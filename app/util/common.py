@@ -1,9 +1,20 @@
+from __future__ import annotations
+
 import math
+from typing import Callable, TYPE_CHECKING, Type, TypeVar
+
+from discord.ext.commands import Converter
+
+if TYPE_CHECKING:
+    from app.core import Context
+
+    T = TypeVar('T')
 
 __all__ = (
     'setinel',
     'level_requirement_for',
     'calculate_level',
+    'converter',
 )
 
 
@@ -15,6 +26,14 @@ class ConstantT:
 def setinel(name: str, **dunders) -> ConstantT:
     attrs = {f'__{k}__': lambda _: v for k, v in dunders.items()}
     return type(name, (ConstantT,), attrs)()
+
+
+def converter(f: Callable[[Context, str], T]) -> Type[Converter]:
+    class Wrapper(Converter):
+        async def convert(self, ctx: Context, argument: str) -> T:
+            return await f(ctx, argument)
+
+    return Wrapper
 
 
 def level_requirement_for(level: int, /, *, base: int = 1000, factor: float = 1.45) -> int:
