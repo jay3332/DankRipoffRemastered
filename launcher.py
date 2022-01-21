@@ -5,7 +5,7 @@ import asyncpg
 
 from app.core.bot import Bot
 from app.database.migrations import Migrator
-from config import beta, DatabaseConfig
+from config import DatabaseConfig, beta
 
 
 async def run_migrations() -> None:
@@ -13,6 +13,7 @@ async def run_migrations() -> None:
         host=DatabaseConfig.host,
         port=DatabaseConfig.port,
         user=DatabaseConfig.user,
+        database=DatabaseConfig.name,
         password=DatabaseConfig.beta_password if beta else DatabaseConfig.password,
     )
     await Migrator(conn).run_migrations(debug=True)

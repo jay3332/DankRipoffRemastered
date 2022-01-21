@@ -60,7 +60,7 @@ class Migrator:
             print('Starting migrations...')
 
         with open('./migrations/.migrations', 'r+') as fp:
-            migrated = fp.readlines()
+            migrated = fp.read().split()
             
             # This ensures we are on a newline
             fp.seek(0, io.SEEK_END)

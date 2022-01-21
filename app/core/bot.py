@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
-from typing import ClassVar, Final, TYPE_CHECKING
+from typing import Any, ClassVar, Final, TYPE_CHECKING
 
 import discord
 import jishaku
 from discord.ext import commands
 
+from app.core.models import Context
+from app.database import Database
 from config import allowed_mentions, beta, beta_token, default_prefix, description, name, owner, token, version
 
 if TYPE_CHECKING:
@@ -62,9 +64,16 @@ class Bot(commands.Bot):
 
     def prepare(self) -> None:
         """Prepares the bot for startup."""
-        # self.db: Database = Database(loop=self.loop)
+        self.db: Database = Database(loop=self.loop)
         self.loop.create_task(self._dispatch_first_ready())
         self._load_extensions()
+
+    async def process_commands(self, message: discord.Message, /) -> None:
+        if message.author.bot:
+            return
+
+        ctx = await self.get_context(message, cls=Context)
+        await self.invoke(ctx)
 
     async def on_first_ready(self) -> None:
         self.startup_timestamp = discord.utils.utcnow()
@@ -74,6 +83,27 @@ class Bot(commands.Bot):
 
         print(format(center, f'=^{len(text)}'))
         print(text)
+
+    async def on_command_error(self, ctx: Context, error: Exception) -> Any:
+        error = getattr(error, 'original', error)
+
+        blacklist = (
+            commands.CommandNotFound,
+        )
+        if isinstance(error, blacklist):
+            return
+
+        if isinstance(error, commands.UserInputError):
+            return await ctx.send(error)
+
+        if isinstance(error, discord.NotFound) and error.code == 10062:
+            return
+
+        if isinstance(error, commands.CommandOnCooldown):
+            return await ctx.send(f'you have been cooldowned (wait {error.retry_after:.1f} seconds)')
+
+        await ctx.send(f'`panic!({error})`')
+        raise error
 
     def run(self) -> None:
         return super().run(beta_token if beta else token)
