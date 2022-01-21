@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from textwrap import dedent
 from typing import TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, command
+from app.core import Cog, Context, command, simple_cooldown
 from app.util.converters import CaseInsensitiveMemberConverter
 from config import Colors, Emojis
 
@@ -17,7 +18,8 @@ class Stats(Cog):
 
     # noinspection PyTypeChecker
     @command(aliases={"bal", "coins", "stats", "b", "wallet"})
-    async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None):
+    @simple_cooldown(2, 5)
+    async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> discord.Embed:
         """View your wallet and bank balance, or optionally, someone elses."""
         user = user or ctx.author
         data = await ctx.db.get_user_record(user.id)
@@ -25,10 +27,10 @@ class Stats(Cog):
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
 
         embed.set_author(name=f"Balance: {user}", icon_url=user.avatar)
-        embed.add_field(name="Coins", value=f"""
+        embed.add_field(name="Coins", value=dedent(f"""
             Wallet: {Emojis.coin} **{data.wallet:,}**
             Bank: {Emojis.coin} **{data.bank:,}**/{data.max_bank:,} *[{data.bank_ratio * 100:.1f}%]*
-        """)
+        """))
 
         return embed
 

@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 __all__ = (
     'REPLY',
     'EDIT',
+    'BAD_ARGUMENT',
     'MISSING',
     'easy_command_callback',
     'command',
@@ -28,6 +29,7 @@ __all__ = (
 
 EDIT  = setinel('EDIT', repr='EDIT')
 REPLY = setinel('REPLY', repr='REPLY')
+BAD_ARGUMENT = setinel('BAD_ARGUMENT', repr='BAD_ARGUMENT')
 
 MISSING = setinel('MISSING', bool=False, repr='MISSING')
 
@@ -50,6 +52,9 @@ async def _send_message(ctx: Context, payload: Any) -> discord.Message | None:
 
         elif part is EDIT:
             kwargs['edit'] = True
+
+        elif part is BAD_ARGUMENT:
+            raise commands.BadArgument(kwargs['content'])
 
         elif isinstance(part, discord.Embed):
             kwargs['embeds'].append(part)

@@ -93,7 +93,8 @@ class Bot(commands.Bot):
         if isinstance(error, blacklist):
             return
 
-        if isinstance(error, commands.UserInputError):
+        if isinstance(error, commands.BadArgument):
+            ctx.command.reset_cooldown(ctx)
             return await ctx.send(error)
 
         if isinstance(error, discord.NotFound) and error.code == 10062:
