@@ -6,6 +6,7 @@ from discord.ext.commands import BadArgument, Converter, MemberConverter, Member
 
 from app.core import Context
 from app.util.common import converter
+from config import Emojis
 
 
 def get_number(argument: str) -> int:
@@ -150,5 +151,29 @@ def BankTransaction(method: Literal[0, 1]) -> Type[Converter | int]:
                 )
             except ZeroDivisionError:
                 raise BadArgument("Very funny. Division by 0.")
+
+    return Wrapper
+
+
+def Investment(minimum: int = 500, maximum: int = 50000000) -> Type[Converter | int]:
+    class Wrapper(Converter, int):
+        async def convert(self, ctx: Context, arg: str) -> int:
+            record = await ctx.db.get_user_record(ctx.author.id)
+            _all = record.wallet
+
+            try:
+                return get_amount(_all, minimum, maximum, arg)
+
+            except NotAnInteger:
+                raise BadArgument("Investment amount must be a positive integer.")
+
+            except NotEnough:
+                raise BadArgument("You don't have that many coins.")
+
+            except PastMinimum:
+                raise BadArgument(f"The minimum investment is {Emojis.coin} **{minimum:,}**.")
+
+            except ZeroDivisionError:
+                raise BadArgument("very funny, division by zero.")
 
     return Wrapper

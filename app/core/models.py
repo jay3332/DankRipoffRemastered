@@ -68,6 +68,22 @@ class Context(TypedContext):
 
         return view.value
 
+    async def maybe_edit(self, message: discord.Message, content: Any = None, **kwargs: Any) -> discord.Message | None:
+        try:
+            await message.edit(content=content, **kwargs)
+        except (AttributeError, discord.NotFound):
+            if (not message) or message.channel == self.channel:
+                return await self.send(content, **kwargs)
+
+            return await message.channel.send(content, **kwargs)
+
+    @staticmethod
+    async def maybe_delete(message: discord.Message, *args: Any, **kwargs: Any) -> None:
+        try:
+            await message.delete(*args, **kwargs)
+        except (AttributeError, discord.NotFound, discord.Forbidden):
+            pass
+
     async def send(self, content: Any = None, **kwargs) -> discord.Message:
         if kwargs.get('embed') and kwargs.get('embeds') is not None:
             kwargs['embeds'].append(kwargs['embed'])
@@ -81,7 +97,7 @@ class Context(TypedContext):
             kwargs.pop('files', None)
             kwargs.pop('reference', None)
 
-            await self._message.edit(content=content, **kwargs)
+            await self.maybe_edit(self._message, content, **kwargs)
             return self._message
 
         self._message = result = await super().send(content, **kwargs)

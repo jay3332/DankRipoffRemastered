@@ -188,6 +188,10 @@ def simple_cooldown(rate: int, per: float, bucket: commands.BucketType = command
     return commands.cooldown(rate, per, bucket)
 
 
+def user_max_concurrency(count: int, *, wait: bool = False) -> Callable[[callable], callable]:
+    return commands.max_concurrency(count, commands.BucketType.user, wait=wait)
+
+
 # def database_cooldown(per: float, /) -> Callable[[callable], callable]:
 #     async def predicate(ctx: Context) -> bool:
 #         data = await ctx.db.get_user_record(ctx.author.id)
