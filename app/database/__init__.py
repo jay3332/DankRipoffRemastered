@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from typing import Any, Awaitable, Callable, Literal, overload
 
 import asyncpg
@@ -133,11 +134,30 @@ class UserRecord:
     def add(self, **values: Any) -> Awaitable[UserRecord]:
         return self._update(lambda o: f'"{o[1]}" = "{o[1]}" + ${o[0]}', values)
 
+    async def add_coins(self, coins: int, /) -> int:
+        """Adds coins including applying multipliers. Returns the amount of coins added."""
+        await self.add(wallet=coins)
+        return coins
+
     async def add_exp(self, exp: int, /) -> bool:
         """Return whether or not the user as leveled up."""
         old = self.level
         await self.add(exp=exp)
         return self.level > old  # TODO: Notify user
+
+    async def add_random_bank_space(self, minimum: int, maximum: int, *, chance: float = 1) -> int:
+        if random.random() > chance:
+            return 0
+
+        await self.add(max_bank=(amount := random.randint(minimum, maximum)))
+        return amount
+
+    async def add_random_exp(self, minimum: int, maximum: int, *, chance: float = 1) -> int:
+        if random.random() > chance:
+            return 0
+
+        await self.add_exp(amount := random.randint(minimum, maximum))
+        return amount
 
     @property
     def wallet(self) -> int:

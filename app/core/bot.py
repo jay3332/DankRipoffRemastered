@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import os
+from textwrap import dedent
 from typing import Any, ClassVar, Final, TYPE_CHECKING
 
 import discord
 import jishaku
 from discord.ext import commands
 
-from app.core.models import Context
+from app.core.models import Context, Command
 from app.database import Database
 from config import allowed_mentions, beta, beta_token, default_prefix, description, name, owner, token, version
 
@@ -96,6 +97,25 @@ class Bot(commands.Bot):
         if isinstance(error, commands.BadArgument):
             ctx.command.reset_cooldown(ctx)
             return await ctx.send(error)
+
+        if isinstance(error, (commands.ConversionError, commands.MissingRequiredArgument)):
+            if error.param is None:
+                return await ctx.send("Could not parse your command input properly.")
+
+            ctx.command.reset_cooldown(ctx)
+            ansi, length, carets = Command.ansi_signature_until(ctx.command, error.param.name)
+
+            return await ctx.send(dedent(f"""
+                Could not parse your command input properly:
+                ```ansi
+                Attempted to parse signature:
+                
+                    \u001b[37;1m{ctx.clean_prefix}\u001b[32;1m{ctx.invoked_with} {ansi}\u001b[30;1m
+                    {' ' * (length + len(ctx.clean_prefix) + len(ctx.invoked_with))} {'^' * carets} Error occured here
+                
+                \u001b[31;1m{error} 
+                ```
+            """))
 
         if isinstance(error, discord.NotFound) and error.code == 10062:
             return

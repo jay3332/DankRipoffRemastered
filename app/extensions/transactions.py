@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from textwrap import dedent
-from typing import TYPE_CHECKING, Any
+from typing import Any, TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, command, simple_cooldown, BAD_ARGUMENT
-from app.util.converters import CaseInsensitiveMemberConverter
+from app.core import Cog, Context, command, simple_cooldown
+from app.util.converters import BankTransaction, DEPOSIT, WITHDRAW
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -19,14 +19,8 @@ class Transactions(Cog):
     # noinspection PyTypeChecker
     @command(aliases={"w", "with", "wd"})
     @simple_cooldown(1, 8)
-    async def withdraw(self, ctx: Context, amount: int) -> Any:  # TODO: amount converter    
-        if amount <= 0:
-            return "Please provide an amount greater than 0.", BAD_ARGUMENT
-
+    async def withdraw(self, ctx: Context, *, amount: BankTransaction(WITHDRAW)) -> Any:
         data = await ctx.db.get_user_record(ctx.author.id)
-
-        if amount > data.bank:
-            return "You do not have that many coins in your bank.", BAD_ARGUMENT
 
         async with ctx.typing():
             await data.add(wallet=amount, bank=-amount)
@@ -42,20 +36,11 @@ class Transactions(Cog):
 
         return embed
 
+    # noinspection PyTypeChecker
     @command(aliases={"d", "dep"})
     @simple_cooldown(1, 8)
-    async def deposit(self, ctx: Context, amount: int) -> Any:  # TODO ^
-        if amount <= 0:
-            return "Please provide an amount greater than 0."
-
+    async def deposit(self, ctx: Context, *, amount: BankTransaction(DEPOSIT)) -> Any:
         data = await ctx.db.get_user_record(ctx.author.id)
-
-        if amount > data.wallet:
-            return "You do not have that many coins to deposit.", BAD_ARGUMENT
-
-        space_left = data.max_bank - data.bank
-        if amount > space_left:
-            return "Your bank cannot hold that many coins yet.", BAD_ARGUMENT
 
         async with ctx.typing():
             await data.add(wallet=-amount, bank=amount)

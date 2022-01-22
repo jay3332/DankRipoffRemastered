@@ -9,7 +9,7 @@ from discord.utils import maybe_coroutine as maybe_coro
 from app.util.types import TypedContext
 from app.util.views import AnyUser, ConfirmationView
 
-from typing import Any, Awaitable, Callable, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Literal, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from app.core.bot import Bot
@@ -28,6 +28,14 @@ class Context(TypedContext):
     @property
     def now(self) -> datetime.datetime:
         return self.message.created_at
+
+    @property
+    def clean_prefix(self) -> str:
+        if self.prefix is None:
+            return ''
+
+        user = self.bot.user
+        return self.prefix.replace(f'<@{user.id}>', f'@{user.name}').replace(f'<@!{user.id}>', f'@{user.name}')
 
     async def thumbs(self, message: discord.Message = None) -> None:
         message = message or self.message
@@ -90,7 +98,105 @@ class Cog(commands.Cog):
 
 
 class Command(commands.Command):
-    ...
+    def ansi_signature(self) -> str:
+        return self.ansi_signature_until("$")[0]
+
+    # This code consists of purely hell.
+    # The base of this method was taken from the actual library, but I cba to actually optimize it nor it's changes.
+    def ansi_signature_until(self, until: str) -> tuple[str, int, int]:  # sourcery no-metrics
+        params = self.clean_params
+        if not params:
+            return '', 0, 0
+
+        result = []
+        count = length = 0
+        got = False
+
+        for name, param in params.items():
+            greedy = isinstance(param.annotation, commands.Greedy)
+            optional = False  # postpone evaluation of if it's an optional argument
+
+            # for typing.Literal[...], typing.Optional[typing.Literal[...]], and Greedy[typing.Literal[...]], the
+            # parameter signature is a literal list of it's values
+            annotation = param.annotation.converter if greedy else param.annotation
+            origin = getattr(annotation, '__origin__', None)
+            if not greedy and origin is Union:
+                none_cls = type(None)
+                union_args = annotation.__args__
+                optional = union_args[-1] is none_cls
+                if len(union_args) == 2 and optional:
+                    annotation = union_args[0]
+                    origin = getattr(annotation, '__origin__', None)
+
+            if origin is Literal:
+                name = '|'.join(f'"{v}"' if isinstance(v, str) else str(v) for v in annotation.__args__)
+            if param.default is not param.empty:
+                # We don't want None or '' to trigger the [name=value] case and instead it should
+                # do [name] since [name=None] or [name=] are not exactly useful for the user.
+                should_print = param.default if isinstance(param.default, str) else param.default is not None
+
+                if should_print:
+                    result.append(r := (
+                        f'\u001b[34;1m[{name}={param.default}]'
+                        if not greedy else f'\u001b[34;1m[{name}={param.default}]...'
+                    ))
+
+                    if name == until or got:
+                        if not length:
+                            length = len(r) - 7
+                        got = True
+                    else:
+                        count += len(r) - 6
+
+                    continue
+                else:
+                    result.append(f'\u001b[34;1m[{name}]')
+                    if name != until and not got:
+                        count += len(name) + 3
+                    else:
+                        if not length:
+                            length = len(name) + 2
+                        got = True
+
+            elif param.kind == param.VAR_POSITIONAL:
+                if self.require_var_positional:
+                    result.append(f'\u001b[33;1m<{name}...>')
+                else:
+                    result.append(f'\u001b[34;1m[{name}...]')
+
+                if name == until or got:
+                    if not length:
+                        length = len(name) + 5
+                    got = True
+                else:
+                    count += len(name) + 6
+            elif greedy:
+                result.append(f'\u001b[34;1m[{name}]...')
+
+                if name != until and not got:
+                    count += len(name) + 6
+                else:
+                    if not length:
+                        length = len(name) + 5
+                    got = True
+            elif optional:
+                result.append(f'\u001b[34;1m[{name}]')
+                if name == until or got:
+                    if not length:
+                        length = len(name) + 2
+                    got = True
+                else:
+                    count += len(name) + 3
+            else:
+                result.append(f'\u001b[33;1m<{name}>')
+                if name != until and not got:
+                    count += len(name) + 3
+                else:
+                    if not length:
+                        length = len(name) + 2
+                    got = True
+
+        return ' '.join(result), count, length
 
 
 class GroupCommand(commands.Group, Command):
