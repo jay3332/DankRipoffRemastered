@@ -149,6 +149,6 @@ def BankTransaction(method: Literal[0, 1]) -> Type[Converter | int]:
                     else "You can't withdraw more than what you actually have."
                 )
             except ZeroDivisionError:
-                raise BadArgument("Very funny. 0 divided by 0.")
+                raise BadArgument("Very funny. Division by 0.")
 
     return Wrapper
