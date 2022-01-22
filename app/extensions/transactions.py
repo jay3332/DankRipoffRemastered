@@ -5,7 +5,7 @@ from typing import Any, TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, command, simple_cooldown
+from app.core import Cog, Context, REPLY, command, simple_cooldown
 from app.util.converters import BankTransaction, DEPOSIT, WITHDRAW
 from config import Colors, Emojis
 
@@ -34,7 +34,7 @@ class Transactions(Cog):
             Bank: {Emojis.coin} **{data.bank:,}**
         """))
 
-        return embed
+        return embed, REPLY
 
     # noinspection PyTypeChecker
     @command(aliases={"d", "dep"})
@@ -54,7 +54,7 @@ class Transactions(Cog):
             Bank: {Emojis.coin} **{data.bank:,}**
         """))
 
-        return embed
+        return embed, REPLY
 
 
 def setup(bot: Bot) -> None:

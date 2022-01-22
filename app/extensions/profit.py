@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, EDIT, command, simple_cooldown, user_max_concurrency
+from app.core import Cog, Context, EDIT, REPLY, command, simple_cooldown, user_max_concurrency
 from app.util.converters import Investment
 from config import Colors, Emojis
 
@@ -86,9 +86,9 @@ class Profit(Cog):
     @command(aliases={"plead"})
     @simple_cooldown(1, 15)
     @user_max_concurrency(1)
-    async def beg(self, ctx: Context) -> discord.Embed:
+    async def beg(self, ctx: Context):
         """Beg for coins. There is a chance that you can get nothing, and a small chance that you can obtain some items"""
-        yield f"{Emojis.loading} {random.choice(self.BEG_INITIAL_MESSAGES)}"
+        yield f"{Emojis.loading} {random.choice(self.BEG_INITIAL_MESSAGES)}", REPLY
         person = random.choice(self.BEG_PEOPLE)
 
         embed = discord.Embed(timestamp=ctx.now)
@@ -117,6 +117,8 @@ class Profit(Cog):
         yield embed, EDIT
         return
 
+    @command(aliases={""})
+
     @command(aliases={"investment", "iv", "in"})
     @simple_cooldown(1, 20)
     @user_max_concurrency(1)
@@ -134,7 +136,7 @@ class Profit(Cog):
             return e
 
         multiplier = 0
-        yield f'{Emojis.loading} Please wait...'
+        yield f'{Emojis.loading} Please wait...', REPLY
 
         for _ in range(5):
             if random.random() > 0.15:

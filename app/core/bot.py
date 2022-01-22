@@ -28,6 +28,7 @@ class Bot(commands.Bot):
     INTENTS: Final[ClassVar[discord.Intents]] = discord.Intents(
         messages=True,
         members=True,
+        guilds=True,
     )
 
     def __init__(self) -> None:

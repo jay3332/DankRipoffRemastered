@@ -64,7 +64,7 @@ class Database(_Database):
 
     def __init__(self, *, loop: asyncio.AbstractEventLoop | None = None) -> None:
         super().__init__(loop=loop)
-        self._user_records: dict[int, UserRecord] = {}
+        self.user_records: dict[int, UserRecord] = {}
 
     @overload
     def get_user_record(self, user_id: int, *, fetch: Literal[True] = True) -> Awaitable[UserRecord]:
@@ -76,9 +76,9 @@ class Database(_Database):
 
     def get_user_record(self, user_id: int, *, fetch: bool = True):
         try:
-            record = self._user_records[user_id]
+            record = self.user_records[user_id]
         except KeyError:
-            record = self._user_records[user_id] = UserRecord(user_id, db=self)
+            record = self.user_records[user_id] = UserRecord(user_id, db=self)
 
         if not fetch:
             return record
