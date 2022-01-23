@@ -6,7 +6,8 @@ from typing import Any, Awaitable, Callable, Literal, overload
 
 import asyncpg
 
-from app.util.common import calculate_level
+from app.data.items import Item, Items
+from app.util.common import calculate_level, get_by_key
 from config import DatabaseConfig, beta
 from .migrations import Migrator
 
@@ -86,6 +87,71 @@ class Database(_Database):
         return record.fetch_if_necessary()
 
 
+class InventoryMapping(dict[Item, int]):
+    def quantity_of(self, item: Item | str) -> int:
+        try:
+            return self[item]
+        except KeyError:
+            return 0
+
+    def __getitem__(self, item: Item | str) -> int:
+        if isinstance(item, str):
+            item = get_by_key(Items, item)
+
+        if item is None:
+            raise RuntimeError(f'Item {item!r} does not exist')
+
+        return super().__getitem__(item)
+
+    def __setitem__(self, item: Item | str, value: int) -> None:
+        if isinstance(item, str):
+            item = get_by_key(Items, item)
+
+        if item is None:
+            return
+
+        return super().__setitem__(item, value)
+
+    def __contains__(self, item: Item | str) -> bool:
+        if isinstance(item, str):
+            item = get_by_key(Items, item)
+
+        if item is None:
+            return False
+
+        return super().__contains__(item)
+
+
+class InventoryManager:
+    def __init__(self, record: UserRecord) -> None:
+        self.cached: InventoryMapping = InventoryMapping()
+
+        self._record: UserRecord = record
+        self._task: asyncio.Task = record.db.loop.create_task(self.fetch_items())
+
+    async def wait(self) -> None:
+        await self._task
+
+    async def fetch_items(self) -> None:
+        query = 'SELECT * FROM items WHERE user_id = $1'
+        records = await self._record.db.fetch(query, self._record.user_id)
+
+        for record in records:
+            self.cached[record['item']] = record['count']
+
+    async def add_item(self, item: Item | str, amount: int = 1) -> None:
+        await self.wait()
+
+        query = """
+                INSERT INTO items (user_id, item, count) VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, item) DO UPDATE SET count = items.count + $3 
+                RETURNING items.count
+                """
+
+        row = await self._record.db.fetchrow(query, self._record.user_id, str(item), amount)
+        self.cached[item] = row['count']
+
+
 class UserRecord:
     """Stores data about a user."""
 
@@ -95,6 +161,8 @@ class UserRecord:
         self.db: Database = db
         self.user_id: int = user_id
         self.data: dict[str, Any] = {}
+
+        self.__inventory_manager: InventoryManager | None = None
 
     async def fetch(self) -> UserRecord:
         query = """
@@ -198,3 +266,10 @@ class UserRecord:
     @property
     def exp_requirement(self) -> int:
         return self.level_data[2]
+
+    @property
+    def inventory_manager(self) -> InventoryManager:
+        if not self.__inventory_manager:
+            self.__inventory_manager = InventoryManager(self)
+
+        return self.__inventory_manager

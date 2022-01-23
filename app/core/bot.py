@@ -106,13 +106,15 @@ class Bot(commands.Bot):
             ctx.command.reset_cooldown(ctx)
             ansi, length, carets = Command.ansi_signature_until(ctx.command, error.param.name)
 
+            invoked_with = ' '.join(ctx.invoked_parents) if ctx.invoked_parents else ctx.invoked_with
+
             return await ctx.send(dedent(f"""
                 Could not parse your command input properly:
                 ```ansi
                 Attempted to parse signature:
                 
-                    \u001b[37;1m{ctx.clean_prefix}\u001b[32;1m{ctx.invoked_with} {ansi}\u001b[30;1m
-                    {' ' * (length + len(ctx.clean_prefix) + len(ctx.invoked_with))} {'^' * carets} Error occured here
+                    \u001b[37;1m{ctx.clean_prefix}\u001b[32;1m{invoked_with} {ansi}\u001b[30;1m
+                    {' ' * (length + len(ctx.clean_prefix) + len(invoked_with))} {'^' * carets} Error occured here
                 
                 \u001b[31;1m{error} 
                 ```

@@ -29,7 +29,7 @@ class Migrator:
             return cls.ensure_migrations_directory()
 
     @classmethod
-    def create_migration(cls, name: str) -> None:
+    def create_migration(cls, name: str) -> str:
         """Creates a migration file."""
         cls.ensure_migrations_directory()
         filename = f'./migrations/{name}-{datetime.datetime.utcnow().timestamp():.0f}.migration.sql'
@@ -42,6 +42,8 @@ class Migrator:
             raise
         else:
             print(f'Successfully created migration file at {filename}')
+
+        return filename
 
     # noinspection PyUnboundLocalVariable
     async def run_migrations(self, *, debug: bool = False) -> None:

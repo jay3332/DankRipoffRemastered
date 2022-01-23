@@ -171,7 +171,7 @@ def group(
     easy_callback: bool = True,
     iwc: bool = True,
     **_other_kwargs
-) -> Callable[[Any, ...], Command]:
+) -> Callable[[Any, ...], GroupCommand]:
     kwargs = _resolve_command_kwargs(
         GroupCommand, name=name, alias=alias, aliases=aliases, brief=brief, help=help, usage=usage,
     )
