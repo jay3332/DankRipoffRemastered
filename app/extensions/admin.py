@@ -3,16 +3,21 @@ from __future__ import annotations
 import contextlib
 from asyncio import subprocess
 from io import StringIO
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Type, TypeAlias
 
+import tabulate
 from jishaku.codeblocks import codeblock_converter
 
-from app.core import Cog, Context, EDIT, command, group, simple_cooldown
+from app.core import Cog, Context, REPLY, group
 from app.database import Migrator
+from app.util.common import humanize_small_duration, pluralize
 from app.util.structures import Timer
 
 if TYPE_CHECKING:
     from app.core import Bot
+    from jishaku.codeblocks import Codeblock
+
+    codeblock_converter: TypeAlias = Type[Codeblock]
 
 
 class Admin(Cog):
@@ -26,13 +31,38 @@ class Admin(Cog):
         """Commands that wrap around the database."""
         await ctx.send_help(ctx.command)
 
+    @database.command(aliases={'run', 'query', 'fetch', 'q'})
+    async def sql(self, ctx: Context, *, sql: codeblock_converter) -> tuple[str, Any]:
+        """Fetches the results of a SQL query."""
+        async with ctx.typing():
+            with Timer() as timer:
+                try:
+                    result = await ctx.db.fetch(sql.content)
+                except Exception as exc:
+                    return f"Error!\n```sql\n{exc}```", REPLY
+
+            time = f'in {humanize_small_duration(timer.time)}: '
+
+            if not result:
+                return f"{time} No results.", REPLY
+
+            table_raw = tabulate.tabulate(result, headers="keys", tablefmt="fancy_grid")
+            time = pluralize(f'{len(result):,} result(s) in {time}')
+
+            message = f"{time}\n```sql\n{table_raw}```"
+
+            if len(message) <= 2000 and all(len(line) < 140 for line in message.split('\n')):
+                return message, REPLY
+
+            return f'{time}\nToo many rows or columns to display. Consider narrowing down your query.', REPLY
+
     @database.group(aliases={'mig', 'm', 'migrate', 'migration'})
     async def migrations(self, ctx: Context):
         """Manages database migrations."""
         await ctx.send_help(ctx.command)
 
-    @migrations.command(aliases={'+', 'new', 'create'})
-    async def add(self, ctx: Context, name: str, *, sql: codeblock_converter) -> str:
+    @migrations.command('add', aliases={'+', 'new', 'create'})
+    async def db_migrations_add(self, ctx: Context, name: str, *, sql: codeblock_converter) -> str:
         """Creates a new migration."""
         out = StringIO()
 
@@ -53,8 +83,8 @@ class Admin(Cog):
         ctx.bot.loop.create_task(ctx.thumbs())
         return f'```{out.read()}```'
 
-    @migrations.command(aliases={'execute', 'exec', 'r', 'push'})
-    async def run(self, ctx: Context) -> str:
+    @migrations.command('run', aliases={'execute', 'exec', 'r', 'push'})
+    async def db_migrations_run(self, ctx: Context) -> str:
         """Runs pending migrations."""
         out = StringIO()
 

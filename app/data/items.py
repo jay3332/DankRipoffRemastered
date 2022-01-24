@@ -4,6 +4,7 @@ import asyncio
 import random
 from dataclasses import dataclass
 from enum import Enum
+from functools import partial
 from typing import Any, Awaitable, Callable, Generator, TYPE_CHECKING, TypeAlias
 
 from app.util.common import pluralize
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
 class ItemType(Enum):
     """Stores the type of this item."""
     tool = 0
+    fish = 1
 
 
 @dataclass
@@ -114,6 +116,9 @@ class Item:
         await self.removal_callback(ITEMS_INST, ctx, self)
 
 
+Fish = partial(Item, type=ItemType.fish)
+
+
 class Items:
     """Stores all items"""
 
@@ -135,6 +140,123 @@ class Items:
         description='You can sell these for coins, or use these in order to expand your bank space. Gives between 1,000 to 3,000 bank space.',
         sell=10000,
         dispose=True,
+    )
+
+    fishing_pole = Item(
+        type=ItemType.tool,
+        key='fishing_pole',
+        name='Fishing Pole',
+        emoji='<:fishing_pole:935298127353745499>',
+        description='Owning this will grant you access to the `fish` command - fish for fish and sell them for profit!',
+        price=10000,
+        buyable=True,
+    )
+
+    fish_bait = Item(
+        type=ItemType.tool,
+        key='fish_bait',
+        name='Fish Bait',
+        emoji='\U0001fab1',
+        description='When you fish while owning this, your chances of catching rarer fish will increase. Disposed every time you fish, no matter success or fail.',
+        price=300,
+        buyable=True,
+    )
+
+    @fishing_pole.to_use
+    async def use_fishing_pole(self, ctx: Context, _) -> None:
+        await ctx.invoke(ctx.bot.get_command('fish'))
+
+    fish = Fish(
+        key='fish',
+        name='Fish',
+        plural='Fish',
+        emoji='<:fish:935002348361748491>',
+        description='A normal fish. Commonly found in the ocean.',
+        sell=100,
+    )
+
+    sardine = Fish(
+        key='sardine',
+        name='Sardine',
+        emoji='<:sardine:935265248091451493>',
+        description='A nutritious fish. They are small and easy to catch.',
+        sell=180,
+    )
+
+    angel_fish = Fish(
+        key='angel_fish',
+        name='Angel Fish',
+        plural='Angel Fish',
+        emoji='<:angel_fish:935265295000551475>',
+        description='Angelfish are tropical freshwater fish that come in a variety of colors.',
+        sell=260,
+    )
+
+    blowfish = Fish(
+        key='blowfish',
+        name='Blowfish',
+        plural='Blowfish',
+        emoji='<:blowfish:935265366601498685>',
+        description='These are also known as pufferfish. These are caught in it\'s inflated form.',
+        sell=375,
+    )
+
+    crab = Fish(
+        key='crab',
+        name='Crab',
+        emoji='<:crab:935285322395299840>',
+        description='Crabs are crustaceans that are found in the ocean. Also the mascot of the Rust programming language.',
+        sell=500,
+    )
+
+    lobster = Fish(
+        key='lobster',
+        name='Lobster',
+        emoji='<:lobster:935288666283212830>',
+        description='Lobsters are large crustaceans that are found in the ocean.',
+        sell=640,
+    )
+
+    octopus = Fish(
+        key='octopus',
+        name='Octopus',
+        plural='Octopuses',
+        emoji='<:octopus:935292291143331900>',
+        description='Octopuses have 3 hearts and 9 brains. And yes, that is the correct plural form of octopus.',
+        sell=785,
+    )
+
+    dolphin = Fish(
+        key='dolphin',
+        name='Dolphin',
+        emoji='<:dolphin:935294203364245601>',
+        description='Dolphins are large aquatic mammals that are found in the ocean.',
+        sell=1000,
+    )
+
+    shark = Fish(
+        key='shark',
+        name='Shark',
+        emoji='<:shark:935301959949365249>',
+        description='Sharks are large predatory fish that are found in the ocean.',
+        sell=1300,
+    )
+
+    whale = Fish(
+        key='whale',
+        name='Whale',
+        emoji='<:whale:935305582846566410>',
+        description='Whales are huge mammals that swim deep in the ocean. How do you even manage to catch these?',
+        sell=2000,
+    )
+
+    vibe_fish = Fish(
+        key='vibe_fish',
+        name='Vibe Fish',
+        plural='Vibe Fish',
+        emoji='<a:vibe_fish:935293751604183060>',
+        description='\uff56\uff49\uff42\uff45',  # "vibe" in full-width text
+        sell=6500,
     )
 
     @banknote.to_use

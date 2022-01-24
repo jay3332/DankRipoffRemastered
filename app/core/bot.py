@@ -111,6 +111,10 @@ class Bot(commands.Bot):
 
             invoked_with = ' '.join(ctx.invoked_parents) if ctx.invoked_parents else ctx.invoked_with
 
+            # inspired by Rust error messages
+            #
+            # this looks really nice on PC, but it looks horrible on mobile
+            # maybe make it look different on mobile?
             return await ctx.send(dedent(f"""
                 Could not parse your command input properly:
                 ```ansi

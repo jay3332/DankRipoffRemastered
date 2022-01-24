@@ -89,6 +89,9 @@ class Database(_Database):
 
 
 class InventoryMapping(dict[Item, int]):
+    def get(self, k: Item | str, d: Any = None) -> int:
+        return super().get(k, d)
+
     def quantity_of(self, item: Item | str) -> int:
         try:
             return self[item]

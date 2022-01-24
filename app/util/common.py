@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 import re
 from difflib import SequenceMatcher
 from typing import Any, Callable, Iterator, Optional, TYPE_CHECKING, Type, TypeVar
@@ -21,6 +22,7 @@ __all__ = (
 )
 
 EMOJI_REGEX: re.Pattern[str] = re.compile(r'<(a)?:([a-zA-Z0-9_]{2,32}):([0-9]{17,25})>')
+PLURALIZE_REGEX: re.Pattern[str] = re.compile(r'(?P<quantity>-?[0-9.,]+) (?P<thing>[a-zA-Z]+)\((?P<plural>i?e?s)\)')
 
 
 # This exists for type checkers
@@ -126,4 +128,25 @@ def pluralize(text: str, /) -> str:
         quantity = abs(float((q := match.group('quantity')).replace(',', '')))
         return f'{q} ' + match.group('thing') + (('', match.group('plural'))[quantity != 1])
 
-    return re.sub(r'(?P<quantity>-?[0-9.,]+) (?P<thing>[a-zA-Z]+)\((?P<plural>i?e?s)\)', callback, text)
+    return PLURALIZE_REGEX.sub(callback, text)
+
+
+def humanize_small_duration(seconds: float, /) -> str:
+    """Turns a very small duration into a human-readable string."""
+    units = ('ms', 'μs', 'ns', 'ps')
+
+    for i, unit in enumerate(units, start=1):
+        boundary = 10 ** 3 * i
+
+        if seconds > 1 / boundary:
+            m = seconds * boundary
+            m = round(m, 2) if m >= 10 else round(m, 3)
+
+            return f"{m} {unit}"
+
+    return "<1 ps"
+
+
+def insert_random_u200b(text: str, /) -> str:
+    """Inserts random zero-width space characters into a string, usually to make them copy-paste proof."""
+    return ''.join(c + random.randint(0, 4) * '\u200b' for c in text)

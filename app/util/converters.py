@@ -184,7 +184,7 @@ def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemA
                 raise BadArgument(f'You must {method} at least one of that item.')
 
             except NotAnInteger:
-                raise BadArgument(f'Invalid quantity {quantity}')
+                raise BadArgument(f'Invalid quantity {quantity} - either what you specified yields 0, or it is not an integer.')
 
             except NotEnough:
                 raise BadArgument(
@@ -295,3 +295,26 @@ async def DropAmount(ctx: Context, arg: str) -> int:
 
     except ZeroDivisionError:
         raise BadArgument("very funny, division by zero.")
+
+
+def CasinoBet(minimum: int = 200, maximum: int = 500000) -> Type[Converter | int]:
+    class Wrapper(Converter, int):
+        async def convert(self, ctx: Context, argument: str):
+            record = await ctx.db.get_user_record(ctx.author.id)
+
+            try:
+                return get_amount(record.wallet, minimum, maximum, argument)
+
+            except NotAnInteger:
+                raise BadArgument("Bet amount must be a positive integer.")
+
+            except NotEnough:
+                raise BadArgument("You don't have that many coins.")
+
+            except PastMinimum:
+                raise BadArgument(f"The minimum bet for `{ctx.command.qualified_name}` is {Emojis.coin} **{minimum:,}**.")
+
+            except ZeroDivisionError:
+                raise BadArgument("very funny, division by zero.")
+
+    return Wrapper

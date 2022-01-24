@@ -9,6 +9,7 @@ import discord
 
 from app.core import Cog, Context, EDIT, REPLY, command, simple_cooldown, user_max_concurrency
 from app.data.items import Item, Items
+from app.util.common import insert_random_u200b
 from app.util.converters import Investment
 from app.util.views import UserView
 from config import Colors, Emojis
@@ -203,11 +204,11 @@ class Profit(Cog):
                 embed.description = f'{Emojis.loading} Investing...'
 
                 embed.add_field(name="Earnings", value=dedent(f"""
-                    {multiplier * 100:,.1f}% of initial value
+                    {multiplier:,.1%} of initial value
                     \u2937 {Emojis.coin} +{round(amount * multiplier):,}
                 """), inline=False)
 
-                embed.add_field(name="Total Return", value=f"{Emojis.coin} {round(amount * (1 + multiplier)):,}")
+                embed.add_field(name="Total Return", value=f"{Emojis.coin} {amount * (1 + multiplier):,.0f}")
 
                 yield embed, EDIT
 
@@ -226,8 +227,8 @@ class Profit(Cog):
         embed.description = 'Success! Your investment succeeded.'
 
         embed.add_field(name="Earnings", value=dedent(f"""
-            {multiplier * 100:,.1f}% of initial value
-            \u2937 {Emojis.coin} +{round(amount * multiplier):,}
+            {multiplier:,.1%} of initial value
+            \u2937 {Emojis.coin} +{amount * multiplier:,.0f}
         """), inline=False)
 
         embed.add_field(name="Total Return", value=f"{Emojis.coin} {profit:,}")
@@ -432,6 +433,121 @@ class Profit(Cog):
         embed.add_field(name='Profit!', value=random.choice(choice.success_responses).format(message))
 
         yield embed, REPLY
+
+    FISH_CHANCES = {
+        None: 1,
+        Items.fish: 0.4,
+        Items.sardine: 0.25,
+        Items.angel_fish: 0.175,
+        Items.blowfish: 0.125,
+        Items.crab: 0.075,
+        Items.lobster: 0.04,
+        Items.octopus: 0.02,
+        Items.dolphin: 0.0075,
+        Items.shark: 0.004,
+        Items.whale: 0.0015,
+        Items.vibe_fish: 0.00025,
+    }
+
+    FISH_CHANCES_WITH_BAIT = {
+        None: 1,
+        Items.fish: 0.4,
+        Items.sardine: 0.25,
+        Items.angel_fish: 0.2,
+        Items.blowfish: 0.2,
+        Items.crab: 0.125,
+        Items.lobster: 0.055,
+        Items.octopus: 0.03,
+        Items.dolphin: 0.015,
+        Items.shark: 0.0085,
+        Items.whale: 0.0035,
+        Items.vibe_fish: 0.001,
+    }
+
+    RARE_FISH = {
+        Items.octopus,
+        Items.dolphin,
+        Items.shark,
+        Items.whale,
+        Items.vibe_fish,
+    }
+
+    FISHING_PROMPTS = (
+        "that's a big fish",
+        "what a heavy one",
+        "this must be something special",
+        "mom, get the camera!",
+        "what must this be?",
+        "fish fish fish",
+        "my fishing pole is about to break",
+    )
+
+    @command(aliases={'f', 'cast', 'fishing', 'fishingpole'})
+    @simple_cooldown(1, 25)
+    @user_max_concurrency(1)
+    async def fish(self, ctx: Context):
+        """Using your fishing pole to fish for fish and sell them for profit!"""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+
+        if not inventory.cached.quantity_of('fishing_pole'):
+            yield f'You need {Items.fishing_pole.get_sentence_chunk(1)} to fish.', REPLY
+            return
+
+        if inventory.cached.quantity_of('fish_bait'):
+            mapping = self.FISH_CHANCES_WITH_BAIT
+            await inventory.add_item('fish_bait', -1)
+        else:
+            mapping = self.FISH_CHANCES
+
+        fish = random.choices(list(mapping), weights=list(mapping.values()), k=5)
+        fish = {item: fish.count(item) for item in set(fish) if item is not None}
+
+        yield f'{Emojis.loading} Casting your fishing pole...', REPLY
+        await asyncio.sleep(random.uniform(2., 4.))
+
+        if not len(fish):
+            yield 'You caught absolutely nothing. Lmao.', EDIT
+            return
+
+        if any(f in self.RARE_FISH for f in fish):
+            message = random.choice(self.FISHING_PROMPTS)
+
+            yield (
+                f'Looks like one of the fish you caught was pretty heavy! Type `{insert_random_u200b(message)}` to wind up your fishing pole before it breaks!',
+                EDIT,
+            )
+
+            try:
+                response = await ctx.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=10)
+                initial = "You failed to wind up your fishing pole"
+
+            except asyncio.TimeoutError:
+                response = ctx.message  # guaranteed that this wont equal the message
+                initial = "You couldn't wind up your fishing pole in time"
+
+            if response.content.lower() != message:
+                await inventory.add_item('fishing_pole', -1)
+
+                if random.random() < 0.15:
+                    await record.make_dead(reason='a fish biting your head off')
+
+                    yield f'{initial}, and the fish jumped out of the water and bit your head off. You died, and also lost your fishing pole.', REPLY
+                    return
+
+                yield f'{initial}, and your fishing pole snapped in half. Nice one.', REPLY
+                return
+
+        async with ctx.db.acquire() as conn:
+            for item, count in fish.items():
+                await inventory.add_item(item, count, connection=conn)
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+
+        embed.add_field(name='You caught:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in fish.items()))
+        embed.set_author(name=f'Fishing: {ctx.author}', icon_url=ctx.author.avatar.url)
+
+        yield '', embed, EDIT
 
 
 def setup(bot: Bot) -> None:

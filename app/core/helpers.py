@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 # from datetime import timedelta
 from functools import wraps
-from typing import Any, Callable, Dict, Iterable, TYPE_CHECKING
+from typing import Any, Callable, Dict, Final, Iterable, TYPE_CHECKING
 
 import discord
 from discord.ext import commands
@@ -30,11 +30,23 @@ __all__ = (
 EDIT  = setinel('EDIT', repr='EDIT')
 REPLY = setinel('REPLY', repr='REPLY')
 BAD_ARGUMENT = setinel('BAD_ARGUMENT', repr='BAD_ARGUMENT')
+NO_EXTRA = setinel('NO_EXTRA', repr='NO_EXTRA')
 
 MISSING = setinel('MISSING', bool=False, repr='MISSING')
 
+CURRENCY_COGS: Final[frozenset[str]] = frozenset({
+    'Casino',
+    'Profit',
+    'Stats',
+    'Transactions',
+})
+
 
 async def _send_message(ctx: Context, payload: Any) -> discord.Message | None:
+    # sourcery no-metrics
+    if payload is None:
+        return
+
     kwargs = {}
     # noinspection PyTypeChecker
     kwargs.setdefault('embeds', [])
@@ -45,16 +57,21 @@ async def _send_message(ctx: Context, payload: Any) -> discord.Message | None:
         payload = [payload]
 
     paginator = None
+    extra = True
+    edit = False
 
     for part in payload:
         if part is REPLY:
             kwargs['reference'] = ctx.message
 
         elif part is EDIT:
-            kwargs['edit'] = True
+            kwargs['edit'] = edit = True
 
         elif part is BAD_ARGUMENT:
             raise commands.BadArgument(kwargs['content'])
+
+        elif part is NO_EXTRA:
+            extra = False
 
         elif isinstance(part, discord.Embed):
             kwargs['embeds'].append(part)
@@ -72,10 +89,21 @@ async def _send_message(ctx: Context, payload: Any) -> discord.Message | None:
             kwargs.update(part)
 
         elif part is None:
-            return
+            continue
 
         else:
             kwargs['content'] = str(part)
+
+    if extra and ctx.cog.qualified_name in CURRENCY_COGS and not kwargs.get('content') and not edit:
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        if notifs := record.unread_notifications:
+            kwargs['content'] = (
+                f"\U0001f514 You have {notifs:,} unread notification{'s' if notifs != 1 else ''}. "
+                f"Run `{ctx.prefix}notifications` to view them."
+            )
+
+        # TODO: tips
 
     if paginator:
         return await paginator.start(**kwargs)

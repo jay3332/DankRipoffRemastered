@@ -6,7 +6,7 @@ from typing import Any, TYPE_CHECKING
 
 import discord
 
-from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, simple_cooldown, user_max_concurrency
+from app.core import Cog, Context, EDIT, NO_EXTRA, REPLY, command, simple_cooldown, user_max_concurrency
 from app.data.items import Item, Items
 from app.util.common import image_url_from_emoji, walk_collection
 from app.util.converters import (
@@ -14,7 +14,8 @@ from app.util.converters import (
     BankTransaction,
     DEPOSIT,
     DROP,
-    DropAmount, ItemAndQuantityConverter,
+    DropAmount,
+    ItemAndQuantityConverter,
     SELL,
     USE,
     WITHDRAW,
@@ -289,7 +290,7 @@ class Transactions(Cog):
         embed.set_footer(text='Click the button below to retrieve your coins!')
 
         view = DropView(ctx)
-        yield embed, view, REPLY
+        yield embed, view, REPLY, NO_EXTRA
 
         embed.set_footer(text='')
 

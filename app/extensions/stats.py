@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from datetime import timezone
 from textwrap import dedent
 from typing import Any, TYPE_CHECKING
 
 import discord
 
-from app.core import BAD_ARGUMENT, Cog, Context, REPLY, command, group, simple_cooldown
+from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
 from app.database import UserRecord
 from app.util.common import cutoff
 from app.util.converters import CaseInsensitiveMemberConverter
@@ -48,7 +47,7 @@ class Stats(Cog):
     # noinspection PyTypeChecker
     @command(aliases={"bal", "coins", "stats", "b", "wallet"})
     @simple_cooldown(2, 5)
-    async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> tuple[str, discord.Embed, Any]:
+    async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> tuple[discord.Embed, Any, Any | None]:
         """View your wallet and bank balance, or optionally, someone elses."""
         user = user or ctx.author
         data = await ctx.db.get_user_record(user.id)
@@ -58,17 +57,11 @@ class Stats(Cog):
         embed.set_author(name=f"Balance: {user}", icon_url=user.avatar)
         embed.add_field(name="Coins", value=dedent(f"""
             Wallet: {Emojis.coin} **{data.wallet:,}**
-            Bank: {Emojis.coin} **{data.bank:,}**/{data.max_bank:,} *[{data.bank_ratio * 100:.1f}%]*
+            Bank: {Emojis.coin} **{data.bank:,}**/{data.max_bank:,} *[{data.bank_ratio:.1%}]*
             Total: {Emojis.coin} **{data.wallet + data.bank:,}**
         """))
 
-        note = (
-            f'\U0001f514 You currently have **{data.unread_notifications:,}** unread notification{"s" if data.unread_notifications != 1 else ""}. '
-            f'Run `{ctx.clean_prefix}notifications` to view them.'
-            if user == ctx.author and data.unread_notifications
-            else ''
-        )
-        return note, embed, REPLY
+        return embed, REPLY, NO_EXTRA if ctx.author != user else None
 
     @command(aliases={"rich", "lb", "top", "richest", "wealthiest"})
     @simple_cooldown(1, 15)
@@ -101,7 +94,7 @@ class Stats(Cog):
 
     @command(aliases={"inv", "backpack"})
     @simple_cooldown(1, 6)
-    async def inventory(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> tuple[str | Paginator, Any]:
+    async def inventory(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None):
         """View your inventory, or optionally, someone elses."""
         user = user or ctx.author
 
@@ -120,7 +113,7 @@ class Stats(Cog):
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.avatar.url)
 
-        return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY
+        return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY, NO_EXTRA if ctx.author != user else None
 
     @group(aliases={"notifs", "notification"})
     @simple_cooldown(1, 6)
