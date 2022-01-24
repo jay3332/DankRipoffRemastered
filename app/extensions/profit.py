@@ -307,6 +307,55 @@ class Profit(Cog):
                 Items.banknote: 0.15,
             },
         ),
+        'house': SearchArea(  # credit: Clammerz
+            minimum=200,
+            maximum=700,
+            success_chance=0.6,
+            death_chance_if_fail=0.2,
+            success_responses=[
+                'You stole {} from the dresser.',
+                'You found {} in the spare room.',
+                'You stole {} from a childs piggy bank.',
+                'Unexpectedly, their cat helped you find {}.',
+                'You sneak into the house at 2 in the morning. You find {} and get out without causing a ruckus.',
+            ],
+            failure_responses=[
+                'Lol, the doors and windows were locked.',
+                'Their dog started barking and you swiftly ran away.',
+                'The police caught you breaking in, but you got away just in time.',
+                'You dropped a cereal bowl causing the owner to wake up, you got away before they saw you.',
+            ],
+            death_responses=[
+                'You were caught breaking into someones house (in America). You were shot and killed by the owner.',
+                'The police saw you breaking in; you weren\'t fast enough and ended up getting shot by the police.',
+                'While scrounging for money, the owner knocked you out and tortured you til you met your demise.',
+                'You punctured an artery on the broken window and bled out soon after.',
+            ],
+            items={
+                Items.banknote: 0.06,
+            },
+        ),
+        'shoe': SearchArea(
+            minimum=300,
+            maximum=700,
+            success_chance=0.44,
+            death_chance_if_fail=0.03,
+            success_responses=[
+                'Your shoe had {} in it???',
+                '{} was hiding in your shoe.',
+                'There was {} in your shoe, must\'ve been uncomfortable.',
+            ],
+            failure_responses=[
+                'There was nothing in your shoe.',
+                'Why would there be money in your shoe?',
+                'Your shoe isn\'t your wallet.',
+                'Maybe ask your sock, it might have some coins.',
+                'What were you expecting? It\'s your shoe not a bank.',
+            ],
+            death_responses=[
+                'The shoe literally ate you.',
+            ],
+        ),
     }
 
     @command(aliases={'se', 'sch'})

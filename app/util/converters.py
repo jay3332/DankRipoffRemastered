@@ -131,6 +131,7 @@ class ItemAndQuantity(NamedTuple):
 BUY = 'buy'
 SELL = 'sell'
 USE = 'use'
+DROP = 'drop'
 
 
 def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemAndQuantity]:
@@ -164,6 +165,9 @@ def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemA
 
             if method == USE and not item.usable:
                 raise BadArgument('This item is not usable.')
+
+            if method == DROP and not item.giftable:
+                raise BadArgument('This item is not giftable.')
 
             record = await ctx.db.get_user_record(ctx.author.id)
 
@@ -270,3 +274,24 @@ def Investment(minimum: int = 500, maximum: int = 50000000) -> Type[Converter | 
                 raise BadArgument("very funny, division by zero.")
 
     return Wrapper
+
+
+@converter
+async def DropAmount(ctx: Context, arg: str) -> int:
+    record = await ctx.db.get_user_record(ctx.author.id)
+    _all = record.wallet
+
+    try:
+        return get_amount(_all, 1, _all, arg)
+
+    except NotAnInteger:
+        raise BadArgument("Drop amount must be a positive integer.")
+
+    except NotEnough:
+        raise BadArgument("You don't have that many coins.")
+
+    except PastMinimum:
+        raise BadArgument("Drop amount must be positive.")
+
+    except ZeroDivisionError:
+        raise BadArgument("very funny, division by zero.")

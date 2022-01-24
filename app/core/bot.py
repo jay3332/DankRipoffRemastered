@@ -89,6 +89,9 @@ class Bot(commands.Bot):
     async def on_command_error(self, ctx: Context, error: Exception) -> Any:
         error = getattr(error, 'original', error)
 
+        if isinstance(error, commands.BadUnionArgument):
+            error = error.errors[0]
+
         blacklist = (
             commands.CommandNotFound,
         )

@@ -182,6 +182,8 @@ class NotificationsManager:
         self.cached = [Notification.from_record(record) for record in records]
 
     async def add_notification(self, title: str, content: str, *, connection: asyncpg.Connection | None = None) -> None:
+        await self.wait()
+
         query = """
                 INSERT INTO notifications (user_id, created_at, title, content)
                 VALUES ($1, $2, $3, $4)

@@ -1,19 +1,68 @@
 from __future__ import annotations
 
+import asyncio
 from textwrap import dedent
 from typing import Any, TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, REPLY, command, simple_cooldown, user_max_concurrency
+from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, simple_cooldown, user_max_concurrency
 from app.data.items import Item, Items
 from app.util.common import image_url_from_emoji, walk_collection
-from app.util.converters import BUY, BankTransaction, DEPOSIT, ItemAndQuantityConverter, SELL, USE, WITHDRAW, query_item
+from app.util.converters import (
+    BUY,
+    BankTransaction,
+    DEPOSIT,
+    DROP,
+    DropAmount, ItemAndQuantityConverter,
+    SELL,
+    USE,
+    WITHDRAW,
+    query_item,
+)
 from app.util.pagination import FieldBasedFormatter, Paginator
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
     from app.core import Bot
+
+
+class DropView(discord.ui.View):
+    def __init__(self, ctx: Context) -> None:
+        super().__init__(timeout=120)
+
+        self.ctx: Context = ctx
+        self.winner: discord.Member | None = None
+
+        self._lock: asyncio.Lock = asyncio.Lock()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user == self.ctx.author:
+            await interaction.response.send_message("You cannot claim your own drop, it's too late now!", ephemeral=True)
+
+            return False
+
+        return True
+
+    @discord.ui.button(label='Claim!', style=discord.ButtonStyle.success)
+    async def claim(self, button: discord.ui.Button, interaction: discord.Interaction) -> None:
+        if self.winner:
+            await interaction.response.send_message('This drop has already been claimed!', ephemeral=True)
+
+        async with self._lock:
+            self.winner = interaction.user
+            button.disabled = True
+
+            await interaction.response.edit_message(view=self)
+            self.stop()
+
+    async def on_timeout(self) -> None:
+        assert self.children
+
+        child = self.children[0]
+        assert isinstance(child, discord.ui.Button)
+
+        child.disabled = True
 
 
 class Transactions(Cog):
@@ -209,6 +258,67 @@ class Transactions(Cog):
                 await record.inventory_manager.add_item(item, -quantity, connection=conn)
 
         await ctx.thumbs()
+
+    @command(aliases={'giveaway'})
+    @simple_cooldown(1, 4)
+    async def drop(self, ctx: Context, *, entity: DropAmount | ItemAndQuantityConverter(DROP)):
+        """Drop coins or items from your inventory into the chat.
+
+        The first one to click the button will retrieve your coins!
+        If no one clicks the button within 120 seconds, your coins/items will be returned.
+        """
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        if isinstance(entity, int):
+            await record.add(wallet=-entity)
+        else:
+            item, quantity = entity
+
+            inventory = await record.inventory_manager.wait()
+            await inventory.add_item(item, -quantity)
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name} has dropped ' + (
+            'coins' if isinstance(entity, int) else 'items'
+        ) + '!', icon_url=ctx.author.avatar.url)
+
+        # noinspection PyUnboundLocalVariable
+        entity_human = f"{Emojis.coin} {entity:,}" if isinstance(entity, int) else item.get_sentence_chunk()
+        embed.description = f'{ctx.author.mention} has dropped {entity_human}!'
+
+        embed.set_footer(text='Click the button below to retrieve your coins!')
+
+        view = DropView(ctx)
+        yield embed, view, REPLY
+
+        embed.set_footer(text='')
+
+        await view.wait()
+        if not view.winner:
+            if isinstance(entity, int):
+                await record.add(wallet=entity)
+            else:
+                # noinspection PyUnboundLocalVariable
+                await inventory.add_item(item, quantity)
+
+            embed.description = 'No one clicked the button! Your entities have been returned.'
+            embed.colour = Colors.error
+
+            yield embed, view, EDIT
+            return
+
+        winner_record = await ctx.db.get_user_record(view.winner.id)
+        if isinstance(entity, int):
+            await winner_record.add(wallet=entity)
+        else:
+            # noinspection PyUnboundLocalVariable
+            await winner_record.inventory_manager.add_item(item, quantity)
+
+        embed.colour = Colors.success
+        embed.description = f'{view.winner.mention} was the first one to click the button! They have received {entity_human}.'
+        embed.set_author(name=f'Winner: {view.winner}', icon_url=view.winner.avatar.url)
+
+        yield embed, view, EDIT
 
 
 def setup(bot: Bot) -> None:
