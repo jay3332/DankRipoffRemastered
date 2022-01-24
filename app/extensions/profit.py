@@ -8,6 +8,7 @@ from typing import NamedTuple, TYPE_CHECKING
 import discord
 
 from app.core import Cog, Context, EDIT, REPLY, command, simple_cooldown, user_max_concurrency
+from app.data.items import Item, Items
 from app.util.converters import Investment
 from app.util.views import UserView
 from config import Colors, Emojis
@@ -24,6 +25,7 @@ class SearchArea(NamedTuple):
     success_responses: list[str] = []  # We can use a list literal here as these are defined as constants and will never be appended to.
     failure_responses: list[str] = []
     death_responses: list[str] = []
+    items: dict[Item, float] = {}  # Similar situation with list literals
 
 
 class SearchButton(discord.ui.Button['SearchView']):
@@ -120,6 +122,10 @@ class Profit(Cog):
         "{0} vomitted out {1} and gave it to you.",
     )
 
+    BEG_ITEMS = {
+        Items.banknote: 0.05,
+    }
+
     @staticmethod
     def _capitalize_first(s: str, /) -> str:
         if not len(s):
@@ -152,11 +158,19 @@ class Profit(Cog):
             yield embed, EDIT
             return
 
-        profit = await record.add_coins(random.randint(150, 450))
+        async with ctx.db.acquire() as conn:
+            profit = await record.add_coins(random.randint(150, 450), connection=conn)
+            message = f'{Emojis.coin} **{profit:,}**'
+
+            for item, chance in self.BEG_ITEMS.items():
+                if random.random() < chance:
+                    message += f' and {item.get_sentence_chunk(1)}'
+                    await record.inventory_manager.add_item(item, 1, connection=conn)
+                    break
 
         embed.colour = Colors.success
         embed.description = self._capitalize_first(
-            random.choice(self.BEG_SUCCESS_MESSAGES).format(person, f'{Emojis.coin} **{profit:,}**')
+            random.choice(self.BEG_SUCCESS_MESSAGES).format(person, message)
         )
 
         yield embed, EDIT
@@ -269,6 +283,9 @@ class Profit(Cog):
                 'You look under your car, but you left it in driving mode. Your car runs you over.',
                 'You were held at gunpoint for driving a hijacked car. Reluctant to comply, you were shot and killed by the police.',
             ],
+            items={
+                Items.banknote: 0.03,
+            },
         ),
         'bank': SearchArea(
             minimum=200,
@@ -286,6 +303,9 @@ class Profit(Cog):
             death_responses=[
                 'You were caught breaking into the bank. You were shot and killed by the police.',
             ],
+            items={
+                Items.banknote: 0.15,
+            },
         ),
     }
 
@@ -314,8 +334,10 @@ class Profit(Cog):
             embed.colour = Colors.error
 
             if random.random() < choice.death_chance_if_fail:
-                # TODO: add death
-                embed.add_field(name='You died!', value=random.choice(choice.death_responses))
+                cause = random.choice(choice.death_responses)
+                await record.make_dead(reason=f'While searching for coins, {cause}')
+
+                embed.add_field(name='You died!', value=cause)
 
                 yield embed, REPLY
                 return
@@ -326,10 +348,18 @@ class Profit(Cog):
             yield embed, REPLY
             return
 
-        profit = await record.add_coins(random.randint(choice.minimum, choice.maximum))
+        async with ctx.db.acquire() as conn:
+            profit = await record.add_coins(random.randint(choice.minimum, choice.maximum), connection=conn)
+            message = f'{Emojis.coin} **{profit:,}**'
+
+            for item, chance in choice.items.items():
+                if random.random() < chance:
+                    message += f' and {item.get_sentence_chunk(1)}'
+                    await record.inventory_manager.add_item(item, 1, connection=conn)
+                    break
 
         embed.colour = Colors.success
-        embed.add_field(name='Profit!', value=random.choice(choice.success_responses).format(f'{Emojis.coin} **{profit:,}**'))
+        embed.add_field(name='Profit!', value=random.choice(choice.success_responses).format(message))
 
         yield embed, REPLY
 

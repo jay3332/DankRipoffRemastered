@@ -1,0 +1,3 @@
+
+ALTER TABLE users
+ADD COLUMN unread_notifications INTEGER NOT NULL DEFAULT 0;

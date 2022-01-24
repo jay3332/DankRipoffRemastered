@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import random
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Awaitable, Callable, Generator, TYPE_CHECKING, TypeAlias
+
+from app.util.common import pluralize
+from config import Emojis
 
 if TYPE_CHECKING:
     from app.core import Context
@@ -24,7 +29,7 @@ class Item:
     name: str
     emoji: str
     description: str
-    price: int
+    price: int = None
     sell: int = None
     buyable: bool = False
     sellable: bool = True
@@ -41,7 +46,10 @@ class Item:
         if not self.singular:
             self.singular = 'an' if self.name.lower().startswith(tuple('aeiou')) else 'a'
 
-        if not self.sell:
+        if self.sell and not self.price:
+            self.price = self.sell
+
+        elif self.price and not self.sell:
             self.sell = round(self.price / 2.7)
 
         if not self.plural:
@@ -73,7 +81,7 @@ class Item:
         name = self.name if quantity == 1 else self.plural
         middle = fmt.format(self.emoji, name).strip()
 
-        quantifier = quantity if quantity != 1 else self.singular
+        quantifier = format(quantity, ',') if quantity != 1 else self.singular
         return f'{quantifier} {middle}'
 
     def get_display_name(self, *, bold: bool = False) -> str:
@@ -88,15 +96,17 @@ class Item:
         self.removal_callback = func
         return func
 
-    async def use(self, ctx: Context, quantity: int) -> None:
+    async def use(self, ctx: Context, quantity: int) -> int:
         assert self.usable
 
         try:
             coro = self.usage_callback(ITEMS_INST, ctx, self, quantity)
         except TypeError:
             coro = self.usage_callback(ITEMS_INST, ctx, self)
+            quantity = 1
 
         await coro
+        return quantity
 
     async def remove(self, ctx: Context) -> None:
         assert self.removable
@@ -116,6 +126,29 @@ class Items:
         price=4200,
         buyable=True,
     )
+
+    banknote = Item(
+        type=ItemType.tool,
+        key='banknote',
+        name='Banknote',
+        emoji='<:banknote:934913052174848040>',
+        description='You can sell these for coins, or use these in order to expand your bank space. Gives between 1,000 to 3,000 bank space.',
+        sell=10000,
+        dispose=True,
+    )
+
+    @banknote.to_use
+    async def banknote_use(self, ctx: Context, item: Item, quantity: int) -> None:
+        message = await ctx.message.reply(pluralize(f'{item.emoji} Using {quantity} banknote(s)...'))
+
+        await asyncio.sleep(random.uniform(2, 4))
+
+        profit = random.randint(1000 * quantity, 3000 * quantity)
+        await ctx.db.get_user_record(ctx.author.id, fetch=False).add(max_bank=profit)
+
+        await message.edit(content=pluralize(
+            f'{item.emoji} Your {quantity} banknote(s) expanded your bank space by {Emojis.coin} **{profit:,}**.'
+        ))
 
     @classmethod
     def all(cls) -> Generator[Item, Any, Any]:

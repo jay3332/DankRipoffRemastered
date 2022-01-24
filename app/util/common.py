@@ -33,7 +33,7 @@ def setinel(name: str, **dunders) -> ConstantT:
     return type(name, (ConstantT,), attrs)()
 
 
-def converter(f: Callable[[Context, str], T]) -> Type[Converter]:
+def converter(f: Callable[[Context, str], T]) -> Type[Converter | T]:
     class Wrapper(Converter):
         async def convert(self, ctx: Context, argument: str) -> T:
             return await f(ctx, argument)
@@ -109,3 +109,21 @@ def query_collection(collection: type, cls: Type[Q], query: str) -> Optional[Q]:
 
     if queued:
         return queued[0]
+
+
+def cutoff(string: str, /, max_length: int = 64, *, exact: bool = False) -> str:
+    """Cuts-off a string at a certain length, and if it has been cutoff, append "..." to it."""
+    if len(string) <= max_length:
+        return string
+
+    offset = 0 if not exact else 3
+    return string[:max_length - offset] + '...'
+
+
+def pluralize(text: str, /) -> str:
+    """Automatically finds words that need to be pluralized in a string and pluralizes it."""
+    def callback(match):
+        quantity = abs(float((q := match.group('quantity')).replace(',', '')))
+        return f'{q} ' + match.group('thing') + (('', match.group('plural'))[quantity != 1])
+
+    return re.sub(r'(?P<quantity>-?[0-9.,]+) (?P<thing>[a-zA-Z]+)\((?P<plural>i?e?s)\)', callback, text)

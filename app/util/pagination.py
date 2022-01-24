@@ -186,4 +186,5 @@ class FieldBasedFormatter(Formatter[dict[str, Any]]):
         for field in fields:
             embed.add_field(**field)
 
+        embed.set_footer(text=f'Page {paginator.current_page + 1}/{paginator.max_pages}')
         return embed

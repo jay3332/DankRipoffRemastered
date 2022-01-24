@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import random
-from typing import Any, Awaitable, Callable, Literal, overload
+from typing import Any, Awaitable, Callable, Literal, NamedTuple, overload
 
 import asyncpg
 
 from app.data.items import Item, Items
 from app.util.common import calculate_level, get_by_key
-from config import DatabaseConfig, beta
+from config import DatabaseConfig, Emojis, beta
 from .migrations import Migrator
 
 __all__ = (
@@ -129,8 +130,9 @@ class InventoryManager:
         self._record: UserRecord = record
         self._task: asyncio.Task = record.db.loop.create_task(self.fetch_items())
 
-    async def wait(self) -> None:
+    async def wait(self) -> InventoryManager:
         await self._task
+        return self
 
     async def fetch_items(self) -> None:
         query = 'SELECT * FROM items WHERE user_id = $1'
@@ -139,7 +141,7 @@ class InventoryManager:
         for record in records:
             self.cached[record['item']] = record['count']
 
-    async def add_item(self, item: Item | str, amount: int = 1) -> None:
+    async def add_item(self, item: Item | str, amount: int = 1, *, connection: asyncpg.Connection | None = None) -> None:
         await self.wait()
 
         query = """
@@ -148,8 +150,47 @@ class InventoryManager:
                 RETURNING items.count
                 """
 
-        row = await self._record.db.fetchrow(query, self._record.user_id, str(item), amount)
+        row = await (connection or self._record.db).fetchrow(query, self._record.user_id, str(item), amount)
         self.cached[item] = row['count']
+
+
+class Notification(NamedTuple):
+    created_at: datetime.datetime
+    title: str
+    content: str
+
+    @classmethod
+    def from_record(cls, record: asyncpg.Record) -> Notification:
+        return cls(created_at=record['created_at'].replace(tzinfo=datetime.timezone.utc), title=record['title'], content=record['content'])
+
+
+class NotificationsManager:
+    def __init__(self, record: UserRecord) -> None:
+        self.cached: list[Notification] | None = None
+
+        self._record: UserRecord = record
+        self._task: asyncio.Task = record.db.loop.create_task(self.fetch_notifications())
+
+    async def wait(self) -> NotificationsManager:
+        await self._task
+        return self
+
+    async def fetch_notifications(self) -> None:
+        query = 'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1000'
+        records = await self._record.db.fetch(query, self._record.user_id)
+
+        self.cached = [Notification.from_record(record) for record in records]
+
+    async def add_notification(self, title: str, content: str, *, connection: asyncpg.Connection | None = None) -> None:
+        query = """
+                INSERT INTO notifications (user_id, created_at, title, content)
+                VALUES ($1, $2, $3, $4)
+                RETURNING *;
+                """
+
+        row = await (connection or self._record.db).fetchrow(query, self._record.user_id, datetime.datetime.utcnow(), title, content)
+        await self._record.add(unread_notifications=1, connection=connection)
+        self.cached.insert(0, Notification.from_record(row))
 
 
 class UserRecord:
@@ -163,6 +204,7 @@ class UserRecord:
         self.data: dict[str, Any] = {}
 
         self.__inventory_manager: InventoryManager | None = None
+        self.__notifications_manager: NotificationsManager | None = None
 
     async def fetch(self) -> UserRecord:
         query = """
@@ -180,7 +222,7 @@ class UserRecord:
 
         return self
 
-    async def _update(self, key: Callable[[tuple[int, str]], str], values: dict[str, Any]) -> UserRecord:
+    async def _update(self, key: Callable[[tuple[int, str]], str], values: dict[str, Any], *, connection: asyncpg.Connection | None = None) -> UserRecord:
         query = """
                 UPDATE users SET {} WHERE user_id = $1
                 RETURNING *;
@@ -188,7 +230,7 @@ class UserRecord:
 
         # noinspection PyTypeChecker
         self.data.update(
-            await self.db.fetchrow(
+            await (connection or self.db).fetchrow(
                 query.format(', '.join(map(key, enumerate(values.keys(), start=2)))),
                 self.user_id,
                 *values.values(),
@@ -196,36 +238,66 @@ class UserRecord:
         )
         return self
 
-    def update(self, **values: Any) -> Awaitable[UserRecord]:
-        return self._update(lambda o: f'"{o[1]}" = ${o[0]}', values)
+    def update(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[UserRecord]:
+        return self._update(lambda o: f'"{o[1]}" = ${o[0]}', values, connection=connection)
 
-    def add(self, **values: Any) -> Awaitable[UserRecord]:
-        return self._update(lambda o: f'"{o[1]}" = "{o[1]}" + ${o[0]}', values)
+    def add(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[UserRecord]:
+        return self._update(lambda o: f'"{o[1]}" = "{o[1]}" + ${o[0]}', values, connection=connection)
 
-    async def add_coins(self, coins: int, /) -> int:
+    async def add_coins(self, coins: int, /, *, connection: asyncpg.Connection | None = None) -> int:
         """Adds coins including applying multipliers. Returns the amount of coins added."""
-        await self.add(wallet=coins)
+        await self.add(wallet=coins, connection=connection)
         return coins
 
-    async def add_exp(self, exp: int, /) -> bool:
+    async def add_exp(self, exp: int, /, *, connection: asyncpg.Connection | None = None) -> bool:
         """Return whether or not the user as leveled up."""
         old = self.level
-        await self.add(exp=exp)
+        await self.add(exp=exp, connection=connection)
         return self.level > old  # TODO: Notify user
 
-    async def add_random_bank_space(self, minimum: int, maximum: int, *, chance: float = 1) -> int:
+    async def add_random_bank_space(self, minimum: int, maximum: int, *, chance: float = 1, connection: asyncpg.Connection | None = None) -> int:
         if random.random() > chance:
             return 0
 
-        await self.add(max_bank=(amount := random.randint(minimum, maximum)))
+        await self.add(max_bank=(amount := random.randint(minimum, maximum)), connection=connection)
         return amount
 
-    async def add_random_exp(self, minimum: int, maximum: int, *, chance: float = 1) -> int:
+    async def add_random_exp(self, minimum: int, maximum: int, *, chance: float = 1, connection: asyncpg.Connection | None = None) -> int:
         if random.random() > chance:
             return 0
 
-        await self.add_exp(amount := random.randint(minimum, maximum))
+        await self.add_exp(amount := random.randint(minimum, maximum), connection=connection)
         return amount
+
+    async def make_dead(self, *, reason: str | None = None, connection: asyncpg.Connection | None = None) -> None:
+        inventory = await self.inventory_manager.wait()
+        if inventory.cached.quantity_of('lifesaver'):
+            await inventory.add_item('lifesaver', -1, connection=connection)
+
+            return await self.notifications_manager.add_notification(
+                title='You almost died!',
+                content=f"You almost died{' due to ' + reason if reason else ''}, but you had a lifesaver in your inventory, which is now consumed.",
+                connection=connection,
+            )
+
+        old = self.wallet
+        await self.update(wallet=0, connection=connection)
+
+        available = [(key, value) for key, value in inventory.cached.items() if value]
+        if not len(available):
+            item, quantity = None, 0
+        else:
+            item, quantity = random.choice(available)
+            await inventory.add_item(item, -quantity, connection=connection)
+
+        await self.notifications_manager.add_notification(
+            title='You died!',
+            content=(
+                f"You died{' due to ' + reason if reason else ''}. "
+                f"You lost {Emojis.coin} **{old:,}**{f' and {item.get_sentence_chunk(quantity)}' if item else ''}."
+            ),
+            connection=connection,
+        )
 
     @property
     def wallet(self) -> int:
@@ -268,8 +340,19 @@ class UserRecord:
         return self.level_data[2]
 
     @property
+    def unread_notifications(self) -> int:
+        return self.data['unread_notifications']
+
+    @property
     def inventory_manager(self) -> InventoryManager:
         if not self.__inventory_manager:
             self.__inventory_manager = InventoryManager(self)
 
         return self.__inventory_manager
+
+    @property
+    def notifications_manager(self) -> NotificationsManager:
+        if not self.__notifications_manager:
+            self.__notifications_manager = NotificationsManager(self)
+
+        return self.__notifications_manager
