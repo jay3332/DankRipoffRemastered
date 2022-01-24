@@ -356,6 +356,27 @@ class Profit(Cog):
                 'The shoe literally ate you.',
             ],
         ),
+        'sock': SearchArea(
+            minimum=200,
+            maximum=500,
+            success_chance=0.45,
+            death_chance_if_fail=0.1,
+            success_responses=[
+                'Okay now, who put {} coins inside of your sock?',
+                'Your sock was holding {} coins hostage.',
+                'There was {} in your sock, how did you wear this thing..?',
+                'You found {} inside of your sock. Yeah, I know - who *doesn\'t* put coins inside of their socks?',
+            ],
+            failure_responses=[
+                'Sadly, your sock had no coins to offer.',
+                'I wonder why there are no coins in a sock.',
+                'Maybe ask your shoe, it might have some coins.',
+                'Who puts coins in their socks?',
+            ],
+            death_responses=[
+                'The sock captured you and fed you to the shoe.',
+            ],
+        ),
     }
 
     @command(aliases={'se', 'sch'})
