@@ -37,6 +37,10 @@ class Context(TypedContext):
         user = self.bot.user
         return self.prefix.replace(f'<@{user.id}>', f'@{user.name}').replace(f'<@!{user.id}>', f'@{user.name}')
 
+    @property
+    def is_interaction(self) -> bool:
+        return bool(getattr(self, 'interaction', False))
+
     async def thumbs(self, message: discord.Message = None) -> None:
         message = message or self.message
         try:

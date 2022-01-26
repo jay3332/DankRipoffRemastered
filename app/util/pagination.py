@@ -125,11 +125,14 @@ class Paginator:
             self, self.formatter.get_page(page)
         )
 
-    async def start(self, *, page: int = None, **send_kwargs) -> None:
+    async def start(self, *, page: int = None, interaction: Interaction = None, **send_kwargs) -> None:
         if page is not None:
             self.current_page = page
 
+        send_kwargs.pop('embeds', None)
         send_kwargs['embed'] = await self.get_page(self.current_page)
+
+        responder = self.ctx.send if interaction is None else interaction.response.send_message
 
         # If there is only one page,
         # only send the embed
@@ -137,11 +140,11 @@ class Paginator:
             self._underlying_view.stop()
             del self._underlying_view
 
-            await self.ctx.send(**send_kwargs)
+            await responder(**send_kwargs)
             return  # To abide by return annotation
 
         self._underlying_view._update_view()
-        await self.ctx.send(view=self._underlying_view, **send_kwargs)
+        await responder(view=self._underlying_view, **send_kwargs)
 
 
 class Formatter(ABC, Generic[T]):

@@ -6,6 +6,7 @@ from typing import Any, TYPE_CHECKING
 import discord
 
 from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
+from app.data.items import Items
 from app.database import UserRecord
 from app.util.common import cutoff
 from app.util.converters import CaseInsensitiveMemberConverter
@@ -107,10 +108,16 @@ class Stats(Cog):
             'inline': False,
         } for item, quantity in inventory.cached.items() if quantity]
 
+        worth = sum(item.price * quantity for item, quantity in inventory.cached.items())
+
         if not len(fields):
             return f'{"You currently do" if user == ctx.author else f"{user.name} currently does"} not own any items.', REPLY
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.description = dedent(f"""
+            Your inventory is worth {Emojis.coin} **{worth:,}**.
+            Additionally, you own **{len(fields):,}** out of {len(list(Items.all())):,} unique items.
+        """)
         embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.avatar.url)
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY, NO_EXTRA if ctx.author != user else None

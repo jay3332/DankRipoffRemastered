@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 # from datetime import timedelta
 from functools import wraps
-from typing import Any, Callable, Dict, Final, Iterable, TYPE_CHECKING
+from typing import Any, Callable, Final, Iterable, TYPE_CHECKING
 
 import discord
 from discord.ext import commands
@@ -42,7 +42,36 @@ CURRENCY_COGS: Final[frozenset[str]] = frozenset({
 })
 
 
-async def _send_message(ctx: Context, payload: Any) -> discord.Message | None:
+def clean_interaction_kwargs(kwargs: dict[str, Any]) -> None:
+    kwargs.pop('reference', None)
+
+    # no files in interactions
+    kwargs.pop('file', None)
+    kwargs.pop('files', None)
+
+
+async def _into_interaction_response(interaction: discord.Interaction, kwargs: dict[str, Any]) -> None:
+    clean_interaction_kwargs(kwargs)
+
+    if kwargs.get('embed') and kwargs.get('embeds') is not None:
+        kwargs['embeds'].append(kwargs['embed'])
+        del kwargs['embed']
+
+    if kwargs.pop('edit', False):
+        if interaction.response.is_done():
+            await interaction.edit_original_message(**kwargs)
+        else:
+            await interaction.response.edit_message(**kwargs)
+
+        return
+
+    if interaction.response.is_done():
+        await interaction.followup.send(**kwargs)
+    else:
+        await interaction.response.send_message(**kwargs)
+
+
+async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
     # sourcery no-metrics
     if payload is None:
         return
@@ -105,8 +134,14 @@ async def _send_message(ctx: Context, payload: Any) -> discord.Message | None:
 
         # TODO: tips
 
+    interaction = getattr(ctx, 'interaction', None)
+
     if paginator:
-        return await paginator.start(**kwargs)
+        clean_interaction_kwargs(kwargs)
+        return await paginator.start(interaction=interaction, **kwargs)
+
+    if interaction:
+        return await _into_interaction_response(interaction, kwargs)
 
     return await ctx.send(**kwargs)
 
@@ -120,9 +155,9 @@ def easy_command_callback(func: callable) -> callable:
 
         if inspect.isasyncgen(coro):
             async for payload in coro:
-                await _send_message(ctx, payload)
+                await process_message(ctx, payload)
         else:
-            await _send_message(ctx, await coro)
+            await process_message(ctx, await coro)
 
     return wrapper
 
@@ -137,7 +172,7 @@ def _resolve_command_kwargs(
     usage: str = MISSING,
     brief: str = MISSING,
     help: str = MISSING
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     kwargs = {'cls': cls}
 
     if name is not MISSING:

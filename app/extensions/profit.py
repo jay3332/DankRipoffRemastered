@@ -156,7 +156,7 @@ class Profit(Cog):
             embed.colour = Colors.error
             embed.description = self._capitalize_first(random.choice(self.BEG_FAIL_MESSAGES).format(f'**{person}**'))
 
-            yield embed, EDIT
+            yield '', embed, EDIT
             return
 
         async with ctx.db.acquire() as conn:
@@ -174,7 +174,7 @@ class Profit(Cog):
             random.choice(self.BEG_SUCCESS_MESSAGES).format(person, message)
         )
 
-        yield embed, EDIT
+        yield '', embed, EDIT
         return
 
     @command(aliases={"investment", "iv", "in"})

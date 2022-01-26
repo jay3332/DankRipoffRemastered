@@ -278,16 +278,16 @@ class Transactions(Cog):
             inventory = await record.inventory_manager.wait()
             await inventory.add_item(item, -quantity)
 
+        entity_type = 'coins' if isinstance(entity, int) else 'items'
+
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'{ctx.author.name} has dropped ' + (
-            'coins' if isinstance(entity, int) else 'items'
-        ) + '!', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name} has dropped {entity_type}!', icon_url=ctx.author.avatar.url)
 
         # noinspection PyUnboundLocalVariable
-        entity_human = f"{Emojis.coin} {entity:,}" if isinstance(entity, int) else item.get_sentence_chunk()
+        entity_human = f"{Emojis.coin} {entity:,}" if isinstance(entity, int) else item.get_sentence_chunk(quantity)
         embed.description = f'{ctx.author.mention} has dropped {entity_human}!'
 
-        embed.set_footer(text='Click the button below to retrieve your coins!')
+        embed.set_footer(text=f'Click the button below to retrieve your {entity_type}!')
 
         view = DropView(ctx)
         yield embed, view, REPLY, NO_EXTRA

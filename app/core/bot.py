@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import os
 from textwrap import dedent
 from typing import Any, ClassVar, Final, TYPE_CHECKING
@@ -36,6 +37,7 @@ class Bot(commands.Bot):
 
         super().__init__(
             command_prefix=self.__class__.resolve_command_prefix,
+            update_application_commands_at_startup=True,
             description=description,
             case_insensitive=True,
             allowed_mentions=allowed_mentions,
@@ -102,20 +104,33 @@ class Bot(commands.Bot):
             ctx.command.reset_cooldown(ctx)
             return await ctx.send(error)
 
+        if ctx.is_interaction:
+            if ctx.interaction.response.is_done():
+                respond = ctx.interaction.followup.send
+            else:
+                respond = functools.partial(ctx.interaction.response.send_message, ephemeral=True)
+        else:
+            respond = ctx.send
+
         if isinstance(error, (commands.ConversionError, commands.MissingRequiredArgument)):
             if error.param is None:
-                return await ctx.send("Could not parse your command input properly.")
+                return await respond("Could not parse your command input properly.")
 
             ctx.command.reset_cooldown(ctx)
             ansi, length, carets = Command.ansi_signature_until(ctx.command, error.param.name)
 
-            invoked_with = ' '.join(ctx.invoked_parents) if ctx.invoked_parents else ctx.invoked_with
+            invoked_with = ' '.join((*ctx.invoked_parents, ctx.invoked_with))
+
+            alias_message = (
+                f'Hint: \u001b[00;0mcommand alias \u001b[36;1m{invoked_with!r} \u001b[00;0mpoints to '
+                f'\u001b[32;1m{ctx.command.qualified_name}\u001b[00;0m, is this corrrect?'
+            ) if ctx.command.qualified_name != invoked_with else ''
 
             # inspired by Rust error messages
             #
             # this looks really nice on PC, but it looks horrible on mobile
             # maybe make it look different on mobile?
-            return await ctx.send(dedent(f"""
+            return await respond(dedent(f"""
                 Could not parse your command input properly:
                 ```ansi
                 Attempted to parse signature:
@@ -123,7 +138,9 @@ class Bot(commands.Bot):
                     \u001b[37;1m{ctx.clean_prefix}\u001b[32;1m{invoked_with} {ansi}\u001b[30;1m
                     {' ' * (length + len(ctx.clean_prefix) + len(invoked_with))} {'^' * carets} Error occured here
                 
-                \u001b[31;1m{error} 
+                \u001b[31;1m{error} \u001b[37;1m
+                
+                {alias_message}
                 ```
             """))
 
@@ -131,9 +148,9 @@ class Bot(commands.Bot):
             return
 
         if isinstance(error, commands.CommandOnCooldown):
-            return await ctx.send(f'you have been cooldowned (wait {error.retry_after:.1f} seconds)')
+            return await respond(f'you have been cooldowned (wait {error.retry_after:.1f} seconds)')
 
-        await ctx.send(f'`panic!({error})`')
+        await respond(f'`panic!({error})`')
         raise error
 
     def run(self) -> None:

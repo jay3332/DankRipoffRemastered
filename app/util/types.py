@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
+from discord import Interaction
 from discord.ext import commands
 
 if TYPE_CHECKING:
@@ -9,6 +10,7 @@ if TYPE_CHECKING:
 
     from discord import ClientUser, Guild, Member, Message, User, VoiceProtocol
     from discord.abc import Messageable
+    from discord.interactions import InteractionChannel
 
     from app.core.bot import Bot
     from app.core.models import Command, Cog
@@ -16,7 +18,13 @@ if TYPE_CHECKING:
 
 __all__ = (
     'TypedContext',
+    'TypedInteraction',
 )
+
+
+class TypedInteraction(Interaction):
+    client: Bot
+    channel: InteractionChannel
 
 
 # noinspection PyPropertyDefinition
@@ -33,6 +41,9 @@ class _TypedContext:
     invoked_subcommand: Command | None
     subcommand_passed: str
     command_failed: bool
+
+    # May not be present
+    interaction: TypedInteraction | None
 
     @property
     def valid(self) -> bool:
@@ -72,4 +83,4 @@ if TYPE_CHECKING:
         ...
 else:
     class TypedContext(commands.Context):
-        ...
+        interaction: TypedInteraction | None

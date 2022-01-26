@@ -28,7 +28,10 @@ class Miscellaneous(Cog):
         word = random.choice(self.PONG_MESSAGES)
 
         with Timer() as timer:
-            await ctx.send(word, reference=ctx.message)
+            if not ctx.is_interaction:
+                await ctx.send(word, reference=ctx.message)
+            else:
+                await ctx.interaction.response.send_message(word)
 
         time_ms = timer.time * 1000
         return f'{word} ({time_ms:.2f} ms)', EDIT
