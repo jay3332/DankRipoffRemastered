@@ -129,7 +129,7 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
         if notifs := record.unread_notifications:
             kwargs['content'] = (
                 f"\U0001f514 You have {notifs:,} unread notification{'s' if notifs != 1 else ''}. "
-                f"Run `{ctx.prefix}notifications` to view them."
+                f"Run `{ctx.clean_prefix}notifications` to view them."
             )
 
         # TODO: tips

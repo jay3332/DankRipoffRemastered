@@ -180,7 +180,7 @@ class Items:
         name='Sardine',
         emoji='<:sardine:935265248091451493>',
         description='A nutritious fish. They are small and easy to catch.',
-        sell=180,
+        sell=150,
     )
 
     angel_fish = Fish(
@@ -189,7 +189,7 @@ class Items:
         plural='Angel Fish',
         emoji='<:angel_fish:935265295000551475>',
         description='Angelfish are tropical freshwater fish that come in a variety of colors.',
-        sell=260,
+        sell=250,
     )
 
     blowfish = Fish(
@@ -198,7 +198,7 @@ class Items:
         plural='Blowfish',
         emoji='<:blowfish:935265366601498685>',
         description='These are also known as pufferfish. These are caught in it\'s inflated form.',
-        sell=375,
+        sell=350,
     )
 
     crab = Fish(
@@ -206,7 +206,7 @@ class Items:
         name='Crab',
         emoji='<:crab:935285322395299840>',
         description='Crabs are crustaceans that are found in the ocean. Also the mascot of the Rust programming language.',
-        sell=500,
+        sell=450,
     )
 
     lobster = Fish(
@@ -214,7 +214,7 @@ class Items:
         name='Lobster',
         emoji='<:lobster:935288666283212830>',
         description='Lobsters are large crustaceans that are found in the ocean.',
-        sell=640,
+        sell=575,
     )
 
     octopus = Fish(
@@ -223,7 +223,7 @@ class Items:
         plural='Octopuses',
         emoji='<:octopus:935292291143331900>',
         description='Octopuses have 3 hearts and 9 brains. And yes, that is the correct plural form of octopus.',
-        sell=785,
+        sell=800,
     )
 
     dolphin = Fish(
@@ -231,7 +231,7 @@ class Items:
         name='Dolphin',
         emoji='<:dolphin:935294203364245601>',
         description='Dolphins are large aquatic mammals that are found in the ocean.',
-        sell=1000,
+        sell=1050,
     )
 
     shark = Fish(
@@ -239,7 +239,7 @@ class Items:
         name='Shark',
         emoji='<:shark:935301959949365249>',
         description='Sharks are large predatory fish that are found in the ocean.',
-        sell=1300,
+        sell=1250,
     )
 
     whale = Fish(
@@ -247,7 +247,15 @@ class Items:
         name='Whale',
         emoji='<:whale:935305582846566410>',
         description='Whales are huge mammals that swim deep in the ocean. How do you even manage to catch these?',
-        sell=2000,
+        sell=1760,
+    )
+
+    axolotl = Fish(
+        key='axolotl',
+        name='Axolotl',
+        emoji='<:axolotl:935691745180667944>',
+        description='The cool salamander',
+        sell=3000,
     )
 
     vibe_fish = Fish(

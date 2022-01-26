@@ -446,6 +446,7 @@ class Profit(Cog):
         Items.dolphin: 0.0075,
         Items.shark: 0.004,
         Items.whale: 0.0015,
+        Items.axolotl: 0.0005,
         Items.vibe_fish: 0.00025,
     }
 
@@ -461,7 +462,8 @@ class Profit(Cog):
         Items.dolphin: 0.015,
         Items.shark: 0.0085,
         Items.whale: 0.0035,
-        Items.vibe_fish: 0.001,
+        Items.axolotl: 0.0015,
+        Items.vibe_fish: 0.00075,
     }
 
     RARE_FISH = {
@@ -469,6 +471,7 @@ class Profit(Cog):
         Items.dolphin,
         Items.shark,
         Items.whale,
+        Items.axolotl,
         Items.vibe_fish,
     }
 

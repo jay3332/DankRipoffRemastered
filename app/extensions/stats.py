@@ -115,7 +115,7 @@ class Stats(Cog):
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.description = dedent(f"""
-            Your inventory is worth {Emojis.coin} **{worth:,}**.
+            {'Your' if user == ctx.author else f"{user.name}'s"} inventory is worth {Emojis.coin} **{worth:,}**.
             Additionally, you own **{len(fields):,}** out of {len(list(Items.all())):,} unique items.
         """)
         embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.avatar.url)
