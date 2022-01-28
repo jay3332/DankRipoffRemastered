@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import functools
 import os
 from textwrap import dedent
@@ -9,6 +10,7 @@ import discord
 import jishaku
 from discord.ext import commands
 
+from app.core.help import HelpCommand
 from app.core.models import Context, Command
 from app.database import Database
 from config import allowed_mentions, beta, beta_token, default_prefix, description, name, owner, token, version
@@ -25,6 +27,7 @@ class Bot(commands.Bot):
     """Dank Ripoff... Remastered."""
 
     startup_timestamp: datetime
+    transaction_locks: dict[int, asyncio.Lock]
 
     INTENTS: Final[ClassVar[discord.Intents]] = discord.Intents(
         messages=True,
@@ -37,6 +40,7 @@ class Bot(commands.Bot):
 
         super().__init__(
             command_prefix=self.__class__.resolve_command_prefix,
+            help_command=HelpCommand(),
             update_application_commands_at_startup=True,
             description=description,
             case_insensitive=True,
@@ -47,6 +51,7 @@ class Bot(commands.Bot):
             **{key: owner},
         )
 
+        self._BotBase__cogs = commands.core._CaseInsensitiveDict()
         self.prepare()
 
     async def resolve_command_prefix(self, message: discord.Message) -> list[str]:
@@ -69,6 +74,8 @@ class Bot(commands.Bot):
     def prepare(self) -> None:
         """Prepares the bot for startup."""
         self.db: Database = Database(loop=self.loop)
+        self.transaction_locks: dict[int, asyncio.Lock] = {}
+
         self.loop.create_task(self._dispatch_first_ready())
         self._load_extensions()
 
@@ -110,7 +117,7 @@ class Bot(commands.Bot):
             else:
                 respond = functools.partial(ctx.interaction.response.send_message, ephemeral=True)
         else:
-            respond = ctx.send
+            respond = functools.partial(ctx.send, reference=ctx.message)
 
         if isinstance(error, (commands.ConversionError, commands.MissingRequiredArgument)):
             if error.param is None:

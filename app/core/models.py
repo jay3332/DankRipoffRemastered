@@ -109,6 +109,8 @@ class Context(TypedContext):
 
 
 class Cog(commands.Cog):
+    __hidden__: bool = False
+
     def __init__(self, bot: Bot) -> None:
         self.bot: Bot = bot
         bot.loop.create_task(maybe_coro(self.__setup__))

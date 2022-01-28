@@ -3,14 +3,18 @@ from __future__ import annotations
 import asyncio
 import datetime
 import random
-from typing import Any, Awaitable, Callable, Literal, NamedTuple, overload
+from typing import Any, Awaitable, Callable, Literal, NamedTuple, overload, TYPE_CHECKING
 
 import asyncpg
+import discord.utils
 
 from app.data.items import Item, Items
 from app.util.common import calculate_level, get_by_key
 from config import DatabaseConfig, Emojis, beta
 from .migrations import Migrator
+
+if TYPE_CHECKING:
+    from app.core import Command
 
 __all__ = (
     'Database',
@@ -189,13 +193,68 @@ class NotificationsManager:
 
         query = """
                 INSERT INTO notifications (user_id, created_at, title, content)
-                VALUES ($1, $2, $3, $4)
+                VALUES ($1, CURRENT_TIMESTAMP, $2, $3)
                 RETURNING *;
                 """
 
-        row = await (connection or self._record.db).fetchrow(query, self._record.user_id, datetime.datetime.utcnow(), title, content)
+        row = await (connection or self._record.db).fetchrow(query, self._record.user_id, title, content)
         await self._record.add(unread_notifications=1, connection=connection)
         self.cached.insert(0, Notification.from_record(row))
+
+
+class CooldownInfo(NamedTuple):
+    command: str
+    expires: datetime.datetime
+    previous_expiry: datetime.datetime | None
+
+    @classmethod
+    def from_record(cls, record: asyncpg.Record) -> CooldownInfo:
+        return cls(command=record['command'], expires=record['expires'], previous_expiry=record['previous_expiry'])
+
+
+class CooldownManager:
+    def __init__(self, record: UserRecord) -> None:
+        self.cached: dict[str, CooldownInfo] = {}
+
+        self._record: UserRecord = record
+        self._task: asyncio.Task = record.db.loop.create_task(self.fetch_cooldowns())
+
+    async def wait(self) -> CooldownManager:
+        await self._task
+        return self
+
+    def get_cooldown(self, command: Command) -> Literal[False] | float:
+        key = command.qualified_name
+        if key not in self.cached:
+            return False
+
+        difference = (self.cached[key].expires - discord.utils.utcnow()).total_seconds()
+        if difference > 0:
+            return difference
+
+        return False
+
+    async def fetch_cooldowns(self) -> None:
+        query = 'SELECT * FROM cooldowns WHERE user_id = $1 AND CURRENT_TIMESTAMP < expires'
+        records = await self._record.db.fetch(query, self._record.user_id)
+
+        self.cached = {
+            record['command']: CooldownInfo.from_record(record) for record in records
+        }
+
+    async def set_cooldown(self, command: Command, expires: datetime.datetime) -> None:
+        query = """
+                INSERT INTO cooldowns (user_id, command, expires, previous_expiry) VALUES ($1, $2, $3, $4)
+                ON CONFLICT (user_id, command) DO UPDATE SET expires = $3, previous_expiry = $4
+                RETURNING *
+                """
+
+        key = command.qualified_name
+        previous = self.cached[key].expires if key in self.cached else None
+
+        new = await self._record.db.fetchrow(query, self._record.user_id, key, expires, previous)
+
+        self.cached[key] = CooldownInfo.from_record(new)
 
 
 class UserRecord:
@@ -210,6 +269,7 @@ class UserRecord:
 
         self.__inventory_manager: InventoryManager | None = None
         self.__notifications_manager: NotificationsManager | None = None
+        self.__cooldown_manager: CooldownManager | None = None
 
     async def fetch(self) -> UserRecord:
         query = """
@@ -349,6 +409,10 @@ class UserRecord:
         return self.data['unread_notifications']
 
     @property
+    def daily_streak(self) -> int:
+        return self.data['daily_streak']
+
+    @property
     def inventory_manager(self) -> InventoryManager:
         if not self.__inventory_manager:
             self.__inventory_manager = InventoryManager(self)
@@ -361,3 +425,10 @@ class UserRecord:
             self.__notifications_manager = NotificationsManager(self)
 
         return self.__notifications_manager
+
+    @property
+    def cooldown_manager(self) -> CooldownManager:
+        if not self.__cooldown_manager:
+            self.__cooldown_manager = CooldownManager(self)
+
+        return self.__cooldown_manager

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import random
+from datetime import timedelta
 from textwrap import dedent
-from typing import NamedTuple, TYPE_CHECKING
+from typing import Any, NamedTuple, TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, EDIT, REPLY, command, simple_cooldown, user_max_concurrency
+from app.core import Cog, Context, EDIT, REPLY, command, database_cooldown, lock_transactions, simple_cooldown, \
+    user_max_concurrency
 from app.data.items import Item, Items
 from app.util.common import insert_random_u200b
 from app.util.converters import Investment
@@ -180,6 +182,7 @@ class Profit(Cog):
     @command(aliases={"investment", "iv", "in"})
     @simple_cooldown(1, 20)
     @user_max_concurrency(1)
+    @lock_transactions
     async def invest(self, ctx: Context, *, amount: Investment()):
         """Invest your coins and potentially get more money. There is a chance that you could fail and lose your investment, however."""
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -380,7 +383,7 @@ class Profit(Cog):
         ),
     }
 
-    @command(aliases={'se', 'sch'})
+    @command(aliases={'se', 'sch', 'scout'})
     @simple_cooldown(1, 20)
     @user_max_concurrency(1)
     async def search(self, ctx: Context):
@@ -551,6 +554,36 @@ class Profit(Cog):
         embed.set_author(name=f'Fishing: {ctx.author}', icon_url=ctx.author.avatar.url)
 
         yield '', embed, EDIT
+
+    @command(aliases={'da', 'day'})
+    @database_cooldown(86_400)
+    @user_max_concurrency(1)
+    async def daily(self, ctx: Context) -> tuple[discord.Embed, Any]:
+        """Claim your daily reward!"""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        cooldowns = await record.cooldown_manager.wait()
+
+        previous = cooldowns.cached['daily'].previous_expiry
+
+        if previous and ctx.now - previous <= timedelta(days=1):  # Give one day of breathing room
+            await record.add(daily_streak=1)
+        else:
+            await record.update(daily_streak=0)
+
+        streak_benefit = record.daily_streak * 250
+        profit = 5000 + streak_benefit
+
+        await record.add(wallet=profit)
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}: Claim Daily', icon_url=ctx.author.avatar.url)
+
+        if streak_benefit:
+            embed.add_field(name='Streak Bonus', value=f'+{Emojis.coin} **{streak_benefit:,}** [Streak: {record.daily_streak}]')
+
+        embed.description = f'You claimed your daily reward of {Emojis.coin} **{profit:,}**.'
+
+        return embed, REPLY
 
 
 def setup(bot: Bot) -> None:

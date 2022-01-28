@@ -131,6 +131,14 @@ def pluralize(text: str, /) -> str:
     return PLURALIZE_REGEX.sub(callback, text)
 
 
+def humanize_list(li: list[Any]) -> str:
+    """Takes a list and returns it joined."""
+    if len(li) <= 2:
+        return " and ".join(li)
+
+    return ", ".join(li[:-1]) + f", and {li[-1]}"
+
+
 def humanize_small_duration(seconds: float, /) -> str:
     """Turns a very small duration into a human-readable string."""
     units = ('ms', 'μs', 'ns', 'ps')
@@ -145,6 +153,29 @@ def humanize_small_duration(seconds: float, /) -> str:
             return f"{m} {unit}"
 
     return "<1 ps"
+
+
+def humanize_duration(seconds, depth: int = 3):
+    """Formats a duration (in seconds) into one that is human-readable."""
+    if seconds <= 0:
+        return '0 seconds'
+
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    d, h = divmod(h, 24)
+    mo, d = divmod(d, 30)
+    y, mo = divmod(mo, 12)
+
+    if int(s) == s or seconds >= 60:
+        s = int(s)
+
+    if y > 100: return ">100 years"
+
+    y, mo, d, h, m = int(y), int(mo), int(d), int(h), int(m)
+    items = (y, 'year'), (mo, 'month'), (d, 'day'), (h, 'hour'), (m, 'minute'), (s, 'second')
+
+    as_list = [f"{quantity} {unit}{'s' if quantity != 1 else ''}" for quantity, unit in items if quantity > 0]
+    return humanize_list(as_list[:depth])
 
 
 def insert_random_u200b(text: str, /) -> str:

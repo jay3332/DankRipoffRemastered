@@ -1,0 +1,2 @@
+ALTER TABLE cooldowns
+ADD COLUMN previous_expiry TIMESTAMP WITH TIME ZONE;

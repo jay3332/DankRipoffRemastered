@@ -6,7 +6,17 @@ from typing import Any, TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, EDIT, NO_EXTRA, REPLY, command, simple_cooldown, user_max_concurrency
+from app.core import (
+    Cog,
+    Context,
+    EDIT,
+    NO_EXTRA,
+    REPLY,
+    command,
+    lock_transactions,
+    simple_cooldown,
+    user_max_concurrency,
+)
 from app.data.items import Item, Items
 from app.util.common import image_url_from_emoji, walk_collection
 from app.util.converters import (
@@ -72,6 +82,7 @@ class Transactions(Cog):
     # noinspection PyTypeChecker
     @command(aliases={"w", "with", "wd"})
     @simple_cooldown(1, 8)
+    @lock_transactions
     async def withdraw(self, ctx: Context, *, amount: BankTransaction(WITHDRAW)) -> Any:
         """Withdraw coins from your bank."""
         data = await ctx.db.get_user_record(ctx.author.id)
@@ -93,6 +104,7 @@ class Transactions(Cog):
     # noinspection PyTypeChecker
     @command(aliases={"d", "dep"})
     @simple_cooldown(1, 8)
+    @lock_transactions
     async def deposit(self, ctx: Context, *, amount: BankTransaction(DEPOSIT)) -> Any:
         """Deposit coins from your wallet into your bank."""
         data = await ctx.db.get_user_record(ctx.author.id)
@@ -180,6 +192,8 @@ class Transactions(Cog):
 
     @command(alias='purchase')
     @simple_cooldown(3, 8)
+    @user_max_concurrency(1)
+    @lock_transactions
     async def buy(self, ctx: Context, *, item_and_quantity: ItemAndQuantityConverter(BUY)) -> tuple[discord.Embed | str, Any]:
         """Buy items!"""
         item, quantity = item_and_quantity
@@ -211,6 +225,8 @@ class Transactions(Cog):
 
     @command(alias='s')
     @simple_cooldown(3, 8)
+    @user_max_concurrency(1)
+    @lock_transactions
     async def sell(self, ctx: Context, *, item_and_quantity: ItemAndQuantityConverter(SELL)) -> tuple[discord.Embed | str, Any]:
         """Sell items from your inventory for coins."""
         item, quantity = item_and_quantity
@@ -243,6 +259,7 @@ class Transactions(Cog):
     @command(aliases={'u', 'consume'})
     @simple_cooldown(2, 10)
     @user_max_concurrency(1)
+    @lock_transactions
     async def use(self, ctx: Context, *, item_and_quantity: ItemAndQuantityConverter(USE)):
         """Use the items you own!"""
         item, quantity = item_and_quantity
@@ -262,6 +279,8 @@ class Transactions(Cog):
 
     @command(aliases={'giveaway'})
     @simple_cooldown(1, 4)
+    @user_max_concurrency(1)
+    @lock_transactions
     async def drop(self, ctx: Context, *, entity: DropAmount | ItemAndQuantityConverter(DROP)):
         """Drop coins or items from your inventory into the chat.
 

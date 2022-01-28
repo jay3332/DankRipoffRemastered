@@ -8,7 +8,7 @@ from typing import Any, TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, EDIT, REPLY, command, simple_cooldown, user_max_concurrency
+from app.core import Cog, Context, EDIT, REPLY, command, lock_transactions, simple_cooldown, user_max_concurrency
 from app.util.converters import CasinoBet
 from config import Colors, Emojis
 
@@ -29,6 +29,7 @@ class Casino(Cog):
     @command(aliases={'diceroll', 'r', 'bet', 'gamble'})
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
+    @lock_transactions
     async def roll(self, ctx: Context, *, bet: CasinoBet()) -> Any:
         """You and I each will roll a pair of dice. The one with the higher sum wins!"""
         record = await ctx.db.get_user_record(ctx.author.id)

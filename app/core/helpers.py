@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
-# from datetime import timedelta
+from datetime import timedelta
 from functools import wraps
 from typing import Any, Callable, Final, Iterable, TYPE_CHECKING
 
@@ -162,6 +163,35 @@ def easy_command_callback(func: callable) -> callable:
     return wrapper
 
 
+def _get_lock(ctx: Context) -> asyncio.Lock:
+    return ctx.bot.transaction_locks.setdefault(ctx.author.id, asyncio.Lock())
+
+
+def lock_transactions(func: callable) -> callable:
+    async def check(ctx: Context) -> bool:
+        if _get_lock(ctx).locked():
+            raise commands.BadArgument('Please finish your pending transaction(s) first.')
+
+        return True
+
+    # yikes
+
+    if inspect.isasyncgenfunction(func):
+        @wraps(func)
+        async def wrapper(cog: Cog, ctx: Context, /, *args, **kwargs) -> Any:
+            async with _get_lock(ctx):
+                async for item in func(cog, ctx, *args, **kwargs):
+                    yield item
+
+    else:
+        @wraps(func)
+        async def wrapper(cog: Cog, ctx: Context, /, *args, **kwargs) -> Any:
+            async with _get_lock(ctx):
+                return await func(cog, ctx, *args, **kwargs)
+
+    return commands.check(check)(wrapper)
+
+
 # noinspection PyShadowingBuiltins
 def _resolve_command_kwargs(
     cls: type,
@@ -255,19 +285,27 @@ def user_max_concurrency(count: int, *, wait: bool = False) -> Callable[[callabl
     return commands.max_concurrency(count, commands.BucketType.user, wait=wait)
 
 
-# def database_cooldown(per: float, /) -> Callable[[callable], callable]:
-#     async def predicate(ctx: Context) -> bool:
-#         data = await ctx.db.get_user_record(ctx.author.id)
-#         manager = data.cooldown_manager
-#
-#         await manager.wait()
-#         cooldown = manager.get_cooldown(ctx.command)
-#
-#         if cooldown is False:
-#             expires = discord.utils.utcnow() + timedelta(seconds=per)
-#             await manager.set_cooldown(ctx.command, expires=expires)
-#             return True
-#
-#         raise commands.CommandOnCooldown(commands.Cooldown(1, per), cooldown, commands.BucketType.user)
-#
-#     return commands.check(predicate)
+def database_cooldown(per: float, /) -> Callable[[callable], callable]:
+    async def predicate(ctx: Context) -> bool:
+        data = await ctx.db.get_user_record(ctx.author.id)
+        manager = data.cooldown_manager
+
+        await manager.wait()
+        cooldown = manager.get_cooldown(ctx.command)
+
+        if cooldown is False:
+            expires = discord.utils.utcnow() + timedelta(seconds=per)
+            await manager.set_cooldown(ctx.command, expires=expires)
+
+            return True
+
+        raise commands.CommandOnCooldown(commands.Cooldown(1, per), cooldown, commands.BucketType.user)
+
+    deco = commands.check(predicate)
+
+    @wraps(deco)
+    def wrapper(func: callable) -> callable:
+        func.__database_cooldown__ = per
+        return deco(func)
+
+    return wrapper
