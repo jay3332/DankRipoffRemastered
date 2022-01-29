@@ -17,7 +17,7 @@ from app.util.views import UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.core import Bot
+    pass
 
 
 class SearchArea(NamedTuple):
@@ -161,15 +161,23 @@ class Profit(Cog):
             yield '', embed, EDIT
             return
 
+        multiplier = 1
+        item_chance = 0.06
+
+        skills = await record.skill_manager.wait()
+        if begging_skill := skills.get_skill('begging'):
+            multiplier += begging_skill.points * 0.02
+            item_chance += begging_skill.points * 0.005
+
         async with ctx.db.acquire() as conn:
-            profit = await record.add_coins(random.randint(150, 450), connection=conn)
+            profit = await record.add_coins(random.randint(150, 450) * multiplier, connection=conn)
             message = f'{Emojis.coin} **{profit:,}**'
 
-            for item, chance in self.BEG_ITEMS.items():
-                if random.random() < chance:
-                    message += f' and {item.get_sentence_chunk(1)}'
-                    await record.inventory_manager.add_item(item, 1, connection=conn)
-                    break
+            if random.random() < item_chance:
+                item = random.choices(list(self.BEG_ITEMS), list(self.BEG_ITEMS.values()))[0]
+
+                message += f' and {item.get_sentence_chunk(1)}'
+                await record.inventory_manager.add_item(item, 1, connection=conn)
 
         embed.colour = Colors.success
         embed.description = self._capitalize_first(
@@ -586,5 +594,4 @@ class Profit(Cog):
         return embed, REPLY
 
 
-def setup(bot: Bot) -> None:
-    bot.add_cog(Profit(bot))
+setup = Profit.simple_setup

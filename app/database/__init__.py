@@ -9,6 +9,7 @@ import asyncpg
 import discord.utils
 
 from app.data.items import Item, Items
+from app.data.skills import Skill, Skills
 from app.util.common import calculate_level, get_by_key
 from config import DatabaseConfig, Emojis, beta
 from .migrations import Migrator
@@ -202,6 +203,93 @@ class NotificationsManager:
         self.cached.insert(0, Notification.from_record(row))
 
 
+class SkillInfo(NamedTuple):
+    skill: str
+    points: int
+    cooldown_until: datetime.datetime | None
+
+    def into_skill(self) -> Skill:
+        return get_by_key(Skills, self.skill)
+
+    @classmethod
+    def from_record(cls, record: asyncpg.Record) -> SkillInfo:
+        return cls(skill=record['skill'], points=record['points'], cooldown_until=record['on_cooldown_until'])
+
+
+class SkillManager:
+    def __init__(self, record: UserRecord) -> None:
+        self.cached: dict[str, SkillInfo] = {}
+
+        self._record: UserRecord = record
+        self._task: asyncio.Task = record.db.loop.create_task(self.fetch_skills())
+
+    async def wait(self) -> SkillManager:
+        await self._task
+        return self
+
+    async def fetch_skills(self) -> None:
+        query = 'SELECT * FROM skills WHERE user_id = $1'
+        records = await self._record.db.fetch(query, self._record.user_id)
+
+        self.cached = {record['skill']: SkillInfo.from_record(record) for record in records}
+
+    def get_skill(self, skill: Skill | str) -> SkillInfo | None:
+        if not self.has_skill(skill := str(skill)):
+            return None
+
+        return self.cached[skill]
+
+    def has_skill(self, skill: Skill | str) -> bool:
+        return getattr(skill, 'key', skill) in self.cached
+
+    async def add_skill(self, skill: Skill | str, *, connection: asyncpg.Connection | None = None) -> None:
+        await self.wait()
+
+        if isinstance(skill, Skill):
+            skill = skill.key
+
+        query = """
+                INSERT INTO skills (user_id, skill) VALUES ($1, $2)
+                ON CONFLICT (user_id, skill) DO UPDATE SET user_id = $1
+                RETURNING *;
+                """
+
+        row = await (connection or self._record.db).fetchrow(query, self._record.user_id, skill)
+        self.cached[skill] = SkillInfo.from_record(row)
+
+    async def add_skill_points(self, skill: Skill | str, points: int, *, connection: asyncpg.Connection | None = None) -> None:
+        await self.wait()
+
+        if isinstance(skill, Skill):
+            skill = skill.key
+
+        query = """
+                INSERT INTO skills (user_id, skill, points) VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, skill) DO UPDATE SET points = skills.points + $3
+                RETURNING *;
+                """
+
+        row = await (connection or self._record.db).fetchrow(query, self._record.user_id, skill, points)
+        self.cached[skill] = SkillInfo.from_record(row)
+
+    async def add_skill_cooldown(
+        self, skill: Skill | str, cooldown: datetime.timedelta, *, connection: asyncpg.Connection | None = None,
+    ) -> None:
+        await self.wait()
+
+        if isinstance(skill, Skill):
+            skill = skill.key
+
+        query = """
+                INSERT INTO skills (user_id, skill, on_cooldown_until) VALUES ($1, $2, CURRENT_TIMESTAMP + $3)
+                ON CONFLICT (user_id, skill) DO UPDATE SET on_cooldown_until = CURRENT_TIMESTAMP + $3
+                RETURNING *;
+                """
+
+        row = await (connection or self._record.db).fetchrow(query, self._record.user_id, skill, cooldown)
+        self.cached[skill] = SkillInfo.from_record(row)
+
+
 class CooldownInfo(NamedTuple):
     command: str
     expires: datetime.datetime
@@ -270,6 +358,7 @@ class UserRecord:
         self.__inventory_manager: InventoryManager | None = None
         self.__notifications_manager: NotificationsManager | None = None
         self.__cooldown_manager: CooldownManager | None = None
+        self.__skill_manager: SkillManager | None = None
 
     async def fetch(self) -> UserRecord:
         query = """
@@ -311,6 +400,8 @@ class UserRecord:
 
     async def add_coins(self, coins: int, /, *, connection: asyncpg.Connection | None = None) -> int:
         """Adds coins including applying multipliers. Returns the amount of coins added."""
+        coins = round(coins)
+
         await self.add(wallet=coins, connection=connection)
         return coins
 
@@ -432,3 +523,10 @@ class UserRecord:
             self.__cooldown_manager = CooldownManager(self)
 
         return self.__cooldown_manager
+
+    @property
+    def skill_manager(self) -> SkillManager:
+        if not self.__skill_manager:
+            self.__skill_manager = SkillManager(self)
+
+        return self.__skill_manager

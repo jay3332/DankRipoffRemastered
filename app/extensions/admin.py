@@ -14,7 +14,6 @@ from app.util.common import humanize_small_duration, pluralize
 from app.util.structures import Timer
 
 if TYPE_CHECKING:
-    from app.core import Bot
     from jishaku.codeblocks import Codeblock
 
     codeblock_converter: TypeAlias = Type[Codeblock]
@@ -105,5 +104,4 @@ class Admin(Cog):
         return f'```{out.read()}```'
 
 
-def setup(bot: Bot) -> None:
-    bot.add_cog(Admin(bot))
+setup = Admin.simple_setup

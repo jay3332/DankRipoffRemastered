@@ -149,6 +149,7 @@ class HelpCommand(commands.HelpCommand):
                 'inline': False,
             }
             for command in sorted(cmd, key=lambda c: c.qualified_name)
+            if not command.hidden
         ]
 
     async def send_bot_help(self, mapping: dict[Cog | None, list[Command]]) -> None:

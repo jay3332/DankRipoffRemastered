@@ -14,7 +14,7 @@ from app.util.pagination import FieldBasedFormatter, Formatter, Paginator
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.core import Bot
+    pass
 
 
 class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
@@ -182,5 +182,4 @@ class Stats(Cog):
         return 'Cleared all of your notifications.', REPLY
 
 
-def setup(bot: Bot) -> None:
-    bot.add_cog(Stats(bot))
+setup = Stats.simple_setup

@@ -1,0 +1,218 @@
+from __future__ import annotations
+
+import asyncio
+import datetime
+import random
+from textwrap import dedent
+from typing import Any, TYPE_CHECKING
+
+import discord
+
+from app.core import BAD_ARGUMENT, Cog, Context, REPLY, command, group, lock_transactions, simple_cooldown, \
+    user_max_concurrency
+from app.data.skills import Skill as SkillObject, Skills, TrainingFailure
+from app.util.common import humanize_duration, walk_collection
+from app.util.converters import query_skill
+from app.util.pagination import FieldBasedFormatter, Paginator
+from config import Colors, Emojis
+
+if TYPE_CHECKING:
+    from app.database import SkillInfo, UserRecord
+
+
+class Skill(Cog):
+    """Commands for the skill and training system."""
+
+    # noinspection PyTypeChecker
+    @group(aliases={'skills', 'sk'})
+    @simple_cooldown(2, 2)
+    async def skill(self, ctx: Context, *, skill: query_skill = None) -> tuple[Paginator, Any] | None:
+        """View a dashboard of all of your skills, or information on a specific skill."""
+        if skill is not None:
+            await ctx.invoke(self.skill_view, skill=skill)
+            return
+
+        record = await ctx.db.get_user_record(ctx.author.id)
+        skills = await record.skill_manager.wait()
+
+        fields = []
+
+        for skill in walk_collection(Skills, SkillObject):
+            if skill_record := skills.get_skill(skill):
+                fields.append({
+                    'name': f'{skill.name}',
+                    'value': dedent(f"""
+                        Skill Points: **{skill_record.points:,}**
+                        Train this skill by running `{ctx.prefix}train {skill.key}`.
+
+                        {skill.description}
+                        *{skill.benefit(skill_record.points)}*
+                    """),
+                    'inline': False,
+                })
+            elif record.level < skill.level_unlocked:
+                fields.append({
+                    'name': f'{skill.name} (Unlocked at Level {skill.level_unlocked})',
+                    'value': f'You do not meet the level requirement to unlock this skill.\n\n{skill.description}\n*{skill.benefit_per_point} per point*',
+                    'inline': False
+                })
+            else:
+                if record.wallet < skill.price:
+                    value = 'You cannot afford to unlock this skill.'
+                else:
+                    value = f'Buy this skill by running `{ctx.prefix}skill buy {skill.key}`.'
+
+                fields.append({
+                    'name': f'{skill.name} (Unlock for {Emojis.coin} {skill.price:,})',
+                    'value': value + f'\n\n{skill.description}\n*{skill.benefit_per_point} per point*',
+                    'inline': False,
+                })
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}\'s Skills', icon_url=ctx.author.avatar.url)
+        embed.description = f'You have unlocked {len(skills.cached):,} skills.'
+
+        return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=3)), REPLY
+
+    @staticmethod
+    def get_maximum_skill_points(record: UserRecord, skill_record: SkillInfo) -> int | None:
+        acc = None
+
+        for points, level in skill_record.into_skill().level_requirement_mapping.items():
+            if record.level >= level:
+                acc = points
+            else:
+                return acc
+
+        return None
+
+    @skill.command('view', aliases={'i', 'info'})
+    @simple_cooldown(2, 2)
+    async def skill_view(self, ctx: Context, *, skill: query_skill) -> tuple[discord.Embed, Any]:
+        """View information on a specific skill."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        skills = await record.skill_manager.wait()
+
+        embed = discord.Embed(color=Colors.primary, description=skill.description, title=skill.name, timestamp=ctx.now)
+        embed.set_author(name=f'Skill: {skill.name}', icon_url=ctx.author.avatar.url)
+
+        embed.add_field(name='General', value=dedent(f"""
+            Name: {skill.name}
+            Query Key: **`{skill.key}`**
+            Maximum Skill Points: {skill.max_points or 'Unlimited'}
+            Training Cooldown: {humanize_duration(skill.training_cooldown)}
+        """))
+
+        embed.add_field(name='Requirements', value=dedent(f"""
+            Level Unlocked: {skill.level_unlocked:,}
+            Price to Unlock: {Emojis.coin} {skill.price:,}
+        """))
+
+        if skill_record := skills.get_skill(skill):
+            embed.add_field(name='Benefit', value=skill.benefit(skill_record.points), inline=False)
+
+            embed.add_field(name='Skill Points', value=f'{skill_record.points:,}')
+            embed.add_field(name='Maximum Skill Points', value=f'{self.get_maximum_skill_points(record, skill_record):,}')
+
+            embed.set_footer(text='Maximum skill points scale with level.')
+
+        else:
+            embed.description = 'You have not unlocked this skill yet.\n\n' + embed.description
+            embed.add_field(name='Benefit', value=skill.benefit_per_point + ' per point', inline=False)
+
+        return embed, REPLY
+
+    @skill.command('buy', aliases={'purchase', 'b', 'unlock'})
+    @simple_cooldown(1, 6)
+    @user_max_concurrency(1)
+    @lock_transactions
+    async def skill_buy(self, ctx: Context, *, skill: query_skill) -> tuple[discord.Embed | str, Any]:
+        """Purchase a skill."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        skills = await record.skill_manager.wait()
+
+        if skills.has_skill(skill):
+            return 'You have already unlocked this skill.', BAD_ARGUMENT
+
+        if record.level < skill.level_unlocked:
+            return 'You do not meet the level requirement in order unlock this skill.', BAD_ARGUMENT
+
+        if record.wallet < skill.price:
+            return 'Insufficient funds: You do not have enough coins to purchase this skill.', BAD_ARGUMENT
+
+        if not await ctx.confirm(
+            f'Are you sure you want to buy the **{skill.name}** skill for {Emojis.coin} **{skill.price:,}**? '
+            'You will not be able to refund this transaction.',
+            reference=ctx.message,
+            delete_after=True,
+        ):
+            return 'Purchase cancelled.', REPLY
+
+        async with ctx.db.acquire() as conn:
+            await record.add(wallet=-skill.price, connection=conn)
+            await skills.add_skill(skill, connection=conn)
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+        embed.set_author(name='Purchase Successful', icon_url=ctx.author.avatar.url)
+        embed.description = f'Successfully unlocked the **{skill.name}** skill for {Emojis.coin} {skill.price:,}.'
+
+        return embed, REPLY
+
+    @skill.command('issue', hidden=True)
+    async def skill_issue(self, _: Context) -> tuple[str, Any]:
+        """skill issue"""
+        return 'https://tenor.com/view/skillissue-skill-issue-gif-22125481', REPLY
+
+    @command('train', aliases={'t', 'tr'})
+    @user_max_concurrency(1)
+    async def train(self, ctx: Context, *, skill: query_skill) -> Any:
+        """Train a skill. You must have unlocked the skill first."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        skills = await record.skill_manager.wait()
+
+        if not skills.has_skill(skill):
+            yield 'You have not unlocked this skill yet.', BAD_ARGUMENT
+            return
+
+        skill_record = skills.get_skill(skill)
+
+        if skill_record.cooldown_until and ctx.now < skill_record.cooldown_until:
+            dur = humanize_duration((skill_record.cooldown_until - ctx.now).total_seconds())
+
+            yield f'You must wait {dur} before training this skill again.', BAD_ARGUMENT
+            return
+
+        yield f'{Emojis.loading} Training {skill.name}...', REPLY
+        await asyncio.sleep(random.uniform(2, 4))
+
+        try:
+            await skill.run_training(ctx)
+        except TrainingFailure as exc:
+            embed = discord.Embed(color=Colors.error, timestamp=ctx.now)
+            embed.set_author(name='Training Failed', icon_url=ctx.author.avatar.url)
+            embed.add_field(name='You failed training!', value=str(exc))
+
+            yield embed, REPLY
+            return
+        finally:
+            await skills.add_skill_cooldown(skill, datetime.timedelta(seconds=skill.training_cooldown))
+
+        await skills.add_skill_points(skill, 1)
+
+        # it doesn't update in place due to the fact that they're namedtuples
+        skill_record = skills.get_skill(skill)
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+        embed.set_author(name='Training Successful', icon_url=ctx.author.avatar.url)
+
+        embed.description = dedent(f"""
+            Successfully trained the **{skill.name}** skill.
+            Added 1 skill point to this skill - you now have **{skill_record.points:,}** skill points for {skill.name}.
+        """)
+
+        embed.add_field(name='Updated Benefit', value=skill.benefit(skill_record.points))
+
+        yield embed, REPLY
+
+
+setup = Skill.simple_setup

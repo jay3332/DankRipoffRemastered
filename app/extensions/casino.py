@@ -13,7 +13,7 @@ from app.util.converters import CasinoBet
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.core import Bot
+    pass
 
 
 class Casino(Cog):
@@ -84,5 +84,4 @@ class Casino(Cog):
         yield '', embed, EDIT
 
 
-def setup(bot: Bot) -> None:
-    bot.add_cog(Casino(bot))
+setup = Casino.simple_setup

@@ -166,12 +166,10 @@ def humanize_duration(seconds, depth: int = 3):
     mo, d = divmod(d, 30)
     y, mo = divmod(mo, 12)
 
-    if int(s) == s or seconds >= 60:
-        s = int(s)
+    if y > 100:
+        return ">100 years"
 
-    if y > 100: return ">100 years"
-
-    y, mo, d, h, m = int(y), int(mo), int(d), int(h), int(m)
+    y, mo, d, h, m, s = [int(entity) for entity in (y, mo, d, h, m, s)]
     items = (y, 'year'), (mo, 'month'), (d, 'day'), (h, 'hour'), (m, 'minute'), (s, 'second')
 
     as_list = [f"{quantity} {unit}{'s' if quantity != 1 else ''}" for quantity, unit in items if quantity > 0]

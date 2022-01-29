@@ -118,6 +118,10 @@ class Cog(commands.Cog):
     def __setup__(self) -> Awaitable[None] | None:
         pass
 
+    @classmethod
+    def simple_setup(cls, bot: Bot) -> None:
+        bot.add_cog(cls(bot))
+
 
 class Command(commands.Command):
     def ansi_signature(self) -> str:

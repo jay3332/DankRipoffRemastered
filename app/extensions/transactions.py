@@ -35,7 +35,7 @@ from app.util.pagination import FieldBasedFormatter, Paginator
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.core import Bot
+    pass
 
 
 class DropView(discord.ui.View):
@@ -341,5 +341,4 @@ class Transactions(Cog):
         yield embed, view, EDIT
 
 
-def setup(bot: Bot) -> None:
-    bot.add_cog(Transactions(bot))
+setup = Transactions.simple_setup

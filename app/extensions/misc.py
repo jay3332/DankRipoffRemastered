@@ -7,7 +7,7 @@ from app.core import Cog, Context, EDIT, command, simple_cooldown
 from app.util.structures import Timer
 
 if TYPE_CHECKING:
-    from app.core import Bot
+    pass
 
 
 class Miscellaneous(Cog):
@@ -37,5 +37,4 @@ class Miscellaneous(Cog):
         return f'{word} ({time_ms:.2f} ms)', EDIT
 
 
-def setup(bot: Bot) -> None:
-    bot.add_cog(Miscellaneous(bot))
+setup = Miscellaneous.simple_setup
