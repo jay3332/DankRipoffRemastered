@@ -19,6 +19,8 @@ class CogSelect(discord.ui.Select[PaginatorView]):
     def __init__(self, mapping: dict[Cog, list[Command]], *, default: Cog = None) -> None:
         super().__init__(placeholder='Select a category...', row=0)
 
+        self.add_option(label='Home', value='Home')
+
         for cog in mapping:
             # TODO: emojis for cogs
 
@@ -46,18 +48,22 @@ class CogSelect(discord.ui.Select[PaginatorView]):
         return embed
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        cog = self.cog_mapping[self.values[0]]
         ctx = self.view.paginator.ctx
 
-        embed = self.get_base_cog_embed(ctx, cog)
+        try:
+            cog = self.cog_mapping[self.values[0]]
+        except KeyError:
+            paginator = HelpCommand.get_bot_help_paginator(ctx, self.mapping)
+        else:
+            embed = self.get_base_cog_embed(ctx, cog)
 
-        paginator = Paginator(
-            ctx,
-            FieldBasedFormatter(embed, self.get_command_fields(ctx, cog), page_in_footer=True),
-            center_button=self.view._center_button,
-            other_components=[CogSelect(self.mapping, default=cog)],
-            row=1,
-        )
+            paginator = Paginator(
+                ctx,
+                FieldBasedFormatter(embed, self.get_command_fields(ctx, cog), page_in_footer=True),
+                center_button=self.view._center_button,
+                other_components=[CogSelect(self.mapping, default=cog)],
+                row=1,
+            )
 
         await paginator.start(edit=True, interaction=interaction)
 
@@ -152,30 +158,33 @@ class HelpCommand(commands.HelpCommand):
             if not command.hidden
         ]
 
-    async def send_bot_help(self, mapping: dict[Cog | None, list[Command]]) -> None:
-        """Send the bot's help command."""
-        embed = discord.Embed(color=Colors.primary, timestamp=self.context.now)
-        embed.set_author(name=f'Help: {self.context.author.name}', icon_url=self.context.author.avatar.url)
+    @classmethod
+    def get_bot_help_paginator(cls, ctx: Context, mapping: dict[Cog, list[Command]]) -> Paginator:
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar.url)
 
-        mapping = self.filter_mapping(mapping)
+        mapping = cls.filter_mapping(mapping)
 
         fields = [
             {
                 'name': cog.qualified_name,
-                'value': f'{cog.description}\n{self.format_commands(cmds)}',
+                'value': f'{cog.description}\n{cls.format_commands(cmds)}',
                 'inline': False,
             }
             for cog, cmds in mapping.items()
         ]
 
-        paginator = Paginator(
-            self.context,
+        return Paginator(
+            ctx,
             FieldBasedFormatter(embed, fields, page_in_footer=True),
-            center_button=CenterButton(ctx=self.context),
+            center_button=CenterButton(ctx),
             other_components=[CogSelect(mapping)],
             row=1,
         )
 
+    async def send_bot_help(self, mapping: dict[Cog | None, list[Command]]) -> None:
+        """Send the bot's help command."""
+        paginator = self.get_bot_help_paginator(self.context, mapping)
         await paginator.start(interaction=self.context.interaction if self.context.is_interaction else None)
 
     async def send_cog_help(self, cog: Cog) -> None:
@@ -194,7 +203,7 @@ class HelpCommand(commands.HelpCommand):
         await paginator.start(interaction=self.context.interaction if self.context.is_interaction else None)
 
     def get_base_command_embed(self, command: Command) -> discord.Embed:
-        ctx = self.context
+        ctx: Context = self.context
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar.url)
@@ -205,7 +214,10 @@ class HelpCommand(commands.HelpCommand):
             usage = command.usage
 
         body = command.help or 'No description provided.'
-        embed.description = f'```ansi\n\u001b[37;1m{ctx.clean_prefix}\u001b[32;1m{command.qualified_name} {usage}```\n{body}'
+        embed.description = ctx.bot.remove_ansi_if_mobile(
+            ctx,
+            f'```ansi\n\u001b[37;1m{ctx.clean_prefix}\u001b[32;1m{command.qualified_name} {usage}```\n{body}',
+        )
 
         if command.aliases:
             embed.add_field(name='Aliases', value='\u2002'.join(f'`{alias}`' for alias in command.aliases))

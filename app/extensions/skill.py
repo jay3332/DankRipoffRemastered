@@ -43,7 +43,7 @@ class Skill(Cog):
                     'name': f'{skill.name}',
                     'value': dedent(f"""
                         Skill Points: **{skill_record.points:,}**
-                        Train this skill by running `{ctx.prefix}train {skill.key}`.
+                        Train this skill by running `{ctx.clean_prefix}train {skill.key}`.
 
                         {skill.description}
                         *{skill.benefit(skill_record.points)}*
@@ -60,7 +60,7 @@ class Skill(Cog):
                 if record.wallet < skill.price:
                     value = 'You cannot afford to unlock this skill.'
                 else:
-                    value = f'Buy this skill by running `{ctx.prefix}skill buy {skill.key}`.'
+                    value = f'Buy this skill by running `{ctx.clean_prefix}skill buy {skill.key}`.'
 
                 fields.append({
                     'name': f'{skill.name} (Unlock for {Emojis.coin} {skill.price:,})',
@@ -75,7 +75,7 @@ class Skill(Cog):
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=3)), REPLY
 
     @staticmethod
-    def get_maximum_skill_points(record: UserRecord, skill_record: SkillInfo) -> int | None:
+    def get_maximum_skill_points(record: UserRecord, skill_record: SkillInfo) -> int:
         acc = None
 
         for points, level in skill_record.into_skill().level_requirement_mapping.items():
@@ -84,7 +84,7 @@ class Skill(Cog):
             else:
                 return acc
 
-        return None
+        return skill_record.into_skill().max_points
 
     @skill.command('view', aliases={'i', 'info'})
     @simple_cooldown(2, 2)
@@ -175,6 +175,14 @@ class Skill(Cog):
             return
 
         skill_record = skills.get_skill(skill)
+        maximum = self.get_maximum_skill_points(record, skill_record)
+
+        if skill_record.points >= maximum:
+            if skill.max_points <= maximum:
+                yield 'You have already reached the maximum skill points for this skill.', BAD_ARGUMENT
+            else:
+                yield 'You cannot train this skill any further as your level is too low for it.', BAD_ARGUMENT
+            return
 
         if skill_record.cooldown_until and ctx.now < skill_record.cooldown_until:
             dur = humanize_duration((skill_record.cooldown_until - ctx.now).total_seconds())

@@ -86,6 +86,13 @@ class Balance(ApplicationCommand, tree=TREE):
     callback = _make_callback(lambda self: f'balance {self.user.id if self.user else ""}')
 
 
+class Level(ApplicationCommand, tree=TREE):
+    """level"""
+    user: discord.Member = option(description='The user to check the level of.')
+
+    callback = _make_callback(lambda self: f'level {self.user.id if self.user else ""}')
+
+
 class Inventory(ApplicationCommand, tree=TREE):
     """inventory"""
     user: discord.Member = option(description='The user to check the inventory of.')
@@ -109,6 +116,7 @@ class Notifications(ApplicationCommand, tree=TREE):
 Beg = _declare_simple_command('beg')
 Search = _declare_simple_command('search')
 Fish = _declare_simple_command('fish')
+Daily = _declare_simple_command('daily')
 
 
 class Withdraw(ApplicationCommand, tree=TREE):
@@ -164,6 +172,23 @@ class Drop(ApplicationCommand, tree=TREE):
     entity: str = option(description='The amount of coins or items to drop.', required=True)
 
     callback = _make_callback(lambda self: f'drop {self.entity}')
+
+
+Skills = _declare_simple_command('skills')
+
+
+class SkillInfo(ApplicationCommand, name='skill-info', tree=TREE):
+    """skills view"""
+    skill: str = option(description='The skill to get info on.', required=True)
+
+    callback = _make_callback(lambda self: f'skills view {self.skill}')
+
+
+class BuySkill(ApplicationCommand, name='buy-skill', tree=TREE):
+    """skills buy"""
+    skill: str = option(description='The skill to buy.', required=True)
+
+    callback = _make_callback(lambda self: f'skills buy {self.skill}')
 
 
 def setup(bot: Bot) -> None:

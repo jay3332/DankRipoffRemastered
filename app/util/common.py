@@ -8,6 +8,8 @@ from typing import Any, Callable, Iterator, Optional, TYPE_CHECKING, Type, TypeV
 
 from discord.ext.commands import Converter
 
+from config import Emojis
+
 if TYPE_CHECKING:
     from app.core import Context
 
@@ -106,7 +108,7 @@ def query_collection(collection: type, cls: Type[Q], query: str) -> Optional[Q]:
             queued.append(obj)
 
         matcher = SequenceMatcher(None, query, name)
-        if matcher.ratio() > .85:
+        if matcher.ratio() > .85 and all(digit not in query for digit in '0123456789'):
             queued.append(obj)
 
     if queued:
@@ -179,3 +181,44 @@ def humanize_duration(seconds, depth: int = 3):
 def insert_random_u200b(text: str, /) -> str:
     """Inserts random zero-width space characters into a string, usually to make them copy-paste proof."""
     return ''.join(c + random.randint(0, 4) * '\u200b' for c in text)
+
+
+def progress_bar(ratio: float, *, length: int = 8, u200b: bool = True) -> str:
+    # noinspection PyTypeChecker
+    ratio = min(1, max(0, ratio))
+
+    result = ''
+    span = 1 / length
+
+    # Pre-calculate spans
+    quarter_span = span / 4
+    half_span = span / 2
+    high_span = 3 * quarter_span
+
+    for i in range(length):
+        lower = i / length
+
+        if ratio <= lower:
+            key = 'empty'
+        elif ratio <= lower + quarter_span:
+            key = 'low'
+        elif ratio <= lower + half_span:
+            key = 'mid'
+        elif ratio <= lower + high_span:
+            key = 'high'
+        else:
+            key = 'full'
+
+        if i == 0:
+            start = 'left'
+        elif i == length - 1:
+            start = 'right'
+        else:
+            start = 'mid'
+
+        result += getattr(Emojis.ProgressBars, f'{start}_{key}')
+
+    if u200b:
+        return result + "\u200b"
+
+    return result

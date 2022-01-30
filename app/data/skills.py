@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import random
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, TypeAlias, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Literal, TypeAlias, TYPE_CHECKING
 
 import discord
 
 from app.util.common import insert_random_u200b
+from app.util.views import AnyUser, UserView
 from config import Colors
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 
 
 DEFAULT_LEVEL_REQUIREMENT_MAPPING = {
-    5: 3,
+    5: 0,
     15: 10,
     35: 25,
     75: 50,
@@ -72,6 +73,126 @@ class TrainingFailure(Exception):
     pass
 
 
+class RobberyTrainingButton(discord.ui.Button['RobberyTrainingView']):
+    def __init__(self, digit: int, *, row: int | None = None, user: AnyUser | None = None) -> None:
+        super().__init__(label=str(digit), style=discord.ButtonStyle.primary, row=row)
+
+        self.digit: int = digit
+        self._user: AnyUser | None = user
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if self._user and interaction.user != self._user:
+            return await interaction.response.send_message('Nope', ephemeral=True)
+
+        self.view.entered += str(self.digit)
+        self.view.update()
+
+        await interaction.response.edit_message(embed=self.view.embed, view=self.view)
+
+
+class RobberyTrainingView(UserView):
+    def __init__(self, ctx: Context, embed: discord.Embed, code: int) -> None:
+        super().__init__(ctx.author)
+
+        self.code: int = code
+        self.embed: discord.Embed = embed
+        self.entered: str = ''
+
+        self.dangling_interaction: discord.Interaction | None = None
+
+        self.clear_button = discord.ui.Button(label='Clear', style=discord.ButtonStyle.danger)
+        self.submit_button = discord.ui.Button(label='Submit', style=discord.ButtonStyle.success)
+
+        self.clear_button.callback = self.clear_callback
+        self.submit_button.callback = self.submit_callback
+
+        self.scramble_buttons()
+
+    def update(self) -> None:
+        self.embed.remove_field(1)
+
+        if self.entered:
+            self.embed.add_field(name='\u200b', value=f'```py\n{self.entered}```', inline=False)
+
+        self.scramble_buttons()
+
+    def scramble_buttons(self) -> None:
+        buttons = [RobberyTrainingButton(i) for i in range(10)]
+        random.shuffle(buttons)
+
+        self.clear_items()
+        for button in buttons:
+            self.add_item(button)
+
+        self.add_item(self.clear_button)
+        self.add_item(self.submit_button)
+
+    async def clear_callback(self, interaction: discord.Interaction) -> None:
+        self.entered = ''
+        self.update()
+
+        await interaction.response.edit_message(embed=self.embed, view=self)
+
+    async def submit_callback(self, interaction: discord.Interaction) -> None:
+        self.dangling_interaction = interaction
+        self.stop()
+
+
+PUNCH = 'Punch'
+KICK = 'Kick'
+LOW_PUNCH = 'Low Punch'
+HIGH_KICK = 'High Kick'
+
+JUMP = 'Jump!', '\u23eb'
+DUCK = 'Duck!', '\u23ec'
+BLOCK = 'Block!', '\U0001f6e1'
+
+
+class DefenseTrainingButton(discord.ui.Button['DefenseTrainingView']):
+    def __init__(self, action: tuple[str, str]) -> None:
+        self.action, emoji = action
+
+        super().__init__(label=self.action, emoji=emoji)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self.view.choice = self.action
+
+        match self.view.action, self.action:
+            case 'Punch', 'Duck!':
+                self.view._is_correct = True
+            case 'Kick', 'Jump!':
+                self.view._is_correct = True
+            case 'Low Punch' | 'High Kick', 'Block!':
+                self.view._is_correct = True
+            case _:
+                self.view._is_correct = False
+
+        for button in self.view.children:
+            assert isinstance(button, discord.ui.Button)
+
+            if button.label == self.action:
+                button.style = discord.ButtonStyle.success if self.view._is_correct else discord.ButtonStyle.danger
+
+            button.disabled = True
+
+        await interaction.response.edit_message(view=self.view)
+        self.view.stop()
+
+
+class DefenseTrainingView(UserView):
+    def __init__(self, ctx: Context, action: str) -> None:
+        self.ctx: Context = ctx
+        self.action: str = action
+
+        super().__init__(ctx.author, timeout=5)
+        self.choice: str | None = None
+        self._is_correct: bool | None = None
+
+        self.add_item(DefenseTrainingButton(JUMP))
+        self.add_item(DefenseTrainingButton(DUCK))
+        self.add_item(DefenseTrainingButton(BLOCK))
+
+
 class Skills:
     """Stores all of the skills."""
     begging = Skill(
@@ -117,6 +238,93 @@ class Skills:
                 raise TrainingFailure("You didn't send the prompt in time, and you failed training for this session. Try again next time!")
 
             ctx.bot.loop.create_task(ctx.thumbs(message))
+
+    _common_requirement_mapping = {
+        5: 0,
+        15: 10,
+        35: 25,
+        50: 35,
+    }
+
+    robbery = Skill(
+        key='robbery',
+        name='Robbery',
+        description='Improve your chances of success along with net gain when using the `rob` command. (Max. +50% payouts)',
+        benefit=lambda p: f'+{p}% success chance, -{p / 2}% death chance, +{min(p * 2, 50)}% payouts',
+        price=8000,
+        training_cooldown=1800,
+        max_points=50,
+        level_requirement_mapping=_common_requirement_mapping,
+    )
+
+    @robbery.to_train
+    async def train_robbery(self, ctx: Context, _: Skill) -> Any:
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}: Training Robbery Skill', icon_url=ctx.author.avatar.url)
+
+        embed.description = (
+            "Practice entering this combination into the keypad before time runs out!\n"
+            "Because this is Discord and I can do whatever I want, I made the keypad randomize each time."
+        )
+
+        code = random.randint(10000000, 99999999)
+        embed.add_field(name='Enter the following combination:', value=code)
+
+        view = RobberyTrainingView(ctx, embed, code)
+        original = await ctx.send(embed=embed, view=view)
+
+        try:
+            await asyncio.wait_for(view.wait(), timeout=20)
+        except asyncio.TimeoutError:
+            raise TrainingFailure("You didn't enter the code in time and the keypad disappears. Try again next time!")
+
+        if view.entered != str(code):
+            raise TrainingFailure("You didn't enter the code correctly and the keypad disappears. Try again next time!")
+
+        embed.colour = Colors.success
+        await ctx.maybe_edit(original, embed=embed)
+
+    defense = Skill(
+        key='defense',
+        name='Defense',
+        description='Lowers the success chance of others trying to rob you.',
+        benefit=lambda p: f'-{p}% rob success chance, +{p / 2}% death chance for others',
+        price=8000,
+        training_cooldown=1800,
+        max_points=50,
+        level_requirement_mapping=_common_requirement_mapping,
+    )
+
+    @defense.to_train
+    async def train_defense(self, ctx: Context, _: Skill) -> Any:
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}: Training Defense Skill', icon_url=ctx.author.avatar.url)
+        embed.set_footer(text='Starting in 5 seconds.')
+
+        embed.description = (
+            'A dummy opponent will be training your defense skills by trying to hit you.\n'
+            'When the opponent is about to punch, you must **duck**. When they are about to kick, you must **jump**.\n'
+            'Additionally, when the opponent tries dealing a __low punch__ or a __high kick__, you must **block**.'
+        )
+
+        await ctx.send(embed=embed, reference=ctx.message)
+        await asyncio.sleep(5)
+
+        for i in range(1, 6):
+            action = random.choice((PUNCH, KICK, LOW_PUNCH, HIGH_KICK))
+            view = DefenseTrainingView(ctx, action)
+
+            await ctx.send(
+                f'[{i}/5] Dummy opponent is about to deal a **{action}** - what will you do?', reference=ctx.message, view=view,
+            )
+
+            await view.wait()
+
+            if view.choice is None:
+                raise TrainingFailure("You didn't respond in time and the dummy opponent beats you. Try again next time!")
+
+            elif not view._is_correct:
+                raise TrainingFailure("Wrong choice! The dummy opponent beats you. Try again next time!")
 
 
 SKILLS_INSTANCE = Skills()

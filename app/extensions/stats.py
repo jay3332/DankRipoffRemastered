@@ -8,7 +8,7 @@ import discord
 from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
 from app.data.items import Items
 from app.database import UserRecord
-from app.util.common import cutoff
+from app.util.common import cutoff, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter
 from app.util.pagination import FieldBasedFormatter, Formatter, Paginator
 from config import Colors, Emojis
@@ -63,6 +63,24 @@ class Stats(Cog):
         """))
 
         return embed, REPLY, NO_EXTRA if ctx.author != user else None
+
+    @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'})
+    @simple_cooldown(2, 5)
+    async def level(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> tuple[discord.Embed, Any, Any]:
+        """View your current level and experience."""
+        user = user or ctx.author
+        data = await ctx.db.get_user_record(user.id)
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f"Level: {user}", icon_url=user.avatar.url)
+
+        level, exp, requirement = data.level_data
+        embed.add_field(
+            name=f"Level {level:,}",
+            value=f'{exp:,}/{requirement:,} XP ({exp / requirement:.1%})\n{progress_bar(exp / requirement)}',
+        )
+
+        return embed, REPLY, NO_EXTRA
 
     @command(aliases={"rich", "lb", "top", "richest", "wealthiest"})
     @simple_cooldown(1, 15)
@@ -122,7 +140,7 @@ class Stats(Cog):
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY, NO_EXTRA if ctx.author != user else None
 
-    @group(aliases={"notifs", "notification"})
+    @group(aliases={"notifs", "notification", "notif", "nt"})
     @simple_cooldown(1, 6)
     async def notifications(self, ctx: Context) -> tuple[str | Paginator, Any]:
         """View your notifications."""

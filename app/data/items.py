@@ -5,6 +5,7 @@ import random
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
+from textwrap import dedent
 from typing import Any, Awaitable, Callable, Generator, TYPE_CHECKING, TypeAlias
 
 from app.util.common import pluralize
@@ -107,13 +108,22 @@ class Item:
             coro = self.usage_callback(ITEMS_INST, ctx, self)
             quantity = 1
 
-        await coro
+        try:
+            await coro
+        except ItemUsageError as exc:
+            await ctx.send(exc, reference=ctx.message)
+            return 0
+
         return quantity
 
     async def remove(self, ctx: Context) -> None:
         assert self.removable
 
         await self.removal_callback(ITEMS_INST, ctx, self)
+
+
+class ItemUsageError(Exception):
+    """When raised, disposed items will not be disposed."""
 
 
 Fish = partial(Item, type=ItemType.fish)
@@ -132,6 +142,31 @@ class Items:
         buyable=True,
     )
 
+    padlock = Item(
+        type=ItemType.tool,
+        key='padlock',
+        name='Padlock',
+        emoji='<:padlock:785630994685755424>',
+        description='Add a layer of protection to your wallet! When used, others will pay a fine when they try to rob you.',
+        price=5000,
+        buyable=True,
+        dispose=True,
+    )
+
+    @padlock.to_use
+    async def use_padlock(self, ctx: Context, item: Item) -> None:
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.update(padlock_active=True)
+
+        await ctx.send(f'{item.emoji} Successfully activated your padlock.')
+
+    @padlock.to_remove
+    async def remove_padlock(self, ctx: Context, item: Item) -> None:
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.update(padlock_active=False)
+
+        await ctx.send(f'{item.emoji} Successfully deactivated your padlock.')
+
     banknote = Item(
         type=ItemType.tool,
         key='banknote',
@@ -141,6 +176,68 @@ class Items:
         sell=10000,
         dispose=True,
     )
+
+    @banknote.to_use
+    async def use_banknote(self, ctx: Context, item: Item, quantity: int) -> None:
+        message = await ctx.message.reply(pluralize(f'{item.emoji} Using {quantity} banknote(s)...'))
+
+        await asyncio.sleep(random.uniform(2, 4))
+
+        profit = random.randint(1000 * quantity, 3000 * quantity)
+        await ctx.db.get_user_record(ctx.author.id, fetch=False).add(max_bank=profit)
+
+        await message.edit(content=pluralize(
+            f'{item.emoji} Your {quantity} banknote(s) expanded your bank space by {Emojis.coin} **{profit:,}**.'
+        ))
+
+    cheese = Item(
+        type=ItemType.tool,
+        key='cheese',
+        name='Cheese',
+        plural='Cheese',
+        emoji='<:cheese:937157036737724477>',
+        description=(
+            'A lucsious slice of cheese. Eating (using) these will increase your permanent EXP multiplier. '
+            'There is a super small chance (2% per slice of cheese) you could die from lactose intolerance, though.\n\n'
+            'It is preferred to use these individually rather than in bulk.'
+        ),
+        price=7500,
+        buyable=True,
+        dispose=True,
+    )
+
+    @cheese.to_use
+    async def use_cheese(self, ctx: Context, item: Item, quantity: int) -> None:
+        if quantity > 10:
+            raise ItemUsageError('You can only eat up to 10 slices of cheese at a time.')
+
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        if quantity == 1:
+            readable = f'a slice of {item.name}'
+        else:
+            readable = f'{quantity:,} slices of {item.name}'
+
+        original = await ctx.send(f'{item.emoji} Eating {readable}...', reference=ctx.message)
+        await asyncio.sleep(random.uniform(2, 4))
+
+        chance = 1 - 0.98 ** quantity
+        if random.random() < chance:
+            await record.make_dead(reason='lactose intolerance from eating cheese')
+            await original.edit(
+                content=f'{item.emoji} You eat the cheese only to find out that you are lactose intolerant, and now you\'re dead.'
+            )
+
+            return
+
+        # 0.1% to 1% per slice
+        gain = random.uniform(0.001 * quantity, 0.01 * quantity)
+        await record.add(exp_multiplier=gain)
+
+        await original.edit(content=dedent(f'''
+            {item.emoji} You ate {readable} and gained a **{gain:.02%}** EXP multiplier.
+            You now have a **{record.exp_multiplier:.02%}** EXP multiplier.
+        '''))
 
     fishing_pole = Item(
         type=ItemType.tool,
@@ -266,19 +363,6 @@ class Items:
         description='\uff56\uff49\uff42\uff45',  # "vibe" in full-width text
         sell=6500,
     )
-
-    @banknote.to_use
-    async def banknote_use(self, ctx: Context, item: Item, quantity: int) -> None:
-        message = await ctx.message.reply(pluralize(f'{item.emoji} Using {quantity} banknote(s)...'))
-
-        await asyncio.sleep(random.uniform(2, 4))
-
-        profit = random.randint(1000 * quantity, 3000 * quantity)
-        await ctx.db.get_user_record(ctx.author.id, fetch=False).add(max_bank=profit)
-
-        await message.edit(content=pluralize(
-            f'{item.emoji} Your {quantity} banknote(s) expanded your bank space by {Emojis.coin} **{profit:,}**.'
-        ))
 
     @classmethod
     def all(cls) -> Generator[Item, Any, Any]:

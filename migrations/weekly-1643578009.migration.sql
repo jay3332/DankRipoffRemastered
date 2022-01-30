@@ -1,0 +1,3 @@
+
+ALTER TABLE users
+ADD COLUMN weekly_streak INTEGER NOT NULL DEFAULT 0;

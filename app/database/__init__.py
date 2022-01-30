@@ -169,7 +169,7 @@ class Notification(NamedTuple):
 
     @classmethod
     def from_record(cls, record: asyncpg.Record) -> Notification:
-        return cls(created_at=record['created_at'].replace(tzinfo=datetime.timezone.utc), title=record['title'], content=record['content'])
+        return cls(created_at=record['created_at'], title=record['title'], content=record['content'])
 
 
 class NotificationsManager:
@@ -238,6 +238,12 @@ class SkillManager:
             return None
 
         return self.cached[skill]
+
+    def points_in(self, skill: Skill | str) -> int:
+        if skill := self.get_skill(skill):
+            return skill.points
+
+        return 0
 
     def has_skill(self, skill: Skill | str) -> bool:
         return getattr(skill, 'key', skill) in self.cached
@@ -360,6 +366,9 @@ class UserRecord:
         self.__cooldown_manager: CooldownManager | None = None
         self.__skill_manager: SkillManager | None = None
 
+    def __repr__(self) -> str:
+        return f'<UserRecord wallet={self.wallet} bank={self.bank} level_data={self.level_data}>'
+
     async def fetch(self) -> UserRecord:
         query = """
                 INSERT INTO users (user_id) VALUES ($1) 
@@ -422,7 +431,10 @@ class UserRecord:
         if random.random() > chance:
             return 0
 
-        await self.add_exp(amount := random.randint(minimum, maximum), connection=connection)
+        amount = random.randint(minimum, maximum)
+        amount += round(amount * self.exp_multiplier)
+
+        await self.add_exp(amount, connection=connection)
         return amount
 
     async def make_dead(self, *, reason: str | None = None, connection: asyncpg.Connection | None = None) -> None:
@@ -496,12 +508,24 @@ class UserRecord:
         return self.level_data[2]
 
     @property
+    def exp_multiplier(self) -> float:
+        return self.data['exp_multiplier']
+
+    @property
+    def padlock_active(self) -> bool:
+        return self.data['padlock_active']
+
+    @property
     def unread_notifications(self) -> int:
         return self.data['unread_notifications']
 
     @property
     def daily_streak(self) -> int:
         return self.data['daily_streak']
+
+    @property
+    def weekly_streak(self) -> int:
+        return self.data['weekly_streak']
 
     @property
     def inventory_manager(self) -> InventoryManager:

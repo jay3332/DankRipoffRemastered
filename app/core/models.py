@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 
 class Context(TypedContext):
+    bot: Bot
+
     def __init__(self, **attrs) -> None:
         self._message: discord.Message | None = None
         super().__init__(**attrs)

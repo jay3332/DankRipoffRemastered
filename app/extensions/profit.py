@@ -8,12 +8,15 @@ from typing import Any, NamedTuple, TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, EDIT, REPLY, command, database_cooldown, lock_transactions, simple_cooldown, \
+from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, database_cooldown, lock_transactions, \
+    simple_cooldown, \
     user_max_concurrency
+from app.core.helpers import cooldown_message
 from app.data.items import Item, Items
+from app.data.skills import RobberyTrainingButton
 from app.util.common import insert_random_u200b
-from app.util.converters import Investment
-from app.util.views import UserView
+from app.util.converters import CaseInsensitiveMemberConverter, Investment
+from app.util.views import AnyUser, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -126,6 +129,8 @@ class Profit(Cog):
     )
 
     BEG_ITEMS = {
+        Items.padlock: 0.1,
+        Items.cheese: 0.05,
         Items.banknote: 0.05,
     }
 
@@ -277,6 +282,9 @@ class Profit(Cog):
                 'You got stuck in the trash can, lmao',
                 'Not only do you stink now, but you found absolutely nothing in the trash can.',
             ],
+            items={
+                Items.cheese: 0.02,
+            }
         ),
         'car': SearchArea(
             minimum=100,
@@ -344,7 +352,8 @@ class Profit(Cog):
                 'You punctured an artery on the broken window and bled out soon after.',
             ],
             items={
-                Items.banknote: 0.06,
+                Items.padlock: 0.06,
+                Items.banknote: 0.03,
             },
         ),
         'shoe': SearchArea(
@@ -566,6 +575,7 @@ class Profit(Cog):
     @command(aliases={'da', 'day'})
     @database_cooldown(86_400)
     @user_max_concurrency(1)
+    @cooldown_message('This command is named daily for a reason.')
     async def daily(self, ctx: Context) -> tuple[discord.Embed, Any]:
         """Claim your daily reward!"""
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -592,6 +602,265 @@ class Profit(Cog):
         embed.description = f'You claimed your daily reward of {Emojis.coin} **{profit:,}**.'
 
         return embed, REPLY
+
+    @command(aliases={'week', 'wk'})
+    @database_cooldown(604_800)
+    @user_max_concurrency(1)
+    @cooldown_message('This command is named weekly for a reason.')
+    async def weekly(self, ctx: Context) -> tuple[discord.Embed, Any]:
+        """Claim your weekly reward!"""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        cooldowns = await record.cooldown_manager.wait()
+
+        previous = cooldowns.cached['weekly'].previous_expiry
+
+        if previous and ctx.now - previous <= timedelta(days=2):  # Give two days of breathing room
+            await record.add(weekly_streak=1)
+        else:
+            await record.update(weekly_streak=0)
+
+        streak_benefit = record.weekly_streak * 2000
+        profit = 20000 + streak_benefit
+
+        await record.add(wallet=profit)
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}: Claim Weekly', icon_url=ctx.author.avatar.url)
+
+        if streak_benefit:
+            embed.add_field(name='Streak Bonus', value=f'+{Emojis.coin} **{streak_benefit:,}** [Streak: {record.weekly_streak}]')
+
+        embed.description = f'You claimed your weekly reward of {Emojis.coin} **{profit:,}**.'
+
+        return embed, REPLY
+
+    @command(aliases={'steal', 'ripoff'})
+    @simple_cooldown(1, 90)
+    @user_max_concurrency(1)
+    @lock_transactions
+    async def rob(self, ctx: Context, *, user: CaseInsensitiveMemberConverter):
+        """Attempt to rob someone of their coins! There is a chance that you might fail and pay a fine, or even die."""
+        if user == ctx.author:
+            yield 'What are you trying to do? Rob yourself? Sounds kinda dumb to me.', BAD_ARGUMENT
+            return
+
+        if user.bot:
+            yield 'You cannot rob bot accounts.', BAD_ARGUMENT
+            return
+
+        their_record = await ctx.db.get_user_record(user.id)
+
+        if their_record.wallet < 500:
+            yield f"The person you're trying to rob is pretty poor, try robbing people with more than {Emojis.coin} 500 next time.", BAD_ARGUMENT
+            return
+
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        if record.wallet < 500:
+            yield f'You must have {Emojis.coin} 500 in your wallet in order to rob someone.', BAD_ARGUMENT
+            return
+
+        async with ctx.db.acquire() as conn:
+            await record.add_random_bank_space(10, 15, chance=0.6, connection=conn)
+            await record.add_random_exp(12, 17, chance=0.7, connection=conn)
+
+        skills = await record.skill_manager.wait()
+        their_skills = await their_record.skill_manager.wait()
+
+        success_chance = max(50 + skills.points_in('rob') - their_skills.points_in('defense'), 2) / 100
+
+        if not await ctx.confirm(
+            f'Are you sure you want to rob **{user.name}**? (Success chance: {success_chance:.0%})',
+            delete_after=True,
+            reference=ctx.message,
+        ):
+            yield 'Looks like we won\'t rob today.', BAD_ARGUMENT
+            return
+
+        yield f'{Emojis.loading} Robbing {user.name}...', REPLY
+        await asyncio.sleep(random.uniform(1.5, 3.5))
+
+        if their_record.padlock_active:
+            fine_percent = random.uniform(.05, .25)
+            fine = max(500, round(record.wallet * fine_percent))
+
+            fine_percent = fine / record.wallet
+            yield (
+                f'{Items.padlock.emoji} {user.name} had a padlock active. '
+                f'You were instantly caught trying to get rid of the padlock and you pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                EDIT,
+            )
+            await record.add(wallet=-fine)
+            await their_record.update(padlock_active=False)
+            return
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}: Robbing {user.name}', icon_url=ctx.author.avatar.url)
+
+        code = random.randint(100000, 999999)
+        embed.description = (
+            "Robbing isn't as always as easy as it seems. Quick! Type in the following combination onto the keypad below "
+            f"before time runs out to rob {user.mention} of their coins!\n\n"
+            f"{user.mention}, you can press the **CATCH!** button before {ctx.author.name} finishes entering in the "
+            f"combination in order to catch them and automatically fail their attempt."
+        )
+
+        embed.add_field(name='Enter the following combination:', value=str(code), inline=False)
+        view = RobbingKeypad(ctx, user, embed, code)
+
+        yield '', embed, view, EDIT
+
+        try:
+            await asyncio.wait_for(view.wait(), timeout=20)
+        except asyncio.TimeoutError:
+            fine_percent = random.uniform(.1, .5)
+            fine = max(500, round(record.wallet * fine_percent))
+
+            fine_percent = fine / record.wallet
+            yield (
+                f'Looks like you took too long to enter in the combination. '
+                f'You were caught trying to break into {user.name}\'s wallet and you pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                REPLY,
+            )
+            await record.add(wallet=-fine)
+            return
+
+        if view.caught:
+            fine_percent = random.uniform(.2, .6)
+            fine = max(500, round(record.wallet * fine_percent))
+
+            fine_percent = fine / record.wallet
+            yield (
+                f'{user.name} caught you trying to break into their wallet and immediately call the cops on you. '
+                f'You pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                REPLY,
+            )
+            await record.add(wallet=-fine)
+            return
+
+        embed.colour = Colors.success
+        yield embed, EDIT
+
+        death_chance = max(10 - skills.points_in('rob') / 2 + their_skills.points_in('defense') / 2, 0) / 100
+
+        if random.random() < success_chance:
+            payout_percent = min(
+                random.uniform(.3, .8) + min(skills.points_in('rob') * .02, .5), 1,
+            )
+            payout = round(their_record.wallet * payout_percent)
+            await record.add(wallet=payout)
+            await their_record.add(wallet=-payout)
+
+            yield (
+                f"**SUCCESS!** You stole {Emojis.coin} **{payout:,}** ({payout_percent:.1%}) from {user.name}'s wallet!.\n"
+                f"You now have {Emojis.coin} **{record.wallet:,}**.",
+                REPLY,
+            )
+            return
+
+        if random.random() < death_chance:
+            await record.make_dead()
+            yield (
+                f"While trying your best not to make a noise, you are spotted by police while trying to rob {user.name}.\n"
+                "You refuse arrest causing the police to fatally shoot you. You died.",
+                REPLY,
+            )
+            return
+
+        # highest fines are here
+        fine_percent = random.uniform(.2, .7)
+        fine = max(500, round(record.wallet * fine_percent))
+
+        fine_percent = fine / record.wallet
+        yield (
+            f'While so stealthily trying to rob {user.name}, you are spotted by police, '
+            f'who force you to pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet) to {user.name}.',
+            REPLY,
+        )
+        await record.add(wallet=-fine)
+        await their_record.add(wallet=fine)
+        return
+
+
+class PlaceholderKeypadButton(discord.ui.Button['RobbingKeypad']):
+    def __init__(self, *, row: int | None = None) -> None:
+        super().__init__(label='\u200b', disabled=True, row=row)
+
+
+class RobbingKeypad(discord.ui.View):
+    def __init__(self, ctx: Context, opponent: AnyUser, embed: discord.Embed, code: int) -> None:
+        super().__init__()
+
+        self.ctx: Context = ctx
+        self.opponent: AnyUser = opponent
+
+        self.code: int = code
+        self.embed: discord.Embed = embed
+        self.entered: str = ''
+
+        self.caught: bool = False
+        self.dangling_interaction: discord.Interaction | None = None
+
+        self.clear_button = discord.ui.Button(label='Clear', style=discord.ButtonStyle.danger, row=4)
+        self.submit_button = discord.ui.Button(label='Submit!', style=discord.ButtonStyle.success, row=4)
+        self.catch_button = discord.ui.Button(label='CATCH!', style=discord.ButtonStyle.danger, row=4)
+
+        self.clear_button.callback = self.clear_callback
+        self.submit_button.callback = self.submit_callback
+        self.catch_button.callback = self.catch_callback
+
+        self.add_buttons()
+
+    def update(self) -> None:
+        self.embed.remove_field(1)
+
+        if self.entered:
+            self.embed.add_field(name='You entered:', value=f'```py\n{self.entered}```', inline=False)
+
+    def add_buttons(self) -> None:
+        buttons = (
+            (1, 2, 3),
+            (4, 5, 6),
+            (7, 8, 9),
+            (None, 0, None),
+        )
+
+        self.clear_items()
+        for i, row in enumerate(buttons):
+            for button in row:
+                self.add_item(
+                    PlaceholderKeypadButton(row=i)
+                    if button is None
+                    else RobberyTrainingButton(button, row=i, user=self.ctx.author)
+                )
+
+        self.add_item(self.clear_button)
+        self.add_item(self.submit_button)
+        self.add_item(self.catch_button)
+
+    async def clear_callback(self, interaction: discord.Interaction) -> None:
+        if interaction.user != self.ctx.author:
+            return await interaction.response.send_message('nope', ephemeral=True)
+
+        self.entered = ''
+        self.update()
+
+        await interaction.response.edit_message(embed=self.embed, view=self)
+
+    async def submit_callback(self, interaction: discord.Interaction) -> None:
+        if interaction.user != self.ctx.author:
+            return await interaction.response.send_message('nope', ephemeral=True)
+
+        self.dangling_interaction = interaction
+        self.stop()
+
+    async def catch_callback(self, interaction: discord.Interaction) -> None:
+        if interaction.user != self.opponent:
+            return await interaction.response.send_message(f'Only {self.opponent.mention} can use this button.', ephemeral=True)
+
+        self.caught = True
+        self.dangling_interaction = interaction
+        self.stop()
 
 
 setup = Profit.simple_setup

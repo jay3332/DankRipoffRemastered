@@ -285,6 +285,17 @@ def user_max_concurrency(count: int, *, wait: bool = False) -> Callable[[callabl
     return commands.max_concurrency(count, commands.BucketType.user, wait=wait)
 
 
+def cooldown_message(message: str) -> Callable[[callable | commands.Command], callable]:
+    def decorator(func: callable | commands.Command) -> callable:
+        if isinstance(func, commands.Command):
+            func = func.callback
+
+        func.__cooldown_message__ = message
+        return func
+
+    return decorator
+
+
 def database_cooldown(per: float, /) -> Callable[[callable], callable]:
     async def predicate(ctx: Context) -> bool:
         data = await ctx.db.get_user_record(ctx.author.id)

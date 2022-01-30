@@ -18,7 +18,7 @@ from app.core import (
     user_max_concurrency,
 )
 from app.data.items import Item, Items
-from app.util.common import image_url_from_emoji, walk_collection
+from app.util.common import cutoff, image_url_from_emoji, walk_collection
 from app.util.converters import (
     BUY,
     BankTransaction,
@@ -147,9 +147,11 @@ class Transactions(Cog):
                 owned = inventory.cached.quantity_of(i)
                 owned = f'(You own {owned:,})' if owned else ''
 
+                description = cutoff(i.description, max_length=100)
+
                 fields.append({
                     'name': f'• {i.display_name} — {Emojis.coin} {i.price:,} {owned}',
-                    'value': comment + i.description,
+                    'value': comment + description,
                     'inline': False,
                 })
 
@@ -256,7 +258,7 @@ class Transactions(Cog):
 
         return embed, REPLY
 
-    @command(aliases={'u', 'consume'})
+    @command(aliases={'u', 'consume', 'activate'})
     @simple_cooldown(2, 10)
     @user_max_concurrency(1)
     @lock_transactions
@@ -267,13 +269,29 @@ class Transactions(Cog):
         record = await ctx.db.get_user_record(ctx.author.id)
 
         async with ctx.db.acquire() as conn:
-            await record.add_random_exp(10, 15, chance=0.4, connection=conn)
+            await record.add_random_exp(10, 15, chance=0.5, connection=conn)
             await record.add_random_bank_space(10, 15, chance=0.4, connection=conn)
 
             quantity = await item.use(ctx, quantity)
 
-            if item.dispose:
+            if quantity > 0 and item.dispose:
                 await record.inventory_manager.add_item(item, -quantity, connection=conn)
+
+        await ctx.thumbs()
+
+    @command(aliases={'rm', 'dispose', 'deactivate'})
+    @simple_cooldown(2, 10)
+    @user_max_concurrency(1)
+    @lock_transactions
+    async def remove(self, ctx: Context, *, item: query_item):
+        """Remove the effects of active items."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        async with ctx.db.acquire() as conn:
+            await record.add_random_exp(10, 15, chance=0.4, connection=conn)
+            await record.add_random_bank_space(10, 15, chance=0.4, connection=conn)
+
+            await item.remove(ctx)
 
         await ctx.thumbs()
 

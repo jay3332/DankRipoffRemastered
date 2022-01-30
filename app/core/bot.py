@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import os
+import re
 from textwrap import dedent
 from typing import Any, ClassVar, Final, TYPE_CHECKING
 
@@ -13,7 +14,8 @@ from discord.ext import commands
 from app.core.help import HelpCommand
 from app.core.models import Context, Command
 from app.database import Database
-from config import allowed_mentions, beta, beta_token, default_prefix, description, name, owner, token, version
+from app.util.common import humanize_duration, pluralize
+from config import Colors, allowed_mentions, beta, beta_token, default_prefix, description, name, owner, token, version
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -21,6 +23,8 @@ if TYPE_CHECKING:
 jishaku.Flags.HIDE = True
 jishaku.Flags.NO_UNDERSCORE = True
 jishaku.Flags.NO_DM_TRACEBACK = True
+
+ANSI_REGEX: re.Pattern[str] = re.compile(r"\x1b\[\d{2};[01]m")
 
 
 class Bot(commands.Bot):
@@ -31,6 +35,7 @@ class Bot(commands.Bot):
 
     INTENTS: Final[ClassVar[discord.Intents]] = discord.Intents(
         messages=True,
+        presences=True,
         members=True,
         guilds=True,
     )
@@ -68,8 +73,13 @@ class Bot(commands.Bot):
         self.load_extension('jishaku')
 
         for file in os.listdir('./app/extensions'):
+            if file == 'slash.py':
+                continue
+
             if not file.startswith('_') and file.endswith('.py'):
                 self.load_extension(f'app.extensions.{file[:-3]}')
+
+        self.load_extension('app.extensions.slash')  # Load this last
 
     def prepare(self) -> None:
         """Prepares the bot for startup."""
@@ -95,7 +105,19 @@ class Bot(commands.Bot):
         print(format(center, f'=^{len(text)}'))
         print(text)
 
+    @staticmethod
+    def remove_ansi_if_mobile(ctx: Context, text: str) -> str:
+        """Currently, ANSI syntax highlighting does not render properly on mobile devices.
+
+        Here, we check if `mobile_status` is not offline - if it is, we remove all ANSI syntax higlighting.
+        """
+        if ctx.author.mobile_status != discord.Status.offline:
+            return ANSI_REGEX.sub('', text)
+
+        return text
+
     async def on_command_error(self, ctx: Context, error: Exception) -> Any:
+        # sourcery no-metrics
         error = getattr(error, 'original', error)
 
         if isinstance(error, commands.BadUnionArgument):
@@ -103,6 +125,7 @@ class Bot(commands.Bot):
 
         blacklist = (
             commands.CommandNotFound,
+            commands.CheckFailure,
         )
         if isinstance(error, blacklist):
             return
@@ -129,35 +152,52 @@ class Bot(commands.Bot):
             invoked_with = ' '.join((*ctx.invoked_parents, ctx.invoked_with))
 
             alias_message = (
-                f'Hint: \u001b[00;0mcommand alias \u001b[36;1m{invoked_with!r} \u001b[00;0mpoints to '
-                f'\u001b[32;1m{ctx.command.qualified_name}\u001b[00;0m, is this corrrect?'
+                f'Hint: \x1b[00;0mcommand alias \x1b[36;1m{invoked_with!r} \x1b[00;0mpoints to '
+                f'\x1b[32;1m{ctx.command.qualified_name}\x1b[00;0m, is this correct?'
             ) if ctx.command.qualified_name != invoked_with else ''
 
             # inspired by Rust error messages
             #
             # this looks really nice on PC, but it looks horrible on mobile
             # maybe make it look different on mobile?
-            return await respond(dedent(f"""
+            return await respond(self.remove_ansi_if_mobile(ctx, dedent(f"""
                 Could not parse your command input properly:
                 ```ansi
                 Attempted to parse signature:
                 
-                    \u001b[37;1m{ctx.clean_prefix}\u001b[32;1m{invoked_with} {ansi}\u001b[30;1m
+                    \x1b[37;1m{ctx.clean_prefix}\x1b[32;1m{invoked_with} {ansi}\x1b[30;1m
                     {' ' * (length + len(ctx.clean_prefix) + len(invoked_with))} {'^' * carets} Error occured here
                 
-                \u001b[31;1m{error} \u001b[37;1m
+                \x1b[31;1m{error} \x1b[37;1m
                 
                 {alias_message}
                 ```
-            """))
+            """)))
+
+        if isinstance(error, commands.MaxConcurrencyReached):
+            # noinspection PyUnresolvedReferences
+            return await respond(
+                pluralize(f'Calm down there! This command can only be used {error.number} time(s) at once per {error.per.name}.'),
+            )
 
         if isinstance(error, discord.NotFound) and error.code == 10062:
             return
 
         if isinstance(error, commands.CommandOnCooldown):
-            return await respond(f'you have been cooldowned (wait {error.retry_after:.1f} seconds)')
+            command = ctx.command
 
-        await respond(f'`panic!({error})`')
+            embed = discord.Embed(color=Colors.error, timestamp=ctx.now)
+            embed.set_author(name='Command on cooldown!', icon_url=ctx.author.avatar.url)
+            embed.description = getattr(command.callback, '__cooldown_message__', 'Please wait before using this command again.')
+
+            default = pluralize(f'{error.cooldown.rate} time(s) per {humanize_duration(error.cooldown.per)}')
+
+            embed.add_field(name='Try again after', value=humanize_duration(error.retry_after))
+            embed.add_field(name='Default cooldown', value=default)
+
+            return await respond(embed=embed)
+
+        await respond(f'`panic!({error!r})`')
         raise error
 
     def run(self) -> None:
