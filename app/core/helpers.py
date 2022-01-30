@@ -12,6 +12,7 @@ from discord.ext import commands
 from app.core.models import Command, GroupCommand
 from app.util.common import setinel
 from app.util.pagination import Paginator
+from app.util.structures import LockWithReason
 
 if TYPE_CHECKING:
     from app.core.models import Context, Cog
@@ -163,14 +164,16 @@ def easy_command_callback(func: callable) -> callable:
     return wrapper
 
 
-def _get_lock(ctx: Context) -> asyncio.Lock:
-    return ctx.bot.transaction_locks.setdefault(ctx.author.id, asyncio.Lock())
+def _get_lock(ctx: Context) -> LockWithReason:
+    return ctx.bot.transaction_locks.setdefault(ctx.author.id, LockWithReason())
 
 
 def lock_transactions(func: callable) -> callable:
     async def check(ctx: Context) -> bool:
-        if _get_lock(ctx).locked():
-            raise commands.BadArgument('Please finish your pending transaction(s) first.')
+        lock = _get_lock(ctx)
+
+        if lock.locked():
+            raise commands.BadArgument(lock.reason or 'Please finish your pending transaction(s) first.')
 
         return True
 

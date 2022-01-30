@@ -1,3 +1,4 @@
+import asyncio
 from time import perf_counter
 from typing import TypeVar
 
@@ -35,3 +36,12 @@ class Timer:
 
     def __float__(self) -> float:
         return self.time
+
+
+class LockWithReason(asyncio.Lock):
+    def __init__(self, reason: str | None = None) -> None:
+        super().__init__()
+        self.reason: str | None = reason
+
+    def set_reason(self, reason: str) -> None:
+        self.reason = reason

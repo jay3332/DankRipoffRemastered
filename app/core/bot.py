@@ -15,6 +15,7 @@ from app.core.help import HelpCommand
 from app.core.models import Context, Command
 from app.database import Database
 from app.util.common import humanize_duration, pluralize
+from app.util.structures import LockWithReason
 from config import Colors, allowed_mentions, beta, beta_token, default_prefix, description, name, owner, token, version
 
 if TYPE_CHECKING:
@@ -31,7 +32,7 @@ class Bot(commands.Bot):
     """Dank Ripoff... Remastered."""
 
     startup_timestamp: datetime
-    transaction_locks: dict[int, asyncio.Lock]
+    transaction_locks: dict[int, LockWithReason]
 
     INTENTS: Final[ClassVar[discord.Intents]] = discord.Intents(
         messages=True,
@@ -84,7 +85,7 @@ class Bot(commands.Bot):
     def prepare(self) -> None:
         """Prepares the bot for startup."""
         self.db: Database = Database(loop=self.loop)
-        self.transaction_locks: dict[int, asyncio.Lock] = {}
+        self.transaction_locks: dict[int, LockWithReason] = {}
 
         self.loop.create_task(self._dispatch_first_ready())
         self._load_extensions()

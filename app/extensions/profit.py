@@ -16,6 +16,7 @@ from app.data.items import Item, Items
 from app.data.skills import RobberyTrainingButton
 from app.util.common import insert_random_u200b
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
+from app.util.structures import LockWithReason
 from app.util.views import AnyUser, UserView
 from config import Colors, Emojis
 
@@ -660,126 +661,130 @@ class Profit(Cog):
             yield f'You must have {Emojis.coin} 500 in your wallet in order to rob someone.', BAD_ARGUMENT
             return
 
-        async with ctx.db.acquire() as conn:
-            await record.add_random_bank_space(10, 15, chance=0.6, connection=conn)
-            await record.add_random_exp(12, 17, chance=0.7, connection=conn)
+        lock = ctx.bot.transaction_locks.setdefault(user.id, LockWithReason())
+        lock.set_reason("Someone else is currently trying to rob you.")
 
-        skills = await record.skill_manager.wait()
-        their_skills = await their_record.skill_manager.wait()
+        async with lock:
+            async with ctx.db.acquire() as conn:
+                await record.add_random_bank_space(10, 15, chance=0.6, connection=conn)
+                await record.add_random_exp(12, 17, chance=0.7, connection=conn)
 
-        success_chance = max(50 + skills.points_in('rob') - their_skills.points_in('defense'), 2) / 100
+            skills = await record.skill_manager.wait()
+            their_skills = await their_record.skill_manager.wait()
 
-        if not await ctx.confirm(
-            f'Are you sure you want to rob **{user.name}**? (Success chance: {success_chance:.0%})',
-            delete_after=True,
-            reference=ctx.message,
-        ):
-            yield 'Looks like we won\'t rob today.', BAD_ARGUMENT
-            return
+            success_chance = max(50 + skills.points_in('rob') - their_skills.points_in('defense'), 2) / 100
 
-        yield f'{Emojis.loading} Robbing {user.name}...', REPLY
-        await asyncio.sleep(random.uniform(1.5, 3.5))
+            if not await ctx.confirm(
+                f'Are you sure you want to rob **{user.name}**? (Success chance: {success_chance:.0%})',
+                delete_after=True,
+                reference=ctx.message,
+            ):
+                yield 'Looks like we won\'t rob today.', BAD_ARGUMENT
+                return
 
-        if their_record.padlock_active:
-            fine_percent = random.uniform(.05, .25)
+            yield f'{Emojis.loading} Robbing {user.name}...', REPLY
+            await asyncio.sleep(random.uniform(1.5, 3.5))
+
+            if their_record.padlock_active:
+                fine_percent = random.uniform(.05, .25)
+                fine = max(500, round(record.wallet * fine_percent))
+
+                fine_percent = fine / record.wallet
+                yield (
+                    f'{Items.padlock.emoji} {user.name} had a padlock active. '
+                    f'You were instantly caught trying to get rid of the padlock and you pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                    EDIT,
+                )
+                await record.add(wallet=-fine)
+                await their_record.update(padlock_active=False)
+                return
+
+            embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+            embed.set_author(name=f'{ctx.author.name}: Robbing {user.name}', icon_url=ctx.author.avatar.url)
+
+            code = random.randint(100000, 999999)
+            embed.description = (
+                "Robbing isn't as always as easy as it seems. Quick! Type in the following combination onto the keypad below "
+                f"before time runs out to rob {user.mention} of their coins!\n\n"
+                f"{user.mention}, you can press the **CATCH!** button before {ctx.author.name} finishes entering in the "
+                f"combination in order to catch them and automatically fail their attempt."
+            )
+
+            embed.add_field(name='Enter the following combination:', value=str(code), inline=False)
+            view = RobbingKeypad(ctx, user, embed, code)
+
+            yield '', embed, view, EDIT
+
+            try:
+                await asyncio.wait_for(view.wait(), timeout=20)
+            except asyncio.TimeoutError:
+                fine_percent = random.uniform(.1, .5)
+                fine = max(500, round(record.wallet * fine_percent))
+
+                fine_percent = fine / record.wallet
+                yield (
+                    f'Looks like you took too long to enter in the combination. '
+                    f'You were caught trying to break into {user.name}\'s wallet and you pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                    REPLY,
+                )
+                await record.add(wallet=-fine)
+                return
+
+            if view.caught:
+                fine_percent = random.uniform(.2, .6)
+                fine = max(500, round(record.wallet * fine_percent))
+
+                fine_percent = fine / record.wallet
+                yield (
+                    f'{user.name} caught you trying to break into their wallet and immediately call the cops on you. '
+                    f'You pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                    REPLY,
+                )
+                await record.add(wallet=-fine)
+                return
+
+            embed.colour = Colors.success
+            yield embed, EDIT
+
+            death_chance = max(10 - skills.points_in('rob') / 2 + their_skills.points_in('defense') / 2, 0) / 100
+
+            if random.random() < success_chance:
+                payout_percent = min(
+                    random.uniform(.3, .8) + min(skills.points_in('rob') * .02, .5), 1,
+                )
+                payout = round(their_record.wallet * payout_percent)
+                await record.add(wallet=payout)
+                await their_record.add(wallet=-payout)
+
+                yield (
+                    f"**SUCCESS!** You stole {Emojis.coin} **{payout:,}** ({payout_percent:.1%}) from {user.name}'s wallet!.\n"
+                    f"You now have {Emojis.coin} **{record.wallet:,}**.",
+                    REPLY,
+                )
+                return
+
+            if random.random() < death_chance:
+                await record.make_dead()
+                yield (
+                    f"While trying your best not to make a noise, you are spotted by police while trying to rob {user.name}.\n"
+                    "You refuse arrest causing the police to fatally shoot you. You died.",
+                    REPLY,
+                )
+                return
+
+            # highest fines are here
+            fine_percent = random.uniform(.2, .7)
             fine = max(500, round(record.wallet * fine_percent))
 
             fine_percent = fine / record.wallet
             yield (
-                f'{Items.padlock.emoji} {user.name} had a padlock active. '
-                f'You were instantly caught trying to get rid of the padlock and you pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
-                EDIT,
-            )
-            await record.add(wallet=-fine)
-            await their_record.update(padlock_active=False)
-            return
-
-        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'{ctx.author.name}: Robbing {user.name}', icon_url=ctx.author.avatar.url)
-
-        code = random.randint(100000, 999999)
-        embed.description = (
-            "Robbing isn't as always as easy as it seems. Quick! Type in the following combination onto the keypad below "
-            f"before time runs out to rob {user.mention} of their coins!\n\n"
-            f"{user.mention}, you can press the **CATCH!** button before {ctx.author.name} finishes entering in the "
-            f"combination in order to catch them and automatically fail their attempt."
-        )
-
-        embed.add_field(name='Enter the following combination:', value=str(code), inline=False)
-        view = RobbingKeypad(ctx, user, embed, code)
-
-        yield '', embed, view, EDIT
-
-        try:
-            await asyncio.wait_for(view.wait(), timeout=20)
-        except asyncio.TimeoutError:
-            fine_percent = random.uniform(.1, .5)
-            fine = max(500, round(record.wallet * fine_percent))
-
-            fine_percent = fine / record.wallet
-            yield (
-                f'Looks like you took too long to enter in the combination. '
-                f'You were caught trying to break into {user.name}\'s wallet and you pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                f'While so stealthily trying to rob {user.name}, you are spotted by police, '
+                f'who force you to pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet) to {user.name}.',
                 REPLY,
             )
             await record.add(wallet=-fine)
+            await their_record.add(wallet=fine)
             return
-
-        if view.caught:
-            fine_percent = random.uniform(.2, .6)
-            fine = max(500, round(record.wallet * fine_percent))
-
-            fine_percent = fine / record.wallet
-            yield (
-                f'{user.name} caught you trying to break into their wallet and immediately call the cops on you. '
-                f'You pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
-                REPLY,
-            )
-            await record.add(wallet=-fine)
-            return
-
-        embed.colour = Colors.success
-        yield embed, EDIT
-
-        death_chance = max(10 - skills.points_in('rob') / 2 + their_skills.points_in('defense') / 2, 0) / 100
-
-        if random.random() < success_chance:
-            payout_percent = min(
-                random.uniform(.3, .8) + min(skills.points_in('rob') * .02, .5), 1,
-            )
-            payout = round(their_record.wallet * payout_percent)
-            await record.add(wallet=payout)
-            await their_record.add(wallet=-payout)
-
-            yield (
-                f"**SUCCESS!** You stole {Emojis.coin} **{payout:,}** ({payout_percent:.1%}) from {user.name}'s wallet!.\n"
-                f"You now have {Emojis.coin} **{record.wallet:,}**.",
-                REPLY,
-            )
-            return
-
-        if random.random() < death_chance:
-            await record.make_dead()
-            yield (
-                f"While trying your best not to make a noise, you are spotted by police while trying to rob {user.name}.\n"
-                "You refuse arrest causing the police to fatally shoot you. You died.",
-                REPLY,
-            )
-            return
-
-        # highest fines are here
-        fine_percent = random.uniform(.2, .7)
-        fine = max(500, round(record.wallet * fine_percent))
-
-        fine_percent = fine / record.wallet
-        yield (
-            f'While so stealthily trying to rob {user.name}, you are spotted by police, '
-            f'who force you to pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet) to {user.name}.',
-            REPLY,
-        )
-        await record.add(wallet=-fine)
-        await their_record.add(wallet=fine)
-        return
 
 
 class PlaceholderKeypadButton(discord.ui.Button['RobbingKeypad']):
