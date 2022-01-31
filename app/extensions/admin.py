@@ -5,6 +5,7 @@ from asyncio import subprocess
 from io import StringIO
 from typing import Any, TYPE_CHECKING, Type, TypeAlias
 
+import discord
 import tabulate
 from jishaku.codeblocks import codeblock_converter
 
@@ -33,7 +34,7 @@ class Admin(Cog):
         await ctx.send_help(ctx.command)
 
     @database.command(aliases={'run', 'query', 'fetch', 'q'})
-    async def sql(self, ctx: Context, *, sql: codeblock_converter) -> tuple[str, Any]:
+    async def sql(self, ctx: Context, *, sql: codeblock_converter) -> Any:
         """Fetches the results of a SQL query."""
         async with ctx.typing():
             with Timer() as timer:
@@ -55,7 +56,9 @@ class Admin(Cog):
             if len(message) <= 2000 and all(len(line) < 140 for line in message.split('\n')):
                 return message, REPLY
 
-            return f'{time}\nToo many rows or columns to display. Consider narrowing down your query.', REPLY
+            # noinspection PyTypeChecker
+            file = discord.File(StringIO(table_raw), filename='response.txt')
+            return time, file, REPLY
 
     @database.group(aliases={'mig', 'm', 'migrate', 'migration'})
     async def migrations(self, ctx: Context):

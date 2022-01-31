@@ -8,6 +8,8 @@ from functools import partial
 from textwrap import dedent
 from typing import Any, Awaitable, Callable, Generator, TYPE_CHECKING, TypeAlias
 
+from discord.ext.commands import BadArgument
+
 from app.util.common import pluralize
 from config import Emojis
 
@@ -156,6 +158,9 @@ class Items:
     @padlock.to_use
     async def use_padlock(self, ctx: Context, item: Item) -> None:
         record = await ctx.db.get_user_record(ctx.author.id)
+        if record.padlock_active:
+            raise ItemUsageError('You already have a padlock active!')
+
         await record.update(padlock_active=True)
 
         await ctx.send(f'{item.emoji} Successfully activated your padlock.')
@@ -163,8 +168,10 @@ class Items:
     @padlock.to_remove
     async def remove_padlock(self, ctx: Context, item: Item) -> None:
         record = await ctx.db.get_user_record(ctx.author.id)
-        await record.update(padlock_active=False)
+        if not record.padlock_active:
+            raise BadArgument('You do not have a padlock active!')
 
+        await record.update(padlock_active=False)
         await ctx.send(f'{item.emoji} Successfully deactivated your padlock.')
 
     banknote = Item(

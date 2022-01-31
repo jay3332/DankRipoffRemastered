@@ -662,9 +662,8 @@ class Profit(Cog):
             return
 
         lock = ctx.bot.transaction_locks.setdefault(user.id, LockWithReason())
-        lock.set_reason("Someone else is currently trying to rob you.")
 
-        async with lock:
+        async with lock.with_reason(f"Someone else ({ctx.author.mention}) is currently trying to rob you."):
             async with ctx.db.acquire() as conn:
                 await record.add_random_bank_space(10, 15, chance=0.6, connection=conn)
                 await record.add_random_exp(12, 17, chance=0.7, connection=conn)
@@ -672,7 +671,7 @@ class Profit(Cog):
             skills = await record.skill_manager.wait()
             their_skills = await their_record.skill_manager.wait()
 
-            success_chance = max(50 + skills.points_in('rob') - their_skills.points_in('defense'), 2) / 100
+            success_chance = max(50 + skills.points_in('robbery') - their_skills.points_in('defense'), 2) / 100
 
             if not await ctx.confirm(
                 f'Are you sure you want to rob **{user.name}**? (Success chance: {success_chance:.0%})',
@@ -743,21 +742,34 @@ class Profit(Cog):
                 await record.add(wallet=-fine)
                 return
 
+            if str(code) != view.entered:
+                fine_percent = random.uniform(.1, .5)
+                fine = max(500, round(record.wallet * fine_percent))
+
+                fine_percent = fine / record.wallet
+                yield (
+                    f'You entered in the wrong combination. '
+                    f'The police are alerted about your attempt and you pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                    REPLY,
+                )
+                await record.add(wallet=-fine)
+                return
+
             embed.colour = Colors.success
             yield embed, EDIT
 
-            death_chance = max(10 - skills.points_in('rob') / 2 + their_skills.points_in('defense') / 2, 0) / 100
+            death_chance = max(10 - skills.points_in('robbery') / 2 + their_skills.points_in('defense') / 2, 0) / 100
 
             if random.random() < success_chance:
                 payout_percent = min(
-                    random.uniform(.3, .8) + min(skills.points_in('rob') * .02, .5), 1,
+                    random.uniform(.3, .8) + min(skills.points_in('robbery') * .02, .5), 1,
                 )
                 payout = round(their_record.wallet * payout_percent)
                 await record.add(wallet=payout)
                 await their_record.add(wallet=-payout)
 
                 yield (
-                    f"**SUCCESS!** You stole {Emojis.coin} **{payout:,}** ({payout_percent:.1%}) from {user.name}'s wallet!.\n"
+                    f"**SUCCESS!** You stole {Emojis.coin} **{payout:,}** ({payout_percent:.1%}) from {user.name}'s wallet.\n"
                     f"You now have {Emojis.coin} **{record.wallet:,}**.",
                     REPLY,
                 )

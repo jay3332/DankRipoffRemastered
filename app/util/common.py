@@ -159,8 +159,8 @@ def humanize_small_duration(seconds: float, /) -> str:
 
 def humanize_duration(seconds, depth: int = 3):
     """Formats a duration (in seconds) into one that is human-readable."""
-    if seconds <= 0:
-        return '0 seconds'
+    if seconds < 1:
+        return '<1 second'
 
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)

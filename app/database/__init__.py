@@ -337,6 +337,8 @@ class CooldownManager:
         }
 
     async def set_cooldown(self, command: Command, expires: datetime.datetime) -> None:
+        await self.wait()
+
         query = """
                 INSERT INTO cooldowns (user_id, command, expires, previous_expiry) VALUES ($1, $2, $3, $4)
                 ON CONFLICT (user_id, command) DO UPDATE SET expires = $3, previous_expiry = $4

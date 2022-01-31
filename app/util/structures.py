@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from time import perf_counter
 from typing import TypeVar
@@ -38,6 +40,20 @@ class Timer:
         return self.time
 
 
+class LockReasonMonitor:
+    def __init__(self, lock: LockWithReason, reason: str | None) -> None:
+        self._lock: LockWithReason = lock
+        self.reason: str | None = reason
+
+    async def __aenter__(self) -> None:
+        self._lock.set_reason(self.reason)
+        await self._lock.__aenter__()
+
+    async def __aexit__(self, *args) -> None:
+        self._lock.reason = None
+        await self._lock.__aexit__(*args)
+
+
 class LockWithReason(asyncio.Lock):
     def __init__(self, reason: str | None = None) -> None:
         super().__init__()
@@ -45,3 +61,6 @@ class LockWithReason(asyncio.Lock):
 
     def set_reason(self, reason: str) -> None:
         self.reason = reason
+
+    def with_reason(self, reason: str | None) -> LockReasonMonitor:
+        return LockReasonMonitor(self, reason)
