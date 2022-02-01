@@ -1,16 +1,30 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import random
+from collections import deque
 from datetime import timedelta
+from html import unescape
 from textwrap import dedent
-from typing import Any, NamedTuple, TYPE_CHECKING
+from typing import Any, Literal, NamedTuple, TYPE_CHECKING
 
 import discord
+import requests
+from discord.ext import tasks
 
-from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, database_cooldown, lock_transactions, \
-    simple_cooldown, \
+from app.core import (
+    BAD_ARGUMENT,
+    Cog,
+    Context,
+    EDIT,
+    REPLY,
+    command,
+    database_cooldown,
+    lock_transactions,
+    simple_cooldown,
     user_max_concurrency
+)
 from app.core.helpers import cooldown_message
 from app.data.items import Item, Items
 from app.data.skills import RobberyTrainingButton
@@ -69,8 +83,46 @@ class SearchView(UserView):
         await self.ctx.send('Timed out.', reference=self.ctx.message)
 
 
+class RobData(NamedTuple):
+    timestamp: datetime.datetime
+    robbed_by: AnyUser
+    victim: AnyUser
+    amount: int
+
+
+class TriviaQuestion(NamedTuple):
+    category: str
+    type: Literal['multiple', 'boolean']
+    difficulty: Literal['easy', 'medium', 'hard']
+    question: str
+    correct_answer: str
+    incorrect_answers: list[str]
+
+    @property
+    def answers(self) -> list[str]:
+        if self.type == 'multiple':
+            entities = [self.correct_answer] + self.incorrect_answers
+            random.shuffle(entities)
+            return entities
+
+        return ['True', 'False']
+
+    @classmethod
+    def from_data(cls, data: dict[str, Any]) -> TriviaQuestion:
+        data['question'] = unescape(data['question'])
+        data['correct_answer'] = unescape(data['correct_answer'])
+        data['incorrect_answers'] = [unescape(answer) for answer in data['incorrect_answers']]
+
+        return cls(**data)
+
+
 class Profit(Cog):
     """Commands you use to grind for profit."""
+
+    def __setup__(self) -> None:
+        self._recent_robs: dict[int, RobData] = {}
+        self._trivia_questions: deque[TriviaQuestion] = deque(maxlen=50)
+        self._trivia_questions_fetch_lock: asyncio.Lock = asyncio.Lock()
 
     BEG_INITIAL_MESSAGES = (
         "Alright, begging...",
@@ -515,7 +567,7 @@ class Profit(Cog):
         inventory = await record.inventory_manager.wait()
 
         if not inventory.cached.quantity_of('fishing_pole'):
-            yield f'You need {Items.fishing_pole.get_sentence_chunk(1)} to fish.', REPLY
+            yield f'You need {Items.fishing_pole.get_sentence_chunk(1)} to fish.', BAD_ARGUMENT
             return
 
         if inventory.cached.quantity_of('fish_bait'):
@@ -572,6 +624,145 @@ class Profit(Cog):
         embed.set_author(name=f'Fishing: {ctx.author}', icon_url=ctx.author.avatar.url)
 
         yield '', embed, EDIT
+
+    ABUNDANCE_FOREST_WOOD_CHANCES = {
+        None: 1,
+        Items.wood: 0.3,
+        Items.redwood: 0.03,
+        Items.blackwood: 0.0025,
+    }
+
+    EXOTIC_FOREST_WOOD_CHANCES = {
+        None: 1,
+        Items.wood: 0.5,
+        Items.redwood: 0.09,
+        Items.blackwood: 0.0085,
+    }
+
+    @command(aliases={'c', 'ch', 'axe'})
+    @simple_cooldown(1, 25)
+    @user_max_concurrency(1)
+    async def chop(self, ctx: Context):
+        """Chop down trees for wood! Wood can be sold for profit, or used to craft many items."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+
+        if not inventory.cached.quantity_of('axe'):
+            yield f'You need {Items.axe.get_sentence_chunk(1)} to chop down trees.', BAD_ARGUMENT
+            return
+
+        view = ChopView(ctx)
+        yield (
+            "Choose a forest to chop trees from. Abundance Forest has a lower chance of getting rarer wood, while Exotic Forest has a higher chance.\n"
+            "However, there is a chance that you could die by chopping down a tree in the Exotic Forest.",
+            view,
+            REPLY,
+        )
+
+        await view.wait()
+        if view.choice is None:
+            yield 'Timed out.', REPLY
+            return
+
+        # random.random() is INCLUSIVE of 0, but EXCLUSIVE of 1
+        success_chance = 0.95 if view.choice == view.EXOTIC else 1
+        mapping = self.ABUNDANCE_FOREST_WOOD_CHANCES if view.choice == view.ABUNDANCE else self.EXOTIC_FOREST_WOOD_CHANCES
+
+        wood = random.choices(list(mapping), weights=list(mapping.values()), k=13)
+        wood = {item: wood.count(item) for item in set(wood) if item is not None}
+
+        yield f'{Emojis.loading} Chopping down some trees...', REPLY
+        await asyncio.sleep(random.uniform(2., 4.))
+
+        if not len(wood):
+            yield 'You couldn\'t chop down any trees, lol.', EDIT
+            return
+
+        if random.random() > success_chance:
+            await record.make_dead(reason='a tree falling on your head')
+            yield 'How exotic! A tree fell on your head while you were chopping it down, killing you instantly.', EDIT
+            return
+
+        # TODO: way to make user lose their axe?
+
+        async with ctx.db.acquire() as conn:
+            for item, count in wood.items():
+                await inventory.add_item(item, count, connection=conn)
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+        embed.add_field(name='You generated:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in wood.items()))
+        embed.set_author(name=f'Chopping: {ctx.author}', icon_url=ctx.author.avatar.url)
+
+        yield '', embed, EDIT
+
+    async def pop_trivia_question(self) -> TriviaQuestion:
+        try:
+            return self._trivia_questions.popleft()
+        except IndexError:
+            pass
+
+        async with self._trivia_questions_fetch_lock:
+            # async with self.bot.session.get('https://opentdb.com/api.php?amount=50') as response:
+            #     if not response.ok:
+            #         raise RuntimeError('failed to retrieve trivia question')
+            #
+            #     data = await response.json(encoding='utf-8')
+
+            # aiohttp does not work with this on windows due to the fact that aiohttp utilizes OS certs
+            response = await asyncio.to_thread(requests.get, 'https://opentdb.com/api.php?amount=50')
+            if not response.ok:
+                raise RuntimeError('failed to retrieve trivia question')
+
+            data = await asyncio.to_thread(response.json)
+
+            if data['response_code'] != 0:
+                raise RuntimeError('failed to retrieve trivia question')
+
+            self._trivia_questions.extend(TriviaQuestion.from_data(q) for q in data['results'])
+            return self._trivia_questions.popleft()
+
+    TRIVIA_PRIZE_MAPPING = {
+        'easy': (100, 150),
+        'medium': (200, 325),
+        'hard': (360, 500),
+    }
+
+    @command(aliases={'triv', 'tv'})
+    @simple_cooldown(1, 20)
+    @user_max_concurrency(1)
+    async def trivia(self, ctx: Context):
+        """Answer trivia questions for coins!"""
+        question = await self.pop_trivia_question()
+        prize = random.randint(*self.TRIVIA_PRIZE_MAPPING[question.difficulty])
+
+        embed = discord.Embed(color=Colors.primary, description=question.question, timestamp=ctx.now)
+        embed.set_author(name=f'Trivia: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_footer(text='Answer using the buttons below!')
+
+        embed.add_field(name='Difficulty', value=question.difficulty.title())
+        embed.add_field(name='Category', value=question.category)
+        embed.add_field(name='Prize', value=f'{Emojis.coin} **{prize:,}**')
+
+        view = TriviaView(ctx, embed, question)
+        yield embed, view, REPLY
+
+        await view.wait()
+        if not view.choice:
+            yield f"You didn't answer in time! The correct answer was **{question.correct_answer}**", REPLY
+            return
+
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        async with ctx.db.acquire() as conn:
+            await record.add_random_bank_space(10, 15, chance=0.5, connection=conn)
+            await record.add_random_exp(10, 15, chance=0.65, connection=conn)
+
+            if view.choice == question.correct_answer:
+                profit = await record.add_coins(prize)
+                yield f'Correct! You earned {Emojis.coin} **{profit:,}**.', REPLY
+                return
+
+        yield f'Wrong, the correct answer was **{question.correct_answer}**', REPLY
 
     @command(aliases={'da', 'day'})
     @database_cooldown(86_400)
@@ -635,11 +826,18 @@ class Profit(Cog):
 
         return embed, REPLY
 
+    def store_rob(self, ctx: Context, victim: AnyUser, amount: int) -> RobData:
+        self._recent_robs[victim.id] = entry = RobData(
+            timestamp=ctx.utcnow(), robbed_by=ctx.author, victim=victim, amount=amount,
+        )
+        return entry
+
     @command(aliases={'steal', 'ripoff'})
     @simple_cooldown(1, 90)
     @user_max_concurrency(1)
     @lock_transactions
     async def rob(self, ctx: Context, *, user: CaseInsensitiveMemberConverter):
+        # sourcery no-metrics skip: merge-nested-ifs
         """Attempt to rob someone of their coins! There is a chance that you might fail and pay a fine, or even die."""
         if user == ctx.author:
             yield 'What are you trying to do? Rob yourself? Sounds kinda dumb to me.', BAD_ARGUMENT
@@ -647,6 +845,17 @@ class Profit(Cog):
 
         if user.bot:
             yield 'You cannot rob bot accounts.', BAD_ARGUMENT
+            return
+
+        if entry := self._recent_robs.get(user.id):
+            if ctx.now - entry.timestamp < timedelta(minutes=3):
+                yield 'That user has recently been robbed, let\'s give them a break.', BAD_ARGUMENT
+                return
+
+        lock = ctx.bot.transaction_locks.setdefault(user.id, LockWithReason())
+
+        if lock.locked():
+            yield f'{user.name} is currently being robbed, lmao', BAD_ARGUMENT
             return
 
         their_record = await ctx.db.get_user_record(user.id)
@@ -661,25 +870,27 @@ class Profit(Cog):
             yield f'You must have {Emojis.coin} 500 in your wallet in order to rob someone.', BAD_ARGUMENT
             return
 
-        lock = ctx.bot.transaction_locks.setdefault(user.id, LockWithReason())
+        skills = await record.skill_manager.wait()
+        their_skills = await their_record.skill_manager.wait()
 
-        async with lock.with_reason(f"Someone else ({ctx.author.mention}) is currently trying to rob you."):
+        success_chance = max(50 + skills.points_in('robbery') - their_skills.points_in('defense') * 1.5, 2) / 100
+
+        if not await ctx.confirm(
+            f'Are you sure you want to rob **{user.name}**? (Success chance: {success_chance:.0%})',
+            delete_after=True,
+            reference=ctx.message,
+        ):
+            yield 'Looks like we won\'t rob today.', BAD_ARGUMENT
+            return
+
+        async with lock.with_reason(
+            f"Someone else ({ctx.author.mention}) is currently trying to rob you - view your notifications to find out more details!"
+        ):
+            notify = their_record.notifications_manager.add_notification
+
             async with ctx.db.acquire() as conn:
                 await record.add_random_bank_space(10, 15, chance=0.6, connection=conn)
                 await record.add_random_exp(12, 17, chance=0.7, connection=conn)
-
-            skills = await record.skill_manager.wait()
-            their_skills = await their_record.skill_manager.wait()
-
-            success_chance = max(50 + skills.points_in('robbery') - their_skills.points_in('defense'), 2) / 100
-
-            if not await ctx.confirm(
-                f'Are you sure you want to rob **{user.name}**? (Success chance: {success_chance:.0%})',
-                delete_after=True,
-                reference=ctx.message,
-            ):
-                yield 'Looks like we won\'t rob today.', BAD_ARGUMENT
-                return
 
             yield f'{Emojis.loading} Robbing {user.name}...', REPLY
             await asyncio.sleep(random.uniform(1.5, 3.5))
@@ -696,7 +907,17 @@ class Profit(Cog):
                 )
                 await record.add(wallet=-fine)
                 await their_record.update(padlock_active=False)
+
+                await notify(
+                    title='Someone tried to rob you, but you had a padlock active!',
+                    content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to your padlock being active. Your padlock is now deactivated.',
+                )
                 return
+
+            await notify(
+                title='You are being robbed!',
+                content=f'{ctx.author.mention} is trying to rob you in **{ctx.guild.name}**!',
+            )
 
             embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
             embed.set_author(name=f'{ctx.author.name}: Robbing {user.name}', icon_url=ctx.author.avatar.url)
@@ -727,6 +948,11 @@ class Profit(Cog):
                     REPLY,
                 )
                 await record.add(wallet=-fine)
+
+                await notify(
+                    title='Someone tried to rob you, but failed!',
+                    content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to taking too long to enter in the combination.',
+                )
                 return
 
             if view.caught:
@@ -740,7 +966,7 @@ class Profit(Cog):
                     REPLY,
                 )
                 await record.add(wallet=-fine)
-                return
+                return  # Don't notify here since that person MUST have been present
 
             if str(code) != view.entered:
                 fine_percent = random.uniform(.1, .5)
@@ -753,6 +979,11 @@ class Profit(Cog):
                     REPLY,
                 )
                 await record.add(wallet=-fine)
+
+                await notify(
+                    title='Someone tried to rob you, but failed!',
+                    content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to entering in the wrong combination.',
+                )
                 return
 
             embed.colour = Colors.success
@@ -763,7 +994,7 @@ class Profit(Cog):
             if random.random() < success_chance:
                 payout_percent = min(
                     random.uniform(.3, .8) + min(skills.points_in('robbery') * .02, .5), 1,
-                )
+                    )
                 payout = round(their_record.wallet * payout_percent)
                 await record.add(wallet=payout)
                 await their_record.add(wallet=-payout)
@@ -773,6 +1004,13 @@ class Profit(Cog):
                     f"You now have {Emojis.coin} **{record.wallet:,}**.",
                     REPLY,
                 )
+
+                self.store_rob(ctx, user, payout)
+
+                await notify(
+                    title='Someone stole coins from you!',
+                    content=f'{ctx.author.mention} stole {Emojis.coin} **{payout:,}** ({payout_percent:.1%}) from your wallet in **{ctx.guild.name}**!',
+                )
                 return
 
             if random.random() < death_chance:
@@ -781,6 +1019,11 @@ class Profit(Cog):
                     f"While trying your best not to make a noise, you are spotted by police while trying to rob {user.name}.\n"
                     "You refuse arrest causing the police to fatally shoot you. You died.",
                     REPLY,
+                )
+
+                await notify(
+                    title='Someone tried to rob you, but died in the process!',
+                    content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but died due to being caught by the police.',
                 )
                 return
 
@@ -796,7 +1039,90 @@ class Profit(Cog):
             )
             await record.add(wallet=-fine)
             await their_record.add(wallet=fine)
+
+            await notify(
+                title='Someone tried to rob you!',
+                content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but was spotted by police. They paid you a fine of {Emojis.coin} **{fine:,}**.',
+            )
             return
+
+
+class ChopView(UserView):
+    ABUNDANCE = 0
+    EXOTIC = 1
+
+    def __init__(self, ctx: Context) -> None:
+        super().__init__(ctx.author, timeout=20)
+
+        self.choice: Literal[0, 1] | None = None
+        self._ctx: Context = ctx
+
+    def _disable_buttons(self) -> None:
+        for button in self.children:
+            assert isinstance(button, discord.ui.Button)
+            button.disabled = True
+
+    @discord.ui.button(label='Abundance Forest')
+    async def abundance(self, button: discord.ui.Button, interaction: discord.Interaction) -> None:
+        self.choice = self.ABUNDANCE
+
+        self._disable_buttons()
+        button.style = discord.ButtonStyle.primary
+
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+    @discord.ui.button(label='Exotic Forest')
+    async def exotic(self, button: discord.ui.Button, interaction: discord.Interaction) -> None:
+        self.choice = self.EXOTIC
+
+        self._disable_buttons()
+        button.style = discord.ButtonStyle.primary
+
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+
+class TriviaButton(discord.ui.Button['TriviaView']):
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self.view.choice = self.label
+
+        color = Colors.success if self.view.correct == self.label else Colors.error
+        self.view.embed.colour = color
+
+        for button in self.view.children:
+            assert isinstance(button, discord.ui.Button)
+
+            if button.label == self.view.correct:
+                button.style = discord.ButtonStyle.success
+
+            elif button.label == self.label:
+                button.style = discord.ButtonStyle.danger
+
+            else:
+                button.style = discord.ButtonStyle.secondary
+
+            button.disabled = True
+
+        await interaction.response.edit_message(embed=self.view.embed, view=self.view)
+
+        self.view.stop()
+
+
+class TriviaView(UserView):
+    def __init__(self, ctx: Context, embed: discord.Embed, question: TriviaQuestion) -> None:
+        super().__init__(ctx.author, timeout=15)
+
+        if question.type == 'boolean':
+            self.add_item(TriviaButton(label='True', style=discord.ButtonStyle.success))
+            self.add_item(TriviaButton(label='False', style=discord.ButtonStyle.danger))
+        else:
+            for answer in question.answers:
+                self.add_item(TriviaButton(label=answer, style=discord.ButtonStyle.primary))
+
+        self.embed: discord.Embed = embed
+        self.correct: str = question.correct_answer
+        self.choice: str | None = None
 
 
 class PlaceholderKeypadButton(discord.ui.Button['RobbingKeypad']):

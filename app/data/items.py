@@ -24,6 +24,7 @@ class ItemType(Enum):
     """Stores the type of this item."""
     tool = 0
     fish = 1
+    wood = 2
 
 
 @dataclass
@@ -129,6 +130,7 @@ class ItemUsageError(Exception):
 
 
 Fish = partial(Item, type=ItemType.fish)
+Wood = partial(Item, type=ItemType.wood)
 
 
 class Items:
@@ -270,6 +272,20 @@ class Items:
     async def use_fishing_pole(self, ctx: Context, _) -> None:
         await ctx.invoke(ctx.bot.get_command('fish'))
 
+    axe = Item(
+        type=ItemType.tool,
+        key='axe',
+        name='Axe',
+        emoji='<:axe:937880907946283058>',
+        description='Chop down trees using the `.chop` command to gain wood. You can sell wood, or save them for crafting!',
+        price=10000,
+        buyable=True,
+    )
+
+    @axe.to_use
+    async def use_axe(self, ctx: Context, _) -> None:
+        await ctx.invoke(ctx.bot.get_command('chop'))
+
     fish = Fish(
         key='fish',
         name='Fish',
@@ -369,6 +385,33 @@ class Items:
         emoji='<a:vibe_fish:935293751604183060>',
         description='\uff56\uff49\uff42\uff45',  # "vibe" in full-width text
         sell=6500,
+    )
+
+    wood = Wood(
+        key='wood',
+        name='Wood',
+        plural='Wood',
+        emoji='<:wood:937881094563463208>',
+        description='The most abundant type of wood.',
+        sell=30,
+    )
+
+    redwood = Wood(
+        key='redwood',
+        name='Redwood',
+        plural='Redwood',
+        emoji='<:redwood:937893043342815282>',
+        description='Only found from Redwood trees whose lifespan is one of the longest.',
+        sell=100,
+    )
+
+    blackwood = Wood(
+        key='blackwood',
+        name='Blackwood',
+        plural='Blackwood',
+        emoji='<:blackwood:937895087969566771>',
+        description='A rare type of wood',
+        sell=1000,
     )
 
     @classmethod

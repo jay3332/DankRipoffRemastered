@@ -43,6 +43,10 @@ class Context(TypedContext):
     def is_interaction(self) -> bool:
         return bool(getattr(self, 'interaction', False))
 
+    @staticmethod
+    def utcnow() -> datetime.datetime:
+        return discord.utils.utcnow()
+
     async def thumbs(self, message: discord.Message = None) -> None:
         message = message or self.message
         try:

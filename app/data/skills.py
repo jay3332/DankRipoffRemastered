@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import random
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Literal, TypeAlias, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, TYPE_CHECKING, TypeAlias
 
 import discord
 
@@ -288,7 +288,7 @@ class Skills:
         key='defense',
         name='Defense',
         description='Lowers the success chance of others trying to rob you.',
-        benefit=lambda p: f'-{p}% rob success chance, +{p / 2}% death chance for others',
+        benefit=lambda p: f'-{p * 1.5}% rob success chance, +{p / 2}% death chance for others',
         price=8000,
         training_cooldown=1800,
         max_points=50,
@@ -303,7 +303,7 @@ class Skills:
 
         embed.description = (
             'A dummy opponent will be training your defense skills by trying to hit you.\n'
-            'When the opponent is about to punch, you must **duck**. When they are about to kick, you must **jump**.\n'
+            'When the opponent is about to punch, you must **duck**. When they are about to kick, you must **jump**.\n\n'
             'Additionally, when the opponent tries dealing a __low punch__ or a __high kick__, you must **block**.'
         )
 

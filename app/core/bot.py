@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import functools
 import os
 import re
@@ -9,10 +8,11 @@ from typing import Any, ClassVar, Final, TYPE_CHECKING
 
 import discord
 import jishaku
+from aiohttp import ClientSession
 from discord.ext import commands
 
 from app.core.help import HelpCommand
-from app.core.models import Context, Command
+from app.core.models import Command, Context
 from app.database import Database
 from app.util.common import humanize_duration, pluralize
 from app.util.structures import LockWithReason
@@ -31,6 +31,7 @@ ANSI_REGEX: re.Pattern[str] = re.compile(r"\x1b\[\d{2};[01]m")
 class Bot(commands.Bot):
     """Dank Ripoff... Remastered."""
 
+    session: ClientSession
     startup_timestamp: datetime
     transaction_locks: dict[int, LockWithReason]
 
@@ -84,8 +85,9 @@ class Bot(commands.Bot):
 
     def prepare(self) -> None:
         """Prepares the bot for startup."""
-        self.db: Database = Database(loop=self.loop)
+        self.db: Database = Database(self, loop=self.loop)
         self.transaction_locks: dict[int, LockWithReason] = {}
+        self.session: ClientSession = ClientSession()
 
         self.loop.create_task(self._dispatch_first_ready())
         self._load_extensions()
@@ -116,6 +118,18 @@ class Bot(commands.Bot):
             return ANSI_REGEX.sub('', text)
 
         return text
+
+    async def on_message(self, message: discord.Message) -> None:
+        if message.author.bot:
+            return
+
+        if message.content in {f'<@{self.user.id}>', f'<@!{self.user.id}>'}:
+            await message.reply(
+                f"Hey, I'm {self.user.name}. My prefix here is `{default_prefix}`.\nAdditionally, "
+                f"some of my commands are available as slash commands.\n\nFor more help, run `{default_prefix}help`."
+            )
+
+        await self.process_commands(message)
 
     async def on_command_error(self, ctx: Context, error: Exception) -> Any:
         # sourcery no-metrics
@@ -200,6 +214,10 @@ class Bot(commands.Bot):
 
         await respond(f'`panic!({error!r})`')
         raise error
+
+    async def close(self) -> None:
+        await self.session.close()
+        await super().close()
 
     def run(self) -> None:
         return super().run(beta_token if beta else token)

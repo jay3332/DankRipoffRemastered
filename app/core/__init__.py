@@ -1,4 +1,4 @@
-from .bot import Bot, LockWithReason
+from .bot import Bot
 from .helpers import (
     BAD_ARGUMENT,
     EDIT,

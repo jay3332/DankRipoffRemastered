@@ -15,7 +15,7 @@ from config import DatabaseConfig, Emojis, beta
 from .migrations import Migrator
 
 if TYPE_CHECKING:
-    from app.core import Command
+    from app.core import Bot, Command
 
 __all__ = (
     'Database',
@@ -69,9 +69,10 @@ class Database(_Database):
     Additionally, this is where you will find the cache which stores records to be used later.
     """
 
-    def __init__(self, *, loop: asyncio.AbstractEventLoop | None = None) -> None:
+    def __init__(self, bot: Bot, *, loop: asyncio.AbstractEventLoop | None = None) -> None:
         super().__init__(loop=loop)
         self.user_records: dict[int, UserRecord] = {}
+        self.bot: Bot = bot
 
     @overload
     def get_user_record(self, user_id: int, *, fetch: Literal[True] = True) -> Awaitable[UserRecord]:
