@@ -216,6 +216,24 @@ class Formatter(ABC, Generic[T]):
         ...
 
 
+class LineBasedFormatter(Formatter[str]):
+    def __init__(self, embed: Embed, lines: list[str], *, per_page: int = 10, field_name: str | None = None) -> None:
+        self.embed: Embed = embed
+        self.field_name: str | None = field_name
+
+        super().__init__(lines, per_page=per_page)
+
+    async def format_page(self, paginator: Paginator, lines: list[str]) -> Embed:
+        embed = self.embed.copy()
+
+        if self.field_name is None:
+            embed.description = '\n'.join(lines)
+        else:
+            embed.add_field(name=self.field_name, value='\n'.join(lines))
+
+        return embed
+
+
 class FieldBasedFormatter(Formatter[dict[str, Any]]):
     def __init__(
         self,

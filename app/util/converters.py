@@ -295,13 +295,13 @@ async def DropAmount(ctx: Context, arg: str) -> int:
         return get_amount(_all, 1, _all, arg)
 
     except NotAnInteger:
-        raise BadArgument("Drop amount must be a positive integer.")
+        raise BadArgument("Entity must be a positive integer or a valid item with an optional quantity.")
 
     except NotEnough:
         raise BadArgument("You don't have that many coins.")
 
     except PastMinimum:
-        raise BadArgument("Drop amount must be positive.")
+        raise BadArgument("Amount must be positive.")
 
     except ZeroDivisionError:
         raise BadArgument("very funny, division by zero.")

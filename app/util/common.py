@@ -112,7 +112,7 @@ def query_collection(collection: type, cls: Type[Q], query: str) -> Optional[Q]:
             queued.append(obj)
 
     if queued:
-        return queued[0]
+        return min(queued, key=lambda item: len(item.key))
 
 
 def cutoff(string: str, /, max_length: int = 64, *, exact: bool = False) -> str:

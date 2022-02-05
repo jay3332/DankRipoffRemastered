@@ -11,7 +11,6 @@ from typing import Any, Literal, NamedTuple, TYPE_CHECKING
 
 import discord
 import requests
-from discord.ext import tasks
 
 from app.core import (
     BAD_ARGUMENT,
@@ -185,6 +184,7 @@ class Profit(Cog):
         Items.padlock: 0.1,
         Items.cheese: 0.05,
         Items.banknote: 0.05,
+        Items.common_crate: 0.03,
     }
 
     @staticmethod
@@ -562,7 +562,7 @@ class Profit(Cog):
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
     async def fish(self, ctx: Context):
-        """Using your fishing pole to fish for fish and sell them for profit!"""
+        """Use your fishing pole to fish for fish and sell them for profit!"""
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = await record.inventory_manager.wait()
 
@@ -622,6 +622,88 @@ class Profit(Cog):
 
         embed.add_field(name='You caught:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in fish.items()))
         embed.set_author(name=f'Fishing: {ctx.author}', icon_url=ctx.author.avatar.url)
+
+        yield '', embed, EDIT
+
+    RARE_DIG_ITEMS = {
+        Items.hook_worm,
+        Items.poly_worm,
+        Items.ancient_relic,
+    }
+
+    DIG_PROMPTS = (
+        "dig dig dig",
+        "my shovel is about to break",
+        "must dig faster",
+        "probably dulled out my shovel",
+        "what must this be?",
+        "oh look, something shiny?",
+        "this must be something special",
+    )
+
+    @command(aliases={'shovel', 'di'})
+    @simple_cooldown(1, 30)
+    @user_max_concurrency(1)
+    async def dig(self, ctx: Context):
+        """Dig up items from the ground and sell them for profit!"""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+
+        try:
+            shovel = next(filter(inventory.cached.quantity_of, Items.__shovels__))
+        except StopIteration:
+            yield f'You need {Items.shovel.get_sentence_chunk(1)} to dig.', BAD_ARGUMENT
+            return
+
+        mapping = shovel.metadata
+
+        items = random.choices(list(mapping), weights=list(mapping.values()), k=7)
+        items = {item: items.count(item) for item in set(items) if item is not None}
+
+        yield f'{Emojis.loading} Digging through the ground using your {shovel.name}...', REPLY
+        await asyncio.sleep(random.uniform(2., 4.))
+
+        if not len(items):
+            yield 'You dug up absolutely nothing. Lmao.', EDIT
+            return
+
+        if any(item in self.RARE_DIG_ITEMS for item in items):
+            message = random.choice(self.DIG_PROMPTS)
+
+            yield (
+                f'You found something out of the ordinary! Type `{insert_random_u200b(message)}` to dig it up before it breaks.',
+                EDIT,
+            )
+
+            try:
+                response = await ctx.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=10)
+                initial = "You failed dig up the item"
+
+            except asyncio.TimeoutError:
+                response = ctx.message  # guaranteed that this wont equal the message
+                initial = "You couldn't type out your prompt in time"
+
+            if response.content.lower() != message:
+                await inventory.add_item(shovel, -1)
+
+                if random.random() < 0.15:
+                    await record.make_dead(reason='being buried alive')
+
+                    yield f'{initial}, and the mound of dirt you have dug up beforehand collapses in on you, burying yourself alive. You suffocate to death.', REPLY
+                    return
+
+                yield f'{initial}. You try your best to dig the item up, but your shovel suddenly snaps in half! Whoops.', REPLY
+                return
+
+        async with ctx.db.acquire() as conn:
+            for item, count in items.items():
+                await inventory.add_item(item, count, connection=conn)
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+
+        embed.add_field(name='You dug up:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in items.items()))
+        embed.set_author(name=f'Digging: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_footer(text=f'Used {shovel.name}')
 
         yield '', embed, EDIT
 

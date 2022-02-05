@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import random
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from textwrap import dedent
-from typing import Any, Awaitable, Callable, Generator, TYPE_CHECKING, TypeAlias
+from typing import Any, Awaitable, Callable, Generator, Generic, NamedTuple, TYPE_CHECKING, TypeAlias, TypeVar
 
 from discord.ext.commands import BadArgument
 
@@ -19,16 +20,37 @@ if TYPE_CHECKING:
     UsageCallback: TypeAlias = 'Callable[[Items, Context, Item], Awaitable[Any]] | Callable[[Items, Context, Item, int], Awaitable[Any]]'
     RemovalCallback: TypeAlias = 'Callable[[Items, Context, Item], Awaitable[Any]]'
 
+T = TypeVar('T')
+
 
 class ItemType(Enum):
     """Stores the type of this item."""
     tool = 0
     fish = 1
     wood = 2
+    crate = 3
+    collectible = 4
+    worm = 5
+
+
+class ItemRarity(Enum):
+    common = 0
+    uncommon = 1
+    rare = 2
+    epic = 3
+    legendary = 4
+    mythic = 5
+    unobtainable = 6
+
+
+class CrateMetadata(NamedTuple):
+    minimum: int
+    maximum: int
+    items: dict[Item, tuple[float, int, int]]
 
 
 @dataclass
-class Item:
+class Item(Generic[T]):
     """Stores data about an item."""
     type: ItemType
     key: str
@@ -43,7 +65,8 @@ class Item:
     dispose: bool = False  # Dispose on use?
     singular: str = None
     plural: str = None
-    metadata: Any | None = None
+    rarity: ItemRarity = ItemRarity.common
+    metadata: T = None
 
     usage_callback: UsageCallback | None = None
     removal_callback: RemovalCallback | None = None
@@ -131,6 +154,8 @@ class ItemUsageError(Exception):
 
 Fish = partial(Item, type=ItemType.fish)
 Wood = partial(Item, type=ItemType.wood)
+Crate: Callable[..., Item[CrateMetadata]] = partial(Item, type=ItemType.crate, dispose=True)
+Worm = partial(Item, type=ItemType.worm)
 
 
 class Items:
@@ -183,6 +208,7 @@ class Items:
         emoji='<:banknote:934913052174848040>',
         description='You can sell these for coins, or use these in order to expand your bank space. Gives between 1,000 to 3,000 bank space.',
         sell=10000,
+        rarity=ItemRarity.uncommon,
         dispose=True,
     )
 
@@ -286,6 +312,117 @@ class Items:
     async def use_axe(self, ctx: Context, _) -> None:
         await ctx.invoke(ctx.bot.get_command('chop'))
 
+    dirt = Item(
+        type=ItemType.collectible,
+        key='dirt',
+        name='Dirt',
+        emoji='<:dirt:939297925283086396>',
+        description='A chunk of dirt that was dug up from the ground.',
+        sell=10,
+    )
+
+    worm = Worm(
+        key='worm',
+        name='Worm',
+        emoji='<:worm:938575708580634634>',
+        description='The common worm. You can sell these or craft Fish Bait from these.',
+        sell=100,
+    )
+
+    gummy_worm = Worm(
+        key='gummy_worm',
+        name='Gummy Worm',
+        emoji='<:gummy_worm:939297088209055764>',
+        description='A gummy worm - at least it\'s better than a normal worm.',
+        sell=250,
+    )
+
+    earthworm = Worm(
+        key='earthworm',
+        name='Earthworm',
+        emoji='<:earthworm:939297155997392926>',
+        description='Quite literally an "earth" worm.',
+        sell=500,
+    )
+
+    hook_worm = Worm(
+        key='hook_worm',
+        name='Hook Worm',
+        emoji='<:hook_worm:939297533824467005>',
+        description='hookworm',
+        sell=1000,
+        rarity=ItemRarity.uncommon,
+    )
+
+    poly_worm = Worm(
+        key='poly_worm',
+        name='Poly Worm',
+        emoji='<:poly_worm:939297587213787157>',
+        description='A very colorful worm',
+        sell=1500,
+        rarity=ItemRarity.rare,
+    )
+
+    ancient_relic = Item(
+        type=ItemType.collectible,
+        key='ancient_relic',
+        name='Ancient Relic',
+        emoji='<:ancient_relic:939304193934651402>',
+        description='An ancient relic originally from an unknown cave. It\'s probably somewhere in the ground, I don\'t know.',
+        sell=25000,
+        rarity=ItemRarity.mythic,
+    )
+
+    shovel: Item[dict[Item, float]] = Item(
+        type=ItemType.tool,
+        key='shovel',
+        name='Shovel',
+        emoji='<:shovel:938575120157515786>',
+        description='Dig up items from the ground using the `.dig` command. You can sell these items for profit.',
+        price=10000,
+        buyable=True,
+        metadata={
+            None: 1,
+            dirt: 0.6,
+            worm: 0.25,
+            gummy_worm: 0.08,
+            earthworm: 0.03,
+            hook_worm: 0.0075,
+            poly_worm: 0.0025,
+            ancient_relic: 0.00005,  # 0.005%
+        },
+    )
+
+    durable_shovel: Item[dict[Item, float]] = Item(
+        type=ItemType.tool,
+        key='durable_shovel',
+        name='Durable Shovel',
+        emoji='<:durable_shovel:939333623100874783>',
+        description='A more durable version of a shovel. Tends to give more higher rarity items. This item cannot be directly bought - instead it must be crafted.',
+        sell=30000,
+        rarity=ItemRarity.rare,
+        metadata={
+            None: 1,
+            dirt: 0.5,
+            worm: 0.3,
+            gummy_worm: 0.2,
+            earthworm: 0.07,
+            hook_worm: 0.02,
+            poly_worm: 0.007,
+            ancient_relic: 0.0001,  # 0.01%
+        },
+    )
+
+    @shovel.to_use
+    @durable_shovel.to_use
+    async def use_shovel(self, ctx: Context, _) -> None:
+        await ctx.invoke(ctx.bot.get_command('dig'))
+
+    __shovels__: tuple[Item[dict[Item, float]], ...] = (
+        durable_shovel,
+        shovel,
+    )
+
     fish = Fish(
         key='fish',
         name='Fish',
@@ -326,6 +463,7 @@ class Items:
         name='Crab',
         emoji='<:crab:935285322395299840>',
         description='Crabs are crustaceans that are found in the ocean. Also the mascot of the Rust programming language.',
+        rarity=ItemRarity.uncommon,
         sell=450,
     )
 
@@ -334,6 +472,7 @@ class Items:
         name='Lobster',
         emoji='<:lobster:935288666283212830>',
         description='Lobsters are large crustaceans that are found in the ocean.',
+        rarity=ItemRarity.uncommon,
         sell=575,
     )
 
@@ -343,6 +482,7 @@ class Items:
         plural='Octopuses',
         emoji='<:octopus:935292291143331900>',
         description='Octopuses have 3 hearts and 9 brains. And yes, that is the correct plural form of octopus.',
+        rarity=ItemRarity.uncommon,
         sell=800,
     )
 
@@ -351,6 +491,7 @@ class Items:
         name='Dolphin',
         emoji='<:dolphin:935294203364245601>',
         description='Dolphins are large aquatic mammals that are found in the ocean.',
+        rarity=ItemRarity.rare,
         sell=1050,
     )
 
@@ -359,6 +500,7 @@ class Items:
         name='Shark',
         emoji='<:shark:935301959949365249>',
         description='Sharks are large predatory fish that are found in the ocean.',
+        rarity=ItemRarity.rare,
         sell=1250,
     )
 
@@ -367,6 +509,7 @@ class Items:
         name='Whale',
         emoji='<:whale:935305582846566410>',
         description='Whales are huge mammals that swim deep in the ocean. How do you even manage to catch these?',
+        rarity=ItemRarity.rare,
         sell=1760,
     )
 
@@ -375,6 +518,7 @@ class Items:
         name='Axolotl',
         emoji='<:axolotl:935691745180667944>',
         description='The cool salamander',
+        rarity=ItemRarity.epic,
         sell=3000,
     )
 
@@ -384,6 +528,7 @@ class Items:
         plural='Vibe Fish',
         emoji='<a:vibe_fish:935293751604183060>',
         description='\uff56\uff49\uff42\uff45',  # "vibe" in full-width text
+        rarity=ItemRarity.legendary,
         sell=6500,
     )
 
@@ -411,8 +556,83 @@ class Items:
         plural='Blackwood',
         emoji='<:blackwood:937895087969566771>',
         description='A rare type of wood',
+        rarity=ItemRarity.uncommon,
         sell=1000,
     )
+
+    common_crate = Crate(
+        key='common_crate',
+        name='Common Crate',
+        emoji='<:crate:938163970248966165>',
+        description='The most common type of crate.',
+        price=200,
+        sellable=False,
+        metadata=CrateMetadata(
+            minimum=200,
+            maximum=600,
+            items={
+                banknote: (0.05, 1, 1),
+                padlock: (0.5, 1, 1),
+            },
+        ),
+    )
+
+    uncommon_crate = Crate(
+        key='uncommon_crate',
+        name='Uncommon Crate',
+        emoji='<:uncommon_crate:938165259301171310>',
+        description='A slightly more common type of crate.',
+        price=500,
+        sellable=False,
+        metadata=CrateMetadata(
+            minimum=500,
+            maximum=1500,
+            items={
+                banknote: (0.15, 1, 1),
+                cheese: (0.5, 1, 2),
+                lifesaver: (0.5, 1, 1),
+                padlock: (0.75, 1, 2),
+            },
+        ),
+        rarity=ItemRarity.uncommon,
+    )
+
+    @common_crate.to_use
+    @uncommon_crate.to_use
+    async def use_crate(self, ctx: Context, crate: Item[CrateMetadata], quantity: int) -> None:
+        if quantity == 1:
+            formatted = f'{crate.singular} {crate.name}'
+        else:
+            formatted = f'{quantity:,} {crate.plural}'
+
+        original = await ctx.send(f'{crate.emoji} Opening {formatted}...', reference=ctx.message)
+
+        metadata = crate.metadata
+        profit = random.randint(metadata.minimum * quantity, metadata.maximum * quantity)
+
+        async with ctx.db.acquire() as conn:
+            record = await ctx.db.get_user_record(ctx.author.id)
+            await record.add(wallet=profit, connection=conn)
+
+            items = defaultdict(int)
+
+            for _ in range(quantity):
+                for item, (chance, lower, upper) in metadata.items.items():
+                    if random.random() >= chance:
+                        continue
+
+                    amount = random.randint(lower, upper)
+
+                    items[item] += amount
+                    await record.inventory_manager.add_item(item, amount, connection=conn)
+                    break
+
+        await asyncio.sleep(random.uniform(1.5, 3.5))
+
+        readable = f'{Emojis.coin} {profit:,}\n' + '\n'.join(
+            f'{item.emoji} {item.name} x{quantity:,}' for item, quantity in items.items()
+        )
+        await original.edit(content=f'You opened {formatted} and received:\n{readable}')
 
     @classmethod
     def all(cls) -> Generator[Item, Any, Any]:

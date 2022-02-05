@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from textwrap import dedent
-from typing import Any, TYPE_CHECKING
+from typing import Any, Literal, TYPE_CHECKING
 
 import discord
 
@@ -10,7 +10,7 @@ from app.data.items import Items
 from app.database import UserRecord
 from app.util.common import cutoff, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter
-from app.util.pagination import FieldBasedFormatter, Formatter, Paginator
+from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -111,7 +111,7 @@ class Stats(Cog):
 
         return Paginator(ctx, LeaderboardFormatter(records, per_page=10), timeout=120), REPLY
 
-    @command(aliases={"inv", "backpack"})
+    @command(aliases={"inv", "backpack", "items"})
     @simple_cooldown(1, 6)
     async def inventory(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None):
         """View your inventory, or optionally, someone elses."""
@@ -139,6 +139,33 @@ class Stats(Cog):
         embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.avatar.url)
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY, NO_EXTRA if ctx.author != user else None
+
+    @command(aliases={"itembook", "uniqueitems", "discovered"})
+    @simple_cooldown(2, 6)
+    async def book(self, ctx: Context, rarity: Literal['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'all'] = 'all'):
+        """View a summary of all of the unique items you have discovered (and what you are missing)."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+        quantity = inventory.cached.quantity_of
+
+        rarity = rarity.lower()
+
+        lines = [
+            f'{item.get_display_name(bold=quantity(item) > 0)} ({item.rarity.name.title()}) x{quantity(item):,}'
+            for item in Items.all() if rarity in ('all', item.rarity.name.lower())
+        ]
+
+        count = sum(quantity > 0 for quantity in inventory.cached.values())
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}\'s Item Book', icon_url=ctx.author.avatar.url)
+        embed.description = f'You own **{count:,}** out of {len(list(Items.all())):,} unique items.'
+
+        if rarity != 'all':
+            count = sum(quantity > 0 for item, quantity in inventory.cached.items() if item.rarity.name.lower() == rarity)
+            embed.description += f'\nYou have also discovered {count:,} out of {len(lines):,} **{rarity.lower()}** items.'
+
+        return Paginator(ctx, LineBasedFormatter(embed, lines, field_name='\u200b'), timeout=120), REPLY
 
     @group(aliases={"notifs", "notification", "notif", "nt"})
     @simple_cooldown(1, 6)

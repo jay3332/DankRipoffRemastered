@@ -22,7 +22,7 @@ from app.util.common import cutoff, image_url_from_emoji, walk_collection
 from app.util.converters import (
     BUY,
     BankTransaction,
-    DEPOSIT,
+    CaseInsensitiveMemberConverter, DEPOSIT,
     DROP,
     DropAmount,
     ItemAndQuantityConverter,
@@ -170,6 +170,7 @@ class Transactions(Cog):
             Name: {item.get_display_name(bold=True)}
             Query Key: **`{item.key}`**
             Type: **{item.type.name.title()}**
+            Rarity: **{item.rarity.name.title()}**
         """))
 
         embed.add_field(name='Pricing', value=dedent(f"""
@@ -294,6 +295,66 @@ class Transactions(Cog):
             await item.remove(ctx)
 
         await ctx.thumbs()
+
+    @command(aliases={'give', 'gift', 'donate', 'pay'})
+    @simple_cooldown(1, 30)
+    @user_max_concurrency(1)
+    @lock_transactions
+    async def share(self, ctx: Context, user: CaseInsensitiveMemberConverter, *, entity: DropAmount | ItemAndQuantityConverter(DROP)):
+        """Share coins or items from your inventory with another user."""
+        if user.bot:
+            return 'You cannot share with bots.', REPLY
+
+        if user == ctx.author:
+            return 'Sharing with yourself, that sounds kinda funny', REPLY
+
+        if isinstance(entity, int):
+            entity_human = f'{Emojis.coin} **{entity:,}**'
+        else:
+            item, quantity = entity
+            entity_human = item.get_sentence_chunk(quantity)
+
+        if not await ctx.confirm(
+            f"Are you sure you want to give {entity_human} to {user.mention}?",
+            allowed_mentions=discord.AllowedMentions.none(),
+            reference=ctx.message,
+            delete_after=True,
+        ):
+            return 'Cancelled transaction.', REPLY
+
+        record = await ctx.db.get_user_record(ctx.author.id)
+        their_record = await ctx.db.get_user_record(user.id)
+
+        async with ctx.db.acquire() as conn:
+            if isinstance(entity, int):
+                await record.add(wallet=-entity, connection=conn)
+                await their_record.add(wallet=entity, connection=conn)
+
+                updated = f'{Emojis.coin} **{record.wallet:,}**', f'{Emojis.coin} **{their_record.wallet:,}**'
+            else:
+                # noinspection PyUnboundLocalVariable
+                await record.inventory_manager.add_item(item, -quantity, connection=conn)
+                await their_record.inventory_manager.add_item(item, quantity, connection=conn)
+
+                updated = (
+                    f'{item.emoji} {item.name} x{record.inventory_manager.cached.quantity_of(item):,}',
+                    f'{item.emoji} {item.name} x{their_record.inventory_manager.cached.quantity_of(item):,}',
+                )
+
+            await their_record.notifications_manager.add_notification(
+                title='You got coins!' if isinstance(entity, int) else 'You got items!',
+                content=f'{ctx.author.mention} gave you {entity_human}.',
+                connection=conn,
+            )
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+        embed.description = f'You gave {entity_human} to {user.mention}.'
+        embed.set_author(name=f'Successful Transaction: {ctx.author}', icon_url=ctx.author.avatar.url)
+
+        us, them = updated
+        embed.add_field(name='Updated Values', value=f'{ctx.author.name}: {us}\n{user.name}: {them}')
+
+        return embed, REPLY
 
     @command(aliases={'giveaway'})
     @simple_cooldown(1, 4)
