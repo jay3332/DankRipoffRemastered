@@ -190,6 +190,18 @@ class NotificationsManager:
 
         self.cached = [Notification.from_record(record) for record in records]
 
+    async def _dispatch_dm_notification(self, title: str, content: str) -> bool:
+        bot = self._record.db.bot
+        await bot.wait_until_ready()
+
+        try:
+            dm_channel = await bot.create_dm(discord.Object(self._record.user_id))
+            await dm_channel.send(f'\U0001f514 **{title}**\n{content}')
+        except discord.DiscordException:
+            return False
+        else:
+            return True
+
     async def add_notification(self, title: str, content: str, *, connection: asyncpg.Connection | None = None) -> None:
         await self.wait()
 
@@ -200,8 +212,14 @@ class NotificationsManager:
                 """
 
         row = await (connection or self._record.db).fetchrow(query, self._record.user_id, title, content)
-        await self._record.add(unread_notifications=1, connection=connection)
         self.cached.insert(0, Notification.from_record(row))
+
+        result = False
+        if self._record.dm_notifications:
+            result = await self._dispatch_dm_notification(title, content)
+
+        if not result:
+            await self._record.add(unread_notifications=1, connection=connection)
 
 
 class SkillInfo(NamedTuple):
@@ -529,6 +547,10 @@ class UserRecord:
     @property
     def weekly_streak(self) -> int:
         return self.data['weekly_streak']
+
+    @property
+    def dm_notifications(self) -> bool:
+        return self.data['dm_notifications']
 
     @property
     def inventory_manager(self) -> InventoryManager:

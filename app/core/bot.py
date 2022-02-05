@@ -157,7 +157,7 @@ class Bot(commands.Bot):
         else:
             respond = functools.partial(ctx.send, reference=ctx.message)
 
-        if isinstance(error, (commands.ConversionError, commands.MissingRequiredArgument)):
+        if isinstance(error, (commands.ConversionError, commands.MissingRequiredArgument, commands.BadLiteralArgument)):
             if error.param is None:
                 return await respond("Could not parse your command input properly.")
 

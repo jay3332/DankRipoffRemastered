@@ -6,8 +6,13 @@ from typing import Any, TYPE_CHECKING
 import discord
 from discord.utils import format_dt, oauth_url
 
-from app.core import Cog, Context, EDIT, REPLY, command, simple_cooldown
+from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, simple_cooldown
+from app.data.settings import Setting, Settings
+from app.util.common import walk_collection
+from app.util.converters import query_setting
+from app.util.pagination import FieldBasedFormatter, Paginator
 from app.util.structures import Timer
+from config import Colors, Emojis
 
 if TYPE_CHECKING:
     pass
@@ -59,6 +64,50 @@ class Miscellaneous(Cog):
         view.add_item(discord.ui.Button(label='Click here to invite me to your server!', url=link))
 
         return f'<{link}>', view, REPLY
+
+    @staticmethod
+    async def _send_settings(ctx: Context):
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        fields = []
+        for setting in walk_collection(Settings, Setting):
+            try:
+                value = record.data[setting.key]
+            except KeyError:
+                continue
+
+            readable = f'{Emojis.enabled} Enabled' if value else f'{Emojis.disabled} Disabled'
+
+            fields.append({
+                'name': f'**{setting.name}** - {readable}',
+                'value': f'{setting.description}\n\nToggle using `{ctx.prefix}settings {setting.key} <enabled/disabled>`',
+                'inline': False,
+            })
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'Settings for {ctx.author.name}', icon_url=ctx.author.avatar.url)
+
+        return Paginator(ctx, FieldBasedFormatter(embed, fields)), REPLY
+
+    @command(aliases={'setting', 'set', 'config', 'conf'})
+    @simple_cooldown(2, 2)
+    async def settings(self, ctx: Context, setting: query_setting = None, value: bool = None):
+        """View your current settings and/or change them."""
+        if setting is None:
+            return await self._send_settings(ctx)
+
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        if value is None:
+            try:
+                value = record.data[setting.key]
+            except KeyError:
+                return 'Unknown key', BAD_ARGUMENT
+
+            readable = f'{Emojis.enabled} Enabled' if value else f'{Emojis.disabled} Disabled'
+            return f'{setting.name} is currently **{readable}**.', REPLY
+
+        await setting.set(ctx, value)
 
 
 setup = Miscellaneous.simple_setup

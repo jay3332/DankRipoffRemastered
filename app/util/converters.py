@@ -7,6 +7,7 @@ import discord
 from discord.ext.commands import BadArgument, Converter, MemberConverter, MemberNotFound
 
 from app.data.items import Item, Items
+from app.data.settings import Setting, Settings
 from app.data.skills import Skill, Skills
 from app.util.common import converter, query_collection
 from config import Emojis
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from app.core import Context
 
     query_skill: Type[Skill]
+    query_setting: Type[Setting]
 
 
 def get_number(argument: str) -> int:
@@ -223,6 +225,13 @@ def query_skill(query: str, /) -> Skill:
         return match
 
     raise BadArgument(f"I couldn't find a skill named {query!r}.")
+
+
+def query_setting(query: str, /) -> Setting:
+    if match := query_collection(Settings, Setting, query):
+        return match
+
+    raise BadArgument(f"I couldn't find a setting named {query!r}.")
 
 
 WITHDRAW = 0
