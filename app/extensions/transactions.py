@@ -238,8 +238,9 @@ class RecipeView(UserView):
             )
 
             try:
-                response = await self.ctx.bot.wait_for('message', timeout=30,
-                                                       check=lambda m: m.author == interaction.user)
+                response = await self.ctx.bot.wait_for(
+                    'message', timeout=30, check=lambda m: m.author == interaction.user,
+                )
             except asyncio.TimeoutError:
                 return await self.ctx.reply("You took too long to respond, cancelling.")
 
@@ -515,7 +516,7 @@ class Transactions(Cog):
                     f'{item.emoji} {item.name} x{their_record.inventory_manager.cached.quantity_of(item):,}',
                 )
 
-            their_record.notifications_manager.persist_notification(
+            await their_record.notifications_manager.add_notification(
                 title='You got coins!' if isinstance(entity, int) else 'You got items!',
                 content=f'{ctx.author.mention} gave you {entity_human}.',
                 connection=conn,

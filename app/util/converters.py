@@ -16,6 +16,7 @@ from config import Emojis
 if TYPE_CHECKING:
     from app.core import Context
 
+    better_bool: Type[bool]
     query_item: Type[Item]
     query_skill: Type[Skill]
     query_setting: Type[Setting]
@@ -248,6 +249,18 @@ def query_recipe(query: str, /) -> Recipe:
         return match
 
     raise BadArgument(f"I couldn't find a craftable item/recipe named {query!r}.")
+
+
+def better_bool(arg: str, /) -> bool:
+    arg = arg.lower()
+
+    if arg in {'true', 'yes', 'y', 'on', 'enable', 'enabled', 't', '1'}:
+        return True
+
+    if arg in {'false', 'no', 'n', 'off', 'disable', 'disabled', 'f', '0'}:
+        return False
+
+    raise BadArgument(f'Invalid boolean value {arg!r}')
 
 
 @converter

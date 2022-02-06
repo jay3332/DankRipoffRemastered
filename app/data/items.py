@@ -276,6 +276,17 @@ class Items:
             You now have a **{record.exp_multiplier:.02%}** EXP multiplier.
         '''))
 
+    spinning_coin = Item(
+        type=ItemType.collectible,
+        key='spinning_coin',
+        name='Spinning Coin',
+        emoji='<a:spinning_coin:939937188836147240>',
+        description='A coin but it spins automatically, cool isn\'t it?',
+        price=500_000,
+        rarity=ItemRarity.epic,
+        buyable=True,
+    )
+
     fishing_pole = Item(
         type=ItemType.tool,
         key='fishing_pole',

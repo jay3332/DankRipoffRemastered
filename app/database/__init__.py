@@ -227,9 +227,6 @@ class NotificationsManager:
         if not result:
             await self._record.add(unread_notifications=1, connection=connection)
 
-    def persist_notification(self, title: str, content: str, *, connection: asyncpg.Connection | None = None) -> asyncio.Task:
-        return self._record.db.loop.create_task(self.add_notification(title, content, connection=connection))
-
 
 class SkillInfo(NamedTuple):
     skill: str
@@ -453,7 +450,7 @@ class UserRecord:
         await self.add(exp=exp, connection=connection)
 
         if self.level > old:
-            self.notifications_manager.persist_notification(
+            await self.notifications_manager.add_notification(
                 title='You leveled up!',
                 content=f'Congratulations on leveling up to **Level {self.level}**.',
                 connection=connection,
@@ -484,7 +481,7 @@ class UserRecord:
         if inventory.cached.quantity_of('lifesaver'):
             await inventory.add_item('lifesaver', -1, connection=connection)
 
-            self.notifications_manager.persist_notification(
+            await self.notifications_manager.add_notification(
                 title='You almost died!',
                 content=f"You almost died{' due to ' + reason if reason else ''}, but you had a lifesaver in your inventory, which is now consumed.",
                 connection=connection,
@@ -501,7 +498,7 @@ class UserRecord:
             item, quantity = random.choice(available)
             await inventory.add_item(item, -quantity, connection=connection)
 
-        self.notifications_manager.persist_notification(
+        await self.notifications_manager.add_notification(
             title='You died!',
             content=(
                 f"You died{' due to ' + reason if reason else ''}. "

@@ -9,7 +9,7 @@ from discord.utils import format_dt, oauth_url
 from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, simple_cooldown
 from app.data.settings import Setting, Settings
 from app.util.common import walk_collection
-from app.util.converters import query_setting
+from app.util.converters import better_bool, query_setting
 from app.util.pagination import FieldBasedFormatter, Paginator
 from app.util.structures import Timer
 from config import Colors, Emojis
@@ -91,7 +91,7 @@ class Miscellaneous(Cog):
 
     @command(aliases={'setting', 'set', 'config', 'conf'})
     @simple_cooldown(2, 2)
-    async def settings(self, ctx: Context, setting: query_setting = None, value: bool = None):
+    async def settings(self, ctx: Context, setting: query_setting = None, value: better_bool = None):
         """View your current settings and/or change them."""
         if setting is None:
             return await self._send_settings(ctx)

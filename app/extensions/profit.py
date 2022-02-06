@@ -578,6 +578,9 @@ class Profit(Cog):
         else:
             mapping = self.FISH_CHANCES
 
+        await record.add_random_exp(12, 18, chance=0.8)
+        await record.add_random_bank_space(10, 15, chance=0.6)
+
         fish = random.choices(list(mapping), weights=list(mapping.values()), k=5)
         fish = {item: fish.count(item) for item in set(fish) if item is not None}
 
@@ -662,6 +665,9 @@ class Profit(Cog):
         items = random.choices(list(mapping), weights=list(mapping.values()), k=7)
         items = {item: items.count(item) for item in set(items) if item is not None}
 
+        await record.add_random_exp(12, 18, chance=0.8)
+        await record.add_random_bank_space(10, 15, chance=0.6)
+
         yield f'{Emojis.loading} Digging through the ground using your {shovel.name}...', REPLY
         await asyncio.sleep(random.uniform(2., 4.))
 
@@ -744,6 +750,9 @@ class Profit(Cog):
 
         items = random.choices(list(mapping), weights=list(mapping.values()), k=6)
         items = {item: items.count(item) for item in set(items) if item is not None}
+
+        await record.add_random_exp(12, 18, chance=0.8)
+        await record.add_random_bank_space(10, 15, chance=0.6)
 
         yield f'{Emojis.loading} Mining using your {pickaxe.name}...', REPLY
         await asyncio.sleep(random.uniform(2., 4.))
@@ -837,6 +846,9 @@ class Profit(Cog):
 
         wood = random.choices(list(mapping), weights=list(mapping.values()), k=13)
         wood = {item: wood.count(item) for item in set(wood) if item is not None}
+
+        await record.add_random_exp(12, 18, chance=0.8)
+        await record.add_random_bank_space(10, 15, chance=0.6)
 
         yield f'{Emojis.loading} Chopping down some trees...', REPLY
         await asyncio.sleep(random.uniform(2., 4.))
@@ -1053,7 +1065,7 @@ class Profit(Cog):
         async with lock.with_reason(
             f"Someone else ({ctx.author.mention}) is currently trying to rob you - view your notifications to find out more details!"
         ):
-            notify = their_record.notifications_manager.persist_notification
+            notify = their_record.notifications_manager.add_notification
 
             async with ctx.db.acquire() as conn:
                 await record.add_random_bank_space(10, 15, chance=0.6, connection=conn)
@@ -1075,13 +1087,13 @@ class Profit(Cog):
                 await record.add(wallet=-fine)
                 await their_record.update(padlock_active=False)
 
-                notify(
+                await notify(
                     title='Someone tried to rob you, but you had a padlock active!',
                     content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to your padlock being active. Your padlock is now deactivated.',
                 )
                 return
 
-            notify(
+            await notify(
                 title='You are being robbed!',
                 content=f'{ctx.author.mention} is trying to rob you in **{ctx.guild.name}**!',
             )
@@ -1116,7 +1128,7 @@ class Profit(Cog):
                 )
                 await record.add(wallet=-fine)
 
-                notify(
+                await notify(
                     title='Someone tried to rob you, but failed!',
                     content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to taking too long to enter in the combination.',
                 )
@@ -1147,7 +1159,7 @@ class Profit(Cog):
                 )
                 await record.add(wallet=-fine)
 
-                notify(
+                await notify(
                     title='Someone tried to rob you, but failed!',
                     content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to entering in the wrong combination.',
                 )
@@ -1174,7 +1186,7 @@ class Profit(Cog):
 
                 self.store_rob(ctx, user, payout)
 
-                notify(
+                await notify(
                     title='Someone stole coins from you!',
                     content=f'{ctx.author.mention} stole {Emojis.coin} **{payout:,}** ({payout_percent:.1%}) from your wallet in **{ctx.guild.name}**!',
                 )
@@ -1188,7 +1200,7 @@ class Profit(Cog):
                     REPLY,
                 )
 
-                notify(
+                await notify(
                     title='Someone tried to rob you, but died in the process!',
                     content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but died due to being caught by the police.',
                 )
@@ -1207,7 +1219,7 @@ class Profit(Cog):
             await record.add(wallet=-fine)
             await their_record.add(wallet=fine)
 
-            notify(
+            await notify(
                 title='Someone tried to rob you!',
                 content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but was spotted by police. They paid you a fine of {Emojis.coin} **{fine:,}**.',
             )
