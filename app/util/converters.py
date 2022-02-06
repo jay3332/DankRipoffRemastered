@@ -7,16 +7,19 @@ import discord
 from discord.ext.commands import BadArgument, Converter, MemberConverter, MemberNotFound
 
 from app.data.items import Item, Items
+from app.data.recipes import Recipe, Recipes
 from app.data.settings import Setting, Settings
 from app.data.skills import Skill, Skills
-from app.util.common import converter, query_collection
+from app.util.common import converter, query_collection, walk_collection
 from config import Emojis
 
 if TYPE_CHECKING:
     from app.core import Context
 
+    query_item: Type[Item]
     query_skill: Type[Skill]
     query_setting: Type[Setting]
+    query_recipe: Type[Recipe]
 
 
 def get_number(argument: str) -> int:
@@ -139,25 +142,31 @@ USE = 'use'
 DROP = 'drop'
 
 
+def parse_quantity_and_item(argument) -> tuple[Item | None, str]:
+    item: Item | None = None
+    quantity = '1'
+
+    if result := try_query_item(argument):
+        item = result
+
+    elif len(split := argument.split()) > 1:
+        result, quantity = ' '.join(split[:-1]), split[-1]
+
+        if result := try_query_item(result):
+            item = result
+
+        if not item:
+            result, quantity = ' '.join(split[1:]), split[0]
+            if result := try_query_item(result):
+                item = result
+
+    return item, quantity
+
+
 def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemAndQuantity]:
     class Wrapper(Converter):
         async def convert(self, ctx: Context, argument: str) -> ItemAndQuantity:
-            item: Item | None = None
-            quantity = '1'
-
-            if result := try_query_item(argument):
-                item = result
-
-            elif len(split := argument.split()) > 1:
-                result, quantity = ' '.join(split[:-1]), split[-1]
-
-                if result := try_query_item(result):
-                    item = result
-
-                if not item:
-                    result, quantity = ' '.join(split[1:]), split[0]
-                    if result := try_query_item(result):
-                        item = result
+            item, quantity = parse_quantity_and_item(argument)
 
             if not item:
                 raise BadArgument(f'Item "{argument}" not found.')
@@ -232,6 +241,38 @@ def query_setting(query: str, /) -> Setting:
         return match
 
     raise BadArgument(f"I couldn't find a setting named {query!r}.")
+
+
+def query_recipe(query: str, /) -> Recipe:
+    if match := query_collection(Recipes, Recipe, query):
+        return match
+
+    raise BadArgument(f"I couldn't find a craftable item/recipe named {query!r}.")
+
+
+@converter
+async def RecipeConverter(ctx: Context, argument: str) -> Recipe:
+    to_raise = BadArgument(
+        f'Invalid craft entities given. Format your recipe by separating them with commas, e.g. `{ctx.clean_prefix}craft 3 wood, 2 iron`'
+    )
+
+    entities = map(str.strip, argument.split(','))
+    try:
+        entities = {item: int(raw_quantity) for item, raw_quantity in map(parse_quantity_and_item, entities)}
+    except ValueError:
+        raise to_raise
+
+    if None in entities:
+        raise to_raise
+
+    recipe = discord.utils.get(walk_collection(Recipes, Recipe), ingredients=entities)
+    if not recipe:
+        raise BadArgument(
+            'Could not craft anything from that. Note that you can only craft/discover one item at once using this command. '
+            f'You can craft already discovered recipes in bulk using the `{ctx.clean_prefix}recipes` command.'
+        )
+
+    return recipe
 
 
 WITHDRAW = 0

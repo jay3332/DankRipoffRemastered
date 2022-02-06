@@ -181,6 +181,7 @@ class Profit(Cog):
     )
 
     BEG_ITEMS = {
+        Items.stick: 0.1,
         Items.padlock: 0.1,
         Items.cheese: 0.05,
         Items.banknote: 0.05,
@@ -336,6 +337,7 @@ class Profit(Cog):
                 'Not only do you stink now, but you found absolutely nothing in the trash can.',
             ],
             items={
+                Items.stick: 0.04,
                 Items.cheese: 0.02,
             }
         ),

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from functools import partial
 from textwrap import dedent
 from typing import Any, TYPE_CHECKING
 
 import discord
 
 from app.core import (
-    Cog,
+    BAD_ARGUMENT, Cog,
     Context,
     EDIT,
     NO_EXTRA,
@@ -18,24 +20,28 @@ from app.core import (
     user_max_concurrency,
 )
 from app.data.items import Item, Items
-from app.util.common import cutoff, image_url_from_emoji, walk_collection
+from app.data.recipes import Recipe, Recipes
+from app.util.common import cutoff, get_by_key, image_url_from_emoji, walk_collection
 from app.util.converters import (
     BUY,
     BankTransaction,
-    CaseInsensitiveMemberConverter, DEPOSIT,
+    CaseInsensitiveMemberConverter,
+    DEPOSIT,
     DROP,
     DropAmount,
     ItemAndQuantityConverter,
-    SELL,
+    RecipeConverter, SELL,
     USE,
     WITHDRAW,
-    query_item,
+    get_amount, query_item,
+    query_recipe,
 )
 from app.util.pagination import FieldBasedFormatter, Paginator
+from app.util.views import UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    pass
+    from app.database import UserRecord
 
 
 class DropView(discord.ui.View):
@@ -74,6 +80,168 @@ class DropView(discord.ui.View):
         assert isinstance(child, discord.ui.Button)
 
         child.disabled = True
+
+
+class RecipeSelect(discord.ui.Select['RecipeView']):
+    def __init__(self, default: Recipe | None = None) -> None:
+        super().__init__(
+            placeholder='Choose a recipe...',
+            options=[
+                discord.SelectOption(
+                    label=recipe.name,
+                    value=recipe.key,
+                    emoji=recipe.emoji,
+                    description=cutoff(recipe.description, max_length=50, exact=True),
+                    default=default == recipe,
+                )
+                for recipe in walk_collection(Recipes, Recipe)
+            ],
+            row=0,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        try:
+            recipe = get_by_key(Recipes, self.values[0])
+        except (KeyError, IndexError):
+            return await interaction.response.send_message('Could not resolve that recipe for some reason.', ephemeral=True)
+
+        self.view.current = recipe
+        self.view.update()
+        await interaction.response.edit_message(embed=self.view.build_embed(), view=self.view)
+
+
+class RecipeView(UserView):
+    REPLACE_REGEX: re.Pattern[str] = re.compile(r'[^\s]')
+
+    def __init__(self, ctx: Context, record: UserRecord, default: Recipe | None = None) -> None:
+        self.ctx: Context = ctx
+        self.record: UserRecord = record
+
+        self.current: Recipe = default or next(walk_collection(Recipes, Recipe))
+
+        super().__init__(ctx.author)
+        self.add_item(RecipeSelect(default=default))
+
+        self.update()
+
+    @property
+    def discovered(self) -> bool:
+        return self.current.key in self.record.discovered_recipes
+
+    def build_embed(self) -> discord.Embed:
+        embed = discord.Embed(
+            title=self.current.name, description=self.current.description, color=Colors.primary, timestamp=self.ctx.now,
+        )
+        embed.set_author(name='Recipes', icon_url=self.ctx.author.avatar.url)
+        embed.set_thumbnail(url=image_url_from_emoji(self.current.emoji))
+
+        if not self.discovered:
+            embed.set_footer(text='You have not discovered this recipe yet!')
+
+        embed.add_field(name='General', value=dedent(f"""
+            **Name:**: {self.current.name}
+            **Query Key: `{self.current.key}`**
+            **Price:** {Emojis.coin} {self.current.price:,}
+        """), inline=False)
+
+        embed.add_field(name='Ingredients', value='\n'.join(
+            (f'{item.display_name} x{quantity}' for item, quantity in self.current.ingredients.items())
+            if self.discovered
+            else (
+                f'{self.REPLACE_REGEX.sub("?", item.name)} x{quantity}' for item, quantity in self.current.ingredients.items()
+            )
+        ))
+
+        return embed
+
+    def update(self) -> None:
+        toggle = self.discovered and self._get_max() > 0
+
+        for child in self.children:
+            if not isinstance(child, discord.ui.Button):
+                continue
+
+            child.disabled = not toggle
+
+    async def _craft(self, amount: int = 1, *, interaction: discord.Interaction = None) -> Any:
+        respond_error = partial(interaction.response.send_message, ephemeral=True) if interaction else self.ctx.reply
+        respond = interaction.response.send_message if interaction else self.ctx.reply
+
+        if not self.discovered:  # Just in case the user somehow manages to click the button
+            return await respond_error('You have not discovered this recipe yet!')
+
+        extra = f' ({Emojis.coin} **{self.current.price * amount:,}** for {amount})' if amount > 1 else ''
+
+        if self.record.wallet < self.current.price * amount:
+            return await respond_error(
+                f'Insufficient funds: Crafting one of this item costs {Emojis.coin} **{self.current.price:,}**{extra}, '
+                f'you only have {Emojis.coin} **{self.record.wallet:,}**.',
+            )
+
+        manager = self.record.inventory_manager
+        quantity_of = manager.cached.quantity_of
+
+        if any(quantity_of(item) < quantity * amount for item, quantity in self.current.ingredients.items()):
+            extra = ', maybe try a lower amount?' if amount > 1 else ''
+
+            return await respond_error(
+                f"You don't have enough of the required ingredients to craft this recipe{extra}",
+            )
+
+        async with self.record.db.acquire() as conn:
+            await self.record.add(wallet=-self.current.price * amount, connection=conn)
+
+            for item, quantity in self.current.ingredients.items():
+                await manager.add_item(item, -quantity * amount, connection=conn)
+
+            for item, quantity in self.current.result.items():
+                await manager.add_item(item, quantity * amount, connection=conn)
+
+        embed = discord.Embed(color=Colors.success, timestamp=self.ctx.now)
+        embed.set_author(name='Crafted Successfully', icon_url=self.ctx.author.avatar.url)
+
+        embed.add_field(
+            name='Crafted',
+            value='\n'.join(f'{item.display_name} x{quantity * amount:,}' for item, quantity in self.current.result.items()),
+            inline=False
+        )
+
+        embed.add_field(
+            name='Ingredients Used',
+            value=f'{Emojis.coin} {self.current.price * amount:,}\n' + '\n'.join(
+                f'{item.display_name} x{quantity * amount:,}' for item, quantity in self.current.ingredients.items()
+            ),
+            inline=False,
+        )
+        await respond(embed=embed)
+
+    def _get_max(self) -> int:
+        inventory = self.record.inventory_manager
+
+        item_max = min(inventory.cached.quantity_of(item) // quantity for item, quantity in self.current.ingredients.items())
+        return min(item_max, self.record.wallet // self.current.price)
+
+    @discord.ui.button(label='Craft One', style=discord.ButtonStyle.primary, row=1)
+    async def craft_one(self, _, interaction: discord.Interaction) -> None:
+        await self._craft(1, interaction=interaction)
+
+    @discord.ui.button(label='Craft Max', style=discord.ButtonStyle.primary, row=1)
+    async def craft_max(self, _, interaction: discord.Interaction) -> None:
+        await self._craft(self._get_max(), interaction=interaction)
+
+    @discord.ui.button(label='Craft Custom', style=discord.ButtonStyle.primary, row=1)
+    async def craft_custom(self, _, interaction: discord.Interaction) -> Any:
+        await interaction.response.send_message(
+            'How many of this item/recipe do you want to craft? Send a valid quantity in chat, e.g. "3" or "half".',
+        )
+
+        try:
+            response = await self.ctx.bot.wait_for('message', timeout=30, check=lambda m: m.author == interaction.user)
+        except asyncio.TimeoutError:
+            return await self.ctx.reply("You took too long to respond, cancelling.")
+
+        maximum = self._get_max()
+        await self._craft(get_amount(maximum, 1, maximum, response.content))
 
 
 class Transactions(Cog):
@@ -418,6 +586,71 @@ class Transactions(Cog):
         embed.set_author(name=f'Winner: {view.winner}', icon_url=view.winner.avatar.url)
 
         yield embed, view, EDIT
+
+    @command(aliases={'recipe', 'rc'})
+    @simple_cooldown(1, 4)
+    @user_max_concurrency(1)
+    async def recipes(self, ctx: Context, *, recipe: query_recipe = None):
+        """View recipes and craft those you have already discovered."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.inventory_manager.wait()
+
+        view = RecipeView(ctx, record, default=recipe)
+        yield view.build_embed(), view, REPLY
+
+    @command(aliases={'cr', 'make'})
+    @simple_cooldown(1, 10)
+    @user_max_concurrency(1)
+    async def craft(self, ctx: Context, *, recipe: RecipeConverter):
+        """Craft items from your inventory to make new ones!
+
+        If you craft an undiscovered recipe, it will be added to your discovered recipes.
+        Note that you can quickly craft already discovered recipes by using the `recipes` command.
+        """
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+
+        if any(inventory.cached.quantity_of(item) < required for item, required in recipe.ingredients.items()):
+            return "That's a valid recipe, but you don't have the required items in order to craft it.", BAD_ARGUMENT
+
+        if record.wallet < recipe.price:
+            return f"That's a valid recipe, but you don't have enough coins ({Emojis.coin} {recipe.price:,}) to craft it.", BAD_ARGUMENT
+
+        already_discovered = recipe.key in record.discovered_recipes
+        if not already_discovered:
+            await record.append(discovered_recipes=recipe.key)
+            message = f'{ctx.author.name} has crafted something new!'
+        else:
+            message = "You've already discovered this recipe!"
+
+        async with ctx.db.acquire() as conn:
+            await record.add(wallet=-recipe.price, connection=conn)
+
+            for item, quantity in recipe.ingredients.items():
+                await inventory.add_item(item, -quantity, connection=conn)
+
+            for item, quantity in recipe.result.items():
+                await inventory.add_item(item, quantity, connection=conn)
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+        embed.set_author(name=message, icon_url=ctx.author.avatar.url)
+        embed.description = f'You have discovered the {recipe.emoji} **{recipe.name}** recipe.'
+
+        embed.add_field(
+            name='Crafted',
+            value='\n'.join(f'{item.display_name} x{quantity:,}' for item, quantity in recipe.result.items()),
+            inline=False
+        )
+
+        embed.add_field(
+            name='Ingredients Used',
+            value=f'{Emojis.coin} {recipe.price:,}\n' + '\n'.join(
+                f'{item.display_name} x{quantity:,}' for item, quantity in recipe.ingredients.items()
+            ),
+            inline=False,
+        )
+
+        return embed, REPLY
 
 
 setup = Transactions.simple_setup

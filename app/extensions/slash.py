@@ -73,7 +73,7 @@ class Help(ApplicationCommand, tree=TREE):
     """help"""
     entity: str = option(description='The specific command to get help for.')
 
-    callback = _make_callback(lambda self: f'help {self.entity or ""}')  # TODO: make this compatible with slash commands
+    callback = _make_callback(lambda self: f'help {self.entity or ""}')
 
 
 Ping = _declare_simple_command('ping')

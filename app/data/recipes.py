@@ -6,11 +6,15 @@ from app.data.items import Item, Items
 class Recipe(NamedTuple):
     key: str
     name: str
+    emoji: str
     description: str
 
     price: int
     ingredients: dict[Item, int]
     result: dict[Item, int]
+
+    def __hash__(self) -> int:
+        return hash(self.key)
 
 
 class Recipes:
@@ -18,6 +22,7 @@ class Recipes:
         key="durable_shovel",
         name="Durable Shovel",
         description=Items.durable_shovel.description,
+        emoji=Items.durable_shovel.emoji,
         price=10_000,
         ingredients={
             Items.shovel: 3,
@@ -32,6 +37,7 @@ class Recipes:
         key="durable_pickaxe",
         name="Durable Pickaxe",
         description=Items.durable_pickaxe.description,
+        emoji=Items.durable_pickaxe.emoji,
         price=10_000,
         ingredients={
             Items.pickaxe: 3,
@@ -46,6 +52,7 @@ class Recipes:
         key="diamond_pickaxe",
         name="Diamond Pickaxe",
         description=Items.diamond_pickaxe.description,
+        emoji=Items.diamond_pickaxe.emoji,
         price=100_000,
         ingredients={
             Items.pickaxe: 3,
@@ -60,11 +67,26 @@ class Recipes:
         key="fish_bait",
         name="Fish Bait",
         description=Items.fish_bait.description,
+        emoji=Items.fish_bait.emoji,
         price=50,
         ingredients={
             Items.worm: 3,
         },
         result={
             Items.fish_bait: 1,
+        },
+    )
+
+    stick = Recipe(
+        key="stick",
+        name="Stick",
+        description=Items.stick.description,
+        emoji=Items.stick.emoji,
+        price=10,
+        ingredients={
+            Items.wood: 2,
+        },
+        result={
+            Items.stick: 1,
         },
     )

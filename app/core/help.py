@@ -176,7 +176,7 @@ class HelpCommand(commands.HelpCommand):
 
         return Paginator(
             ctx,
-            FieldBasedFormatter(embed, fields, page_in_footer=True),
+            FieldBasedFormatter(embed, fields, per_page=6, page_in_footer=True),
             center_button=CenterButton(ctx),
             other_components=[CogSelect(mapping)],
             row=1,

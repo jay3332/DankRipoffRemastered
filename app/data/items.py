@@ -296,6 +296,15 @@ class Items:
         buyable=True,
     )
 
+    stick = Item(
+        type=ItemType.collectible,
+        key='stick',
+        name='Stick',
+        emoji='<:stick:939923767344394240>',
+        description='A stick. It\'s not very useful on it\'s own, but it can be used to craft other items. Although gainable from commands, you can manually craft these.',
+        sell=100,
+    )
+
     @fishing_pole.to_use
     async def use_fishing_pole(self, ctx: Context, _) -> None:
         await ctx.invoke(ctx.bot.get_command('fish'))

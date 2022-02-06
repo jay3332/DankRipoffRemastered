@@ -1,0 +1,2 @@
+ALTER TABLE users
+ADD COLUMN discovered_recipes TEXT[] NOT NULL DEFAULT ARRAY []::TEXT[];

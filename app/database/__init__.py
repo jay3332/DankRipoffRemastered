@@ -211,7 +211,13 @@ class NotificationsManager:
                 RETURNING *;
                 """
 
-        row = await (connection or self._record.db).fetchrow(query, self._record.user_id, title, content)
+        args = query, self._record.user_id, title, content
+
+        try:
+            row = await (connection or self._record.db).fetchrow(*args)
+        except asyncpg.InterfaceError:
+            row = await self._record.db.fetchrow(*args)
+
         self.cached.insert(0, Notification.from_record(row))
 
         result = False
@@ -431,6 +437,9 @@ class UserRecord:
     def add(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[UserRecord]:
         return self._update(lambda o: f'"{o[1]}" = "{o[1]}" + ${o[0]}', values, connection=connection)
 
+    def append(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[UserRecord]:
+        return self._update(lambda o: f'"{o[1]}" = ARRAY_APPEND("{o[1]}", ${o[0]})', values, connection=connection)
+
     async def add_coins(self, coins: int, /, *, connection: asyncpg.Connection | None = None) -> int:
         """Adds coins including applying multipliers. Returns the amount of coins added."""
         coins = round(coins)
@@ -560,6 +569,10 @@ class UserRecord:
     @property
     def weekly_streak(self) -> int:
         return self.data['weekly_streak']
+
+    @property
+    def discovered_recipes(self) -> list[str]:
+        return self.data['discovered_recipes']
 
     @property
     def dm_notifications(self) -> bool:
