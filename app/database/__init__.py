@@ -221,6 +221,9 @@ class NotificationsManager:
         if not result:
             await self._record.add(unread_notifications=1, connection=connection)
 
+    def persist_notification(self, title: str, content: str, *, connection: asyncpg.Connection | None = None) -> asyncio.Task:
+        return self._record.db.loop.create_task(self.add_notification(title, content, connection=connection))
+
 
 class SkillInfo(NamedTuple):
     skill: str
@@ -439,7 +442,16 @@ class UserRecord:
         """Return whether or not the user as leveled up."""
         old = self.level
         await self.add(exp=exp, connection=connection)
-        return self.level > old  # TODO: Notify user
+
+        if self.level > old:
+            self.notifications_manager.persist_notification(
+                title='You leveled up!',
+                content=f'Congratulations on leveling up to **Level {self.level}**.',
+                connection=connection,
+            )
+            return True
+
+        return False
 
     async def add_random_bank_space(self, minimum: int, maximum: int, *, chance: float = 1, connection: asyncpg.Connection | None = None) -> int:
         if random.random() > chance:
@@ -463,11 +475,12 @@ class UserRecord:
         if inventory.cached.quantity_of('lifesaver'):
             await inventory.add_item('lifesaver', -1, connection=connection)
 
-            return await self.notifications_manager.add_notification(
+            self.notifications_manager.persist_notification(
                 title='You almost died!',
                 content=f"You almost died{' due to ' + reason if reason else ''}, but you had a lifesaver in your inventory, which is now consumed.",
                 connection=connection,
             )
+            return
 
         old = self.wallet
         await self.update(wallet=0, connection=connection)
@@ -479,7 +492,7 @@ class UserRecord:
             item, quantity = random.choice(available)
             await inventory.add_item(item, -quantity, connection=connection)
 
-        await self.notifications_manager.add_notification(
+        self.notifications_manager.persist_notification(
             title='You died!',
             content=(
                 f"You died{' due to ' + reason if reason else ''}. "

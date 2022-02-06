@@ -101,10 +101,10 @@ def query_collection(collection: type, cls: Type[Q], query: str) -> Optional[Q]:
         query = query.lower()
         name = obj.name.lower()
 
-        if query == name:
+        if query in (name, obj.key):
             return obj
 
-        if len(query) >= 3 and query in name:
+        if len(query) >= 3 and query in name or query in obj.key:
             queued.append(obj)
 
         matcher = SequenceMatcher(None, query, name)

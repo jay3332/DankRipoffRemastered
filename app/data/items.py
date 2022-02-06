@@ -31,6 +31,7 @@ class ItemType(Enum):
     crate = 3
     collectible = 4
     worm = 5
+    ore = 6
 
 
 class ItemRarity(Enum):
@@ -156,6 +157,7 @@ Fish = partial(Item, type=ItemType.fish)
 Wood = partial(Item, type=ItemType.wood)
 Crate: Callable[..., Item[CrateMetadata]] = partial(Item, type=ItemType.crate, dispose=True)
 Worm = partial(Item, type=ItemType.worm)
+Ore = partial(Item, type=ItemType.ore)
 
 
 class Items:
@@ -558,6 +560,146 @@ class Items:
         description='A rare type of wood',
         rarity=ItemRarity.uncommon,
         sell=1000,
+    )
+
+    iron = Ore(
+        key='iron',
+        name='Iron',
+        plural='Iron',
+        emoji='<:iron:939598222408712202>',
+        description='A common metal mined from the ground.',
+        sell=60,
+    )
+
+    copper = Ore(
+        key='copper',
+        name='Copper',
+        plural='Copper',
+        emoji='<:copper:939598531432448080>',
+        description='A soft metal with high thermal and electrial conductivity.',
+        sell=200,
+    )
+
+    silver = Ore(
+        key='silver',
+        name='Silver',
+        plural='Silver',
+        emoji='<:silver:939599550027542578>',
+        description='A shiny, lustrous metal with the highest thermal and electrical conductivity of any metal.',
+        rarity=ItemRarity.uncommon,
+        sell=400,
+    )
+
+    gold = Ore(
+        key='gold',
+        name='Gold',
+        plural='Gold',
+        emoji='<:gold:939600989474918471>',
+        description='A bright, dense, and popular metal.',
+        rarity=ItemRarity.rare,
+        sell=900,
+    )
+
+    obsidian = Ore(
+        key='obsidian',
+        name='Obsidian',
+        plural='Obsidian',
+        emoji='<:obsidian:939604204346019950>',
+        description='A volcanic, glassy mineral formed from the rapid cooling of felsic lava.',
+        rarity=ItemRarity.rare,
+        sell=1250,
+    )
+
+    emerald = Ore(
+        key='emerald',
+        name='Emerald',
+        plural='Emerald',
+        emoji='<:emerald:939603191115448370>',
+        description='A valuable green gemstone.',
+        rarity=ItemRarity.epic,
+        sell=2000,
+    )
+
+    diamond = Ore(
+        key='diamond',
+        name='Diamond',
+        plural='Diamond',
+        emoji='<:diamond:939601998867746848>',
+        description='A super-hard mineral known for being extremely expensive.',
+        rarity=ItemRarity.legendary,
+        sell=5000,
+    )
+
+    pickaxe: Item[dict[Item, float]] = Item(
+        type=ItemType.tool,
+        key='pickaxe',
+        name='Pickaxe',
+        emoji='<:pickaxe:939598952284692520>',
+        description='Mine ores using the `.mine` command. You can sell these ores for profit, and use some in crafting.',
+        price=10000,
+        buyable=True,
+        metadata={
+            None: 1,
+            iron: 0.5,
+            copper: 0.17,
+            silver: 0.075,
+            gold: 0.015,
+            obsidian: 0.005,
+            emerald: 0.0015,
+            diamond: 0.0003,
+        },
+    )
+
+    durable_pickaxe = Item(
+        type=ItemType.tool,
+        key='durable_pickaxe',
+        name='Durable Pickaxe',
+        emoji='<:durable_pickaxe:939681326896930856>',
+        description='A durable, re-enforced pickaxe. Able to find rare ores more commonly than a normal pickaxe. This item must be crafted.',
+        rarity=ItemRarity.rare,
+        sell=30000,
+        metadata={
+            None: 0.95,
+            iron: 0.5,
+            copper: 0.25,
+            silver: 0.1,
+            gold: 0.03,
+            obsidian: 0.0075,
+            emerald: 0.003,
+            diamond: 0.00075,
+        },
+    )
+
+    diamond_pickaxe = Item(
+        type=ItemType.tool,
+        key='diamond_pickaxe',
+        name='Diamond Pickaxe',
+        emoji='<:diamond_pickaxe:939683191785148476>',
+        description='A pickaxe made of pure diamond. This pickaxe is better than both the normal and durable pickaxes. This item must be crafted.',
+        rarity=ItemRarity.legendary,
+        sell=200000,
+        metadata={
+            None: 0.9,
+            iron: 0.5,
+            copper: 0.3,
+            silver: 0.15,
+            gold: 0.05,
+            obsidian: 0.015,
+            emerald: 0.0075,
+            diamond: 0.002,
+        },
+    )
+
+    @pickaxe.to_use
+    @durable_pickaxe.to_use
+    @diamond_pickaxe.to_use
+    async def use_pickaxe(self, ctx: Context, _) -> None:
+        await ctx.invoke(ctx.bot.get_command('mine'))
+
+    __pickaxes__: tuple[Item[dict[Item, float]]] = (
+        diamond_pickaxe,
+        durable_pickaxe,
+        pickaxe,
     )
 
     common_crate = Crate(

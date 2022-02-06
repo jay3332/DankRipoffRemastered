@@ -707,6 +707,89 @@ class Profit(Cog):
 
         yield '', embed, EDIT
 
+    RARE_ORES = {
+        Items.gold,
+        Items.obsidian,
+        Items.emerald,
+        Items.diamond,
+    }
+
+    MINE_PROMPTS = (
+        "mine mine mine",
+        "my pickaxe is about to break",
+        "what a shiny ore",
+        "this must be something special",
+        "oh look, something shiny?",
+        "what must this be?",
+        "that looks like a cool ore",
+    )
+
+    @command(aliases={'pickaxe', 'm'})  # TODO: so much boilerplate within these commands, maybe make a common function for these?
+    @simple_cooldown(1, 30)
+    @user_max_concurrency(1)
+    async def mine(self, ctx: Context):
+        """Mine ores from deep below the ground and sell them for profit!"""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+
+        try:
+            pickaxe = next(filter(inventory.cached.quantity_of, Items.__pickaxes__))
+        except StopIteration:
+            yield f'You need {Items.pickaxe.get_sentence_chunk(1)} to mine.', BAD_ARGUMENT
+            return
+
+        mapping = pickaxe.metadata
+
+        items = random.choices(list(mapping), weights=list(mapping.values()), k=6)
+        items = {item: items.count(item) for item in set(items) if item is not None}
+
+        yield f'{Emojis.loading} Mining using your {pickaxe.name}...', REPLY
+        await asyncio.sleep(random.uniform(2., 4.))
+
+        if not len(items):
+            yield 'You mined absolutely nothing. Lmao.', EDIT
+            return
+
+        if any(item in self.RARE_ORES for item in items):
+            message = random.choice(self.MINE_PROMPTS)
+
+            yield (
+                f'Ooh, the ore you mined looks special! Type `{insert_random_u200b(message)}` to retrieve the ore.',
+                EDIT,
+            )
+
+            try:
+                response = await ctx.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=10)
+                initial = "You failed mine the ore"
+
+            except asyncio.TimeoutError:
+                response = ctx.message  # guaranteed that this wont equal the message
+                initial = "You couldn't type out your prompt in time"
+
+            if response.content.lower() != message:
+                await inventory.add_item(pickaxe, -1)
+
+                if random.random() < 0.15:
+                    await record.make_dead(reason='pickaxe snapping back on you')
+
+                    yield f'{initial}. Your pickaxe snaps and the sharp part comes flying back at you, impaling your chest. You died.', REPLY
+                    return
+
+                yield f'{initial}, and your pickaxe snaps in half while trying to mine the ore.', REPLY
+                return
+
+        async with ctx.db.acquire() as conn:
+            for item, count in items.items():
+                await inventory.add_item(item, count, connection=conn)
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+
+        embed.add_field(name='You mined:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in items.items()))
+        embed.set_author(name=f'Mining: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_footer(text=f'Used {pickaxe.name}')
+
+        yield '', embed, EDIT
+
     ABUNDANCE_FOREST_WOOD_CHANCES = {
         None: 1,
         Items.wood: 0.3,
@@ -968,7 +1051,7 @@ class Profit(Cog):
         async with lock.with_reason(
             f"Someone else ({ctx.author.mention}) is currently trying to rob you - view your notifications to find out more details!"
         ):
-            notify = their_record.notifications_manager.add_notification
+            notify = their_record.notifications_manager.persist_notification
 
             async with ctx.db.acquire() as conn:
                 await record.add_random_bank_space(10, 15, chance=0.6, connection=conn)
@@ -990,13 +1073,13 @@ class Profit(Cog):
                 await record.add(wallet=-fine)
                 await their_record.update(padlock_active=False)
 
-                await notify(
+                notify(
                     title='Someone tried to rob you, but you had a padlock active!',
                     content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to your padlock being active. Your padlock is now deactivated.',
                 )
                 return
 
-            await notify(
+            notify(
                 title='You are being robbed!',
                 content=f'{ctx.author.mention} is trying to rob you in **{ctx.guild.name}**!',
             )
@@ -1031,7 +1114,7 @@ class Profit(Cog):
                 )
                 await record.add(wallet=-fine)
 
-                await notify(
+                notify(
                     title='Someone tried to rob you, but failed!',
                     content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to taking too long to enter in the combination.',
                 )
@@ -1062,7 +1145,7 @@ class Profit(Cog):
                 )
                 await record.add(wallet=-fine)
 
-                await notify(
+                notify(
                     title='Someone tried to rob you, but failed!',
                     content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to entering in the wrong combination.',
                 )
@@ -1089,7 +1172,7 @@ class Profit(Cog):
 
                 self.store_rob(ctx, user, payout)
 
-                await notify(
+                notify(
                     title='Someone stole coins from you!',
                     content=f'{ctx.author.mention} stole {Emojis.coin} **{payout:,}** ({payout_percent:.1%}) from your wallet in **{ctx.guild.name}**!',
                 )
@@ -1103,7 +1186,7 @@ class Profit(Cog):
                     REPLY,
                 )
 
-                await notify(
+                notify(
                     title='Someone tried to rob you, but died in the process!',
                     content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but died due to being caught by the police.',
                 )
@@ -1122,7 +1205,7 @@ class Profit(Cog):
             await record.add(wallet=-fine)
             await their_record.add(wallet=fine)
 
-            await notify(
+            notify(
                 title='Someone tried to rob you!',
                 content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but was spotted by police. They paid you a fine of {Emojis.coin} **{fine:,}**.',
             )

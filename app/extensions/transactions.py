@@ -341,7 +341,7 @@ class Transactions(Cog):
                     f'{item.emoji} {item.name} x{their_record.inventory_manager.cached.quantity_of(item):,}',
                 )
 
-            await their_record.notifications_manager.add_notification(
+            their_record.notifications_manager.persist_notification(
                 title='You got coins!' if isinstance(entity, int) else 'You got items!',
                 content=f'{ctx.author.mention} gave you {entity_human}.',
                 connection=conn,
