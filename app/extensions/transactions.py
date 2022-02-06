@@ -118,6 +118,7 @@ class RecipeView(UserView):
         self.record: UserRecord = record
 
         self.current: Recipe = default or next(walk_collection(Recipes, Recipe))
+        self.input_lock: asyncio.Lock = asyncio.Lock()
 
         super().__init__(ctx.author)
         self.add_item(RecipeSelect(default=default))
@@ -231,17 +232,22 @@ class RecipeView(UserView):
 
     @discord.ui.button(label='Craft Custom', style=discord.ButtonStyle.primary, row=1)
     async def craft_custom(self, _, interaction: discord.Interaction) -> Any:
-        await interaction.response.send_message(
-            'How many of this item/recipe do you want to craft? Send a valid quantity in chat, e.g. "3" or "half".',
-        )
+        async with self.input_lock:
+            await interaction.response.send_message(
+                'How many of this item/recipe do you want to craft? Send a valid quantity in chat, e.g. "3" or "half".',
+            )
 
-        try:
-            response = await self.ctx.bot.wait_for('message', timeout=30, check=lambda m: m.author == interaction.user)
-        except asyncio.TimeoutError:
-            return await self.ctx.reply("You took too long to respond, cancelling.")
+            try:
+                response = await self.ctx.bot.wait_for('message', timeout=30,
+                                                       check=lambda m: m.author == interaction.user)
+            except asyncio.TimeoutError:
+                return await self.ctx.reply("You took too long to respond, cancelling.")
 
-        maximum = self._get_max()
-        await self._craft(get_amount(maximum, 1, maximum, response.content))
+            maximum = self._get_max()
+            try:
+                await self._craft(get_amount(maximum, 1, maximum, response.content))
+            except Exception as e:
+                await self.ctx.reply(f'Error: {e.__class__.__name__}')
 
 
 class Transactions(Cog):
