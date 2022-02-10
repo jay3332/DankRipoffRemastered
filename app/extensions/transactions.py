@@ -9,7 +9,8 @@ from typing import Any, TYPE_CHECKING
 import discord
 
 from app.core import (
-    BAD_ARGUMENT, Cog,
+    BAD_ARGUMENT,
+    Cog,
     Context,
     EDIT,
     NO_EXTRA,
@@ -30,10 +31,12 @@ from app.util.converters import (
     DROP,
     DropAmount,
     ItemAndQuantityConverter,
-    RecipeConverter, SELL,
+    RecipeConverter,
+    SELL,
     USE,
     WITHDRAW,
-    get_amount, query_item,
+    get_amount,
+    query_item,
     query_recipe,
 )
 from app.util.pagination import FieldBasedFormatter, Paginator
@@ -156,13 +159,20 @@ class RecipeView(UserView):
         return embed
 
     def update(self) -> None:
-        toggle = self.discovered and self._get_max() > 0
+        amount = self._get_max()
+        toggle = self.discovered and amount > 0
 
         for child in self.children:
-            if not isinstance(child, discord.ui.Button):
+            if child is self.stop_button or not isinstance(child, discord.ui.Button):
                 continue
 
             child.disabled = not toggle
+            child.style = discord.ButtonStyle.primary if self.discovered else discord.ButtonStyle.secondary
+
+        if self.discovered:
+            self.craft_max.label = f'Craft Max ({amount:,})'
+        else:
+            self.craft_max.label = 'Craft Max'
 
     async def _craft(self, amount: int = 1, *, interaction: discord.Interaction = None) -> Any:
         respond_error = partial(interaction.response.send_message, ephemeral=True) if interaction else self.ctx.reply
@@ -249,6 +259,17 @@ class RecipeView(UserView):
                 await self._craft(get_amount(maximum, 1, maximum, response.content))
             except Exception as e:
                 await self.ctx.reply(f'Error: {e.__class__.__name__}')
+
+    @discord.ui.button(label='Stop', style=discord.ButtonStyle.danger, row=1)
+    async def stop_button(self, button: discord.ui.Button, interaction: discord.Interaction) -> None:
+        for child in self.children:
+            child.disabled = True
+
+            if child is not button and isinstance(child, discord.ui.Button):
+                child.style = discord.ButtonStyle.secondary
+
+        self.stop()
+        await interaction.response.edit_message(view=self)
 
 
 class Transactions(Cog):
@@ -605,15 +626,20 @@ class Transactions(Cog):
         view = RecipeView(ctx, record, default=recipe)
         yield view.build_embed(), view, REPLY
 
+        await view.wait()
+
     @command(aliases={'cr', 'make'})
     @simple_cooldown(1, 10)
     @user_max_concurrency(1)
-    async def craft(self, ctx: Context, *, recipe: RecipeConverter):
+    async def craft(self, ctx: Context, *, recipe: RecipeConverter = None):
         """Craft items from your inventory to make new ones!
 
         If you craft an undiscovered recipe, it will be added to your discovered recipes.
         Note that you can quickly craft already discovered recipes by using the `recipes` command.
         """
+        if recipe is None:
+            return await ctx.invoke(self.recipes)
+
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = await record.inventory_manager.wait()
 
@@ -641,7 +667,10 @@ class Transactions(Cog):
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
         embed.set_author(name=message, icon_url=ctx.author.avatar.url)
-        embed.description = f'You have discovered the {recipe.emoji} **{recipe.name}** recipe.'
+        if already_discovered:
+            embed.description = f'You crafted the {recipe.emoji} **{recipe.name}** recipe, which you have already discovered.'
+        else:
+            embed.description = f'You have discovered the {recipe.emoji} **{recipe.name}** recipe.'
 
         embed.add_field(
             name='Crafted',

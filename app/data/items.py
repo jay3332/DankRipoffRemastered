@@ -32,6 +32,9 @@ class ItemType(Enum):
     collectible = 4
     worm = 5
     ore = 6
+    crop = 7
+    harvest = 8
+    miscellaneous = 9
 
 
 class ItemRarity(Enum):
@@ -48,6 +51,12 @@ class CrateMetadata(NamedTuple):
     minimum: int
     maximum: int
     items: dict[Item, tuple[float, int, int]]
+
+
+class CropMetadata(NamedTuple):
+    time: int
+    count: tuple[int, int]
+    item: Item
 
 
 @dataclass
@@ -94,6 +103,9 @@ class Item(Generic[T]):
     def __repr__(self) -> str:
         return f'<Item key={self.key} name={self.name!r}>'
 
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, self.__class__) and self.key == other.key
+
     @property
     def display_name(self) -> str:
         return self.get_display_name()
@@ -114,9 +126,9 @@ class Item(Generic[T]):
         quantifier = format(quantity, ',') if quantity != 1 else self.singular
         return f'{quantifier} {middle}'
 
-    def get_display_name(self, *, bold: bool = False) -> str:
+    def get_display_name(self, *, bold: bool = False, plural: bool = False) -> str:
         fmt = '{} **{}**' if bold else '{} {}'
-        return fmt.format(self.emoji, self.name).strip()
+        return fmt.format(self.emoji, self.plural if plural else self.name).strip()
 
     def to_use(self, func: UsageCallback) -> UsageCallback:
         self.usage_callback = func
@@ -155,9 +167,21 @@ class ItemUsageError(Exception):
 
 Fish = partial(Item, type=ItemType.fish)
 Wood = partial(Item, type=ItemType.wood)
-Crate: Callable[..., Item[CrateMetadata]] = partial(Item, type=ItemType.crate, dispose=True)
+Crate: Callable[..., Item[CrateMetadata]] = partial(Item, type=ItemType.crate, dispose=True, sellable=False)
 Worm = partial(Item, type=ItemType.worm)
 Ore = partial(Item, type=ItemType.ore)
+Harvest = partial(Item, type=ItemType.harvest)
+
+
+def Crop(*, metadata: CropMetadata, **kwargs) -> Item[CropMetadata]:
+    return Item(
+        type=ItemType.crop,
+        metadata=metadata,
+        description=f'A crop that produces {metadata.item.emoji} {metadata.item.plural}.',
+        buyable=True,
+        sellable=False,
+        **kwargs,
+    )
 
 
 class Items:
@@ -728,7 +752,6 @@ class Items:
         emoji='<:crate:938163970248966165>',
         description='The most common type of crate.',
         price=200,
-        sellable=False,
         metadata=CrateMetadata(
             minimum=200,
             maximum=600,
@@ -745,7 +768,6 @@ class Items:
         emoji='<:uncommon_crate:938165259301171310>',
         description='A slightly more common type of crate.',
         price=500,
-        sellable=False,
         metadata=CrateMetadata(
             minimum=500,
             maximum=1500,
@@ -759,8 +781,109 @@ class Items:
         rarity=ItemRarity.uncommon,
     )
 
+    rare_crate = Crate(
+        key='rare_crate',
+        name='Rare Crate',
+        emoji='<:rare_crate:938558029425700926>',
+        description='A pretty rare crate.',
+        price=2000,
+        metadata=CrateMetadata(
+            minimum=1500,
+            maximum=3500,
+            items={
+                fishing_pole: (0.1, 1, 1),
+                banknote: (0.15, 1, 2),
+                cheese: (0.4, 1, 2),
+                lifesaver: (0.5, 1, 2),
+                padlock: (0.75, 1, 2),
+            },
+        ),
+        rarity=ItemRarity.rare,
+    )
+
+    epic_crate = Crate(
+        key='epic_crate',
+        name='Epic Crate',
+        emoji='<:epic_crate:938558716242976798>',
+        description='A pretty epic crate.',
+        price=6000,
+        metadata=CrateMetadata(
+            minimum=5000,
+            maximum=12500,
+            items={
+                fishing_pole: (0.1, 1, 1),
+                pickaxe: (0.1, 1, 1),
+                shovel: (0.1, 1, 1),
+                banknote: (0.2, 1, 3),
+                fish_bait: (0.3, 5, 15),
+                cheese: (0.4, 1, 3),
+                lifesaver: (0.5, 1, 3),
+                padlock: (0.75, 2, 3),
+            },
+        ),
+        rarity=ItemRarity.epic,
+    )
+
+    legendary_crate = Crate(
+        key='legendary_crate',
+        name='Legendary Crate',
+        emoji='<:legendary_crate:940383830177615952>',
+        description='A pretty legendary crate.',
+        price=25000,
+        metadata=CrateMetadata(
+            minimum=20000,
+            maximum=50000,
+            items={
+                uncommon_crate: (0.01, 1, 1),
+                common_crate: (0.01, 1, 1),
+                fishing_pole: (0.1, 1, 1),
+                pickaxe: (0.1, 1, 1),
+                shovel: (0.1, 1, 1),
+                axe: (0.1, 1, 1),
+                banknote: (0.2, 1, 5),
+                fish_bait: (0.3, 20, 50),
+                cheese: (0.4, 2, 5),
+                lifesaver: (0.5, 2, 4),
+                padlock: (0.75, 2, 5),
+            },
+        ),
+        rarity=ItemRarity.legendary,
+    )
+
+    mythic_crate = Crate(
+        key='mythic_crate',
+        name='Mythic Crate',
+        emoji='<:mythic_crate:940385942080991302>',
+        description='A pretty mythic crate.',
+        price=60000,
+        metadata=CrateMetadata(
+            minimum=50000,
+            maximum=150000,
+            items={
+                epic_crate: (0.002, 1, 1),
+                rare_crate: (0.005, 1, 1),
+                uncommon_crate: (0.01, 1, 1),
+                common_crate: (0.01, 1, 2),
+                fishing_pole: (0.1, 1, 2),
+                pickaxe: (0.1, 1, 2),
+                shovel: (0.1, 1, 2),
+                axe: (0.1, 1, 2),
+                banknote: (0.2, 2, 7),
+                fish_bait: (0.3, 50, 100),
+                cheese: (0.4, 2, 7),
+                lifesaver: (0.5, 2, 6),
+                padlock: (0.75, 3, 8),
+            },
+        ),
+        rarity=ItemRarity.mythic,
+    )
+
     @common_crate.to_use
     @uncommon_crate.to_use
+    @rare_crate.to_use
+    @epic_crate.to_use
+    @legendary_crate.to_use
+    @mythic_crate.to_use
     async def use_crate(self, ctx: Context, crate: Item[CrateMetadata], quantity: int) -> None:
         if quantity == 1:
             formatted = f'{crate.singular} {crate.name}'
@@ -795,6 +918,140 @@ class Items:
             f'{item.emoji} {item.name} x{quantity:,}' for item, quantity in items.items()
         )
         await original.edit(content=f'You opened {formatted} and received:\n{readable}')
+
+    cup = Item(
+        type=ItemType.tool,
+        key='cup',
+        name='Cup',
+        emoji='<:cup:941091217993769031>',
+        description='A cup that can hold liquid. Relatively cheap.',
+        price=50,
+        buyable=True
+    )
+
+    watering_can = Item(
+        type=ItemType.tool,
+        key='watering_can',
+        name='Watering Can',
+        emoji='<:watering_can:941088588068683808>',
+        description='Use these to water your plants [crops], boosting their EXP.',
+        price=1000,
+        buyable=True,
+    )
+
+    glass_of_water = Item(
+        type=ItemType.tool,
+        key='glass_of_water',
+        name='Glass of Water',
+        plural='Glasses of Water',
+        emoji='<:glass_of_water:941090007412785173>',
+        description='Usually used for crafting, but can also be a refresher.',
+        sell=1000,
+    )
+
+    tomato = Harvest(
+        key='tomato',
+        name='Tomato',
+        plural='Tomatoes',
+        emoji='<:tomato:940794702175801444>',
+        description='A regular tomato, grown from the tomato crop.',
+        sell=50,
+    )
+
+    tomato_crop = Crop(
+        key='tomato_crop',
+        name='Tomato Crop',
+        emoji='<:tomato:940794702175801444>',
+        price=1000,
+        metadata=CropMetadata(
+            time=300,
+            count=(1, 3),
+            item=tomato,
+        ),
+    )
+
+    wheat = Harvest(
+        key='wheat',
+        name='Wheat',
+        plural='Wheat',
+        emoji='<:wheat:941089760317952020>',
+        description='An ear of wheat, grown from the wheat crop.',
+        sell=40,
+    )
+
+    wheat_crop = Crop(
+        key='wheat_crop',
+        name='Wheat Crop',
+        emoji='<:wheat:941089760317952020>',
+        price=1150,
+        metadata=CropMetadata(
+            time=300,
+            count=(1, 2),
+            item=wheat,
+        ),
+    )
+
+    carrot = Harvest(
+        key='carrot',
+        name='Carrot',
+        emoji='<:carrot:941096334365175839>',
+        description='A carrot, grown from the carrot crop.',
+        sell=75,
+    )
+
+    carrot_crop = Crop(
+        key='carrot_crop',
+        name='Carrot Crop',
+        emoji='<:carrot:941096334365175839>',
+        price=1200,
+        metadata=CropMetadata(
+            time=300,
+            count=(1, 2),
+            item=carrot,
+        ),
+    )
+
+    corn = Harvest(
+        key='corn',
+        name='Corn',
+        plural='Corn',
+        emoji='<:corn:941097271544643594>',
+        description='An ear of corn, grown from the corn crop.',
+        sell=125,
+    )
+
+    corn_crop = Crop(
+        key='corn_crop',
+        name='Corn Crop',
+        emoji='<:corn:941097271544643594>',
+        price=1500,
+        metadata=CropMetadata(
+            time=300,
+            count=(1, 1),
+            item=corn,
+        ),
+    )
+
+    flour = Item(
+        type=ItemType.miscellaneous,
+        key='flour',
+        name='Flour',
+        plural='Flour',
+        emoji='<:flour:941087131038797834>',
+        description='A bag of flour, used to make [craft] bakery products.',
+        sell=100,
+    )
+
+    bread = Item(
+        type=ItemType.miscellaneous,
+        key='loaf_of_bread',
+        name='Loaf of Bread',
+        plural='Loaves of Bread',
+        emoji='<:loaf_of_bread:941087632308457483>',
+        description='A normal loaf of wheat bread.',
+        sell=500,
+        rarity=ItemRarity.uncommon,
+    )
 
     @classmethod
     def all(cls) -> Generator[Item, Any, Any]:

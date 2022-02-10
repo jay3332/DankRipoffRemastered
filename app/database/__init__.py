@@ -3,12 +3,15 @@ from __future__ import annotations
 import asyncio
 import datetime
 import random
+from collections import defaultdict
+from string import ascii_letters
 from typing import Any, Awaitable, Callable, Literal, NamedTuple, overload, TYPE_CHECKING
 
 import asyncpg
 import discord.utils
+from discord.utils import cached_property
 
-from app.data.items import Item, Items
+from app.data.items import CropMetadata, Item, Items
 from app.data.skills import Skill, Skills
 from app.util.common import calculate_level, get_by_key
 from config import DatabaseConfig, Emojis, beta
@@ -378,6 +381,195 @@ class CooldownManager:
         self.cached[key] = CooldownInfo.from_record(new)
 
 
+class CropInfo(NamedTuple):
+    x: int
+    y: int
+    crop: Item[CropMetadata]
+    exp: int
+    last_harvest: datetime.datetime | None
+    created_at: datetime.datetime
+
+    @staticmethod
+    def get_letters(x: int) -> str:
+        letters = ascii_letters[26:52]
+
+        return (' ' + letters)[x // 26].strip() + letters[x % 26]
+
+    @staticmethod
+    def into_coordinates(x: int, y: int) -> str:
+        return CropInfo.get_letters(x) + str(y + 1)
+
+    @cached_property
+    def coordinates(self) -> str:
+        return self.into_coordinates(self.x, self.y)
+
+    @property
+    def level_data(self) -> tuple[int, int, int]:
+        return calculate_level(self.exp, **CropManager.LEVELING_CURVE)
+
+    @property
+    def level(self) -> int:
+        return self.level_data[0]
+
+    @property
+    def xp(self) -> int:
+        return self.level_data[1]
+
+    @property
+    def max_xp(self) -> int:
+        return self.level_data[2]
+
+    @classmethod
+    def from_record(cls, record: asyncpg.Record) -> CropInfo:
+        return cls(
+            x=record['x'],
+            y=record['y'],
+            crop=get_by_key(Items, record['crop']),
+            exp=record['exp'],
+            last_harvest=record['last_harvest'],
+            created_at=record['created_at'],
+        )
+
+
+class CropManager:
+    LEVELING_CURVE = dict(base=50, factor=1.15)
+
+    def __init__(self, record: UserRecord) -> None:
+        self.cached: dict[tuple[int, int], CropInfo] = {}
+
+        self._record: UserRecord = record
+        self._task: asyncio.Task = record.db.loop.create_task(self.fetch_crops())
+
+    async def wait(self) -> CropManager:
+        await self._task
+        return self
+
+    async def fetch_crops(self) -> None:
+        query = 'SELECT * FROM crops WHERE user_id = $1'
+
+        async with self._record.db.acquire() as conn:
+            records = await conn.fetch(query, self._record.user_id)
+            self.cached = {
+                (record['x'], record['y']): CropInfo.from_record(record) for record in records
+            }
+
+            default = [
+                (self._record.user_id, x, y) for x in range(4) for y in range(4)
+                if (x, y) not in self.cached
+            ]
+            if not default:
+                return
+
+            await conn.executemany('INSERT INTO crops (user_id, x, y) VALUES ($1, $2, $3)', default)
+
+            records = await conn.fetch(query, self._record.user_id)
+            self.cached = {
+                (record['x'], record['y']): CropInfo.from_record(record) for record in records
+            }
+
+    def get_crop_info(self, x: int, y: int) -> CropInfo:
+        return self.cached.get((x, y))
+
+    async def harvest(self, coordinates: list[tuple[int, int]]) -> tuple[dict[tuple[int, int], tuple[Item, int]], dict[Item, int]]:
+        level_ups = {}
+        harvested = defaultdict(int)
+
+        await self.wait()
+
+        async with self._record.db.acquire() as conn:
+            for x, y in coordinates:
+                info = self.get_crop_info(x, y)
+                if info is None or info.crop is None or (
+                    info.last_harvest + datetime.timedelta(seconds=info.crop.metadata.time) > discord.utils.utcnow()
+                ):
+                    continue
+
+                old_level = info.level
+                query = """
+                        UPDATE crops SET last_harvest = CURRENT_TIMESTAMP, exp = exp + $4
+                        WHERE user_id = $1 AND x = $2 AND y = $3
+                        RETURNING *;
+                        """
+                new = await conn.fetchrow(query, self._record.user_id, x, y, random.randint(5, 10))
+                self.cached[x, y] = new = CropInfo.from_record(new)
+
+                if new.level > old_level:
+                    level_ups[x, y] = info.crop, new.level
+
+                harvested[info.crop.metadata.item] += random.randint(*info.crop.metadata.count)
+
+            for item, quantity in harvested.items():
+                await self._record.inventory_manager.add_item(item, quantity, connection=conn)
+
+        return level_ups, harvested
+
+    async def add_crop_exp(self, x: int, y: int, exp: int) -> bool:
+        await self.wait()
+
+        query = """
+                UPDATE crops SET exp = exp + $4
+                WHERE user_id = $1 AND x = $2 AND y = $3
+                RETURNING *;
+                """
+
+        old = self.cached[x, y].level
+
+        new = await self._record.db.fetchrow(query, self._record.user_id, x, y, exp)
+        self.cached[x, y] = new = CropInfo.from_record(new)
+
+        return new.level > old
+
+    async def update_last_harvest(self, x: int, y: int) -> None:
+        await self.wait()
+
+        query = """
+                UPDATE crops SET last_harvest = CURRENT_TIMESTAMP
+                WHERE user_id = $1 AND x = $2 AND y = $3
+                RETURNING *;
+                """
+
+        new = await self._record.db.fetchrow(query, self._record.user_id, x, y)
+        self.cached[x, y] = CropInfo.from_record(new)
+
+    async def plant_crop(self, x: int, y: int, crop: Item | str) -> None:
+        if isinstance(crop, Item):
+            crop = crop.key
+
+        await self.wait()
+
+        query = """
+                UPDATE crops SET crop = $2, last_harvest = CURRENT_TIMESTAMP, exp = 0
+                WHERE user_id = $1 AND x = $3 AND y = $4
+                RETURNING *;
+                """
+
+        new = await self._record.db.fetchrow(query, self._record.user_id, crop, x, y)
+        self.cached[x, y] = CropInfo.from_record(new)
+
+    async def add_land(self, x: int, y: int) -> None:
+        await self.wait()
+
+        query = """
+                INSERT INTO crops (user_id, x, y) VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, x, y) DO UPDATE SET user_id = $1
+                RETURNING *;
+                """
+
+        new = await self._record.db.fetchrow(query, self._record.user_id, x, y)
+        self.cached[x, y] = CropInfo.from_record(new)
+
+    async def remove_land(self, x: int, y: int) -> None:
+        await self.wait()
+
+        query = """
+                DELETE FROM crops
+                WHERE user_id = $1 AND x = $2 AND y = $3;
+                """
+
+        await self._record.db.execute(query, self._record.user_id, x, y)
+        self.cached.pop((x, y), None)
+
+
 class UserRecord:
     """Stores data about a user."""
 
@@ -392,6 +584,7 @@ class UserRecord:
         self.__notifications_manager: NotificationsManager | None = None
         self.__cooldown_manager: CooldownManager | None = None
         self.__skill_manager: SkillManager | None = None
+        self.__crop_manager: CropManager | None = None
 
     def __repr__(self) -> str:
         return f'<UserRecord wallet={self.wallet} bank={self.bank} level_data={self.level_data}>'
@@ -602,3 +795,10 @@ class UserRecord:
             self.__skill_manager = SkillManager(self)
 
         return self.__skill_manager
+
+    @property
+    def crop_manager(self) -> CropManager:
+        if not self.__crop_manager:
+            self.__crop_manager = CropManager(self)
+
+        return self.__crop_manager

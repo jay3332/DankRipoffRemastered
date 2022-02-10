@@ -6,7 +6,7 @@ from typing import Literal, NamedTuple, Type, TYPE_CHECKING
 import discord
 from discord.ext.commands import BadArgument, Converter, MemberConverter, MemberNotFound
 
-from app.data.items import Item, Items
+from app.data.items import Item, ItemType, Items
 from app.data.recipes import Recipe, Recipes
 from app.data.settings import Setting, Settings
 from app.data.skills import Skill, Skills
@@ -223,6 +223,21 @@ def query_item(query: str, /) -> Item:
     raise BadArgument(f"I couldn't find a item named {query!r}.")
 
 
+def query_crop(query: str, /) -> Item:
+    try:
+        crop = query_item(query.removesuffix(' crop') + ' crop')
+    except BadArgument:
+        crop = query_item(query)
+
+        if crop.type is not ItemType.crop:
+            crop = query_item(crop.name + ' crop')
+
+    if crop.type is not ItemType.crop:
+        raise BadArgument(f'{crop.name} is not a crop.')
+
+    return crop
+
+
 def try_query_item(query: str, /) -> Item | None:
     try:
         return query_item(query)
@@ -269,7 +284,7 @@ async def RecipeConverter(ctx: Context, argument: str) -> Recipe:
         f'Invalid craft entities given. Format your recipe by separating them with commas, e.g. `{ctx.clean_prefix}craft 3 wood, 2 iron`'
     )
 
-    entities = map(str.strip, argument.split(','))
+    entities = map(str.strip, argument.rstrip(',').split(','))
     try:
         entities = {item: int(raw_quantity) for item, raw_quantity in map(parse_quantity_and_item, entities)}
     except ValueError:

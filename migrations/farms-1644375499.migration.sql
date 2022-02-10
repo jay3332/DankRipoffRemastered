@@ -1,0 +1,10 @@
+CREATE TABLE crops (
+    user_id BIGINT NOT NULL,
+    x INTEGER NOT NULL,
+    y INTEGER NOT NULL,
+    crop TEXT,
+    exp BIGINT NOT NULL DEFAULT 0,
+    last_harvest TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, x, y)
+);

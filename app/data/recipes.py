@@ -90,3 +90,47 @@ class Recipes:
             Items.stick: 1,
         },
     )
+
+    flour = Recipe(
+        key="flour",
+        name="Flour",
+        description=Items.flour.description,
+        emoji=Items.flour.emoji,
+        price=150,
+        ingredients={
+            Items.wheat: 2,
+        },
+        result={
+            Items.flour: 1,
+        },
+    )
+
+    bread = Recipe(
+        key="bread",
+        name="Bread",
+        description=Items.bread.description,
+        emoji=Items.bread.emoji,
+        price=200,
+        ingredients={
+            Items.flour: 2,
+            Items.glass_of_water: 1,
+        },
+        result={
+            Items.bread: 1,
+        },
+    )
+
+    glass_of_water = Recipe(
+        key="glass_of_water",
+        name="Glass of Water",
+        description=Items.glass_of_water.description,
+        emoji=Items.glass_of_water.emoji,
+        price=150,
+        ingredients={
+            Items.watering_can: 1,
+            Items.cup: 1,
+        },
+        result={
+            Items.glass_of_water: 1,
+        },
+    )
