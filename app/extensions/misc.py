@@ -28,6 +28,8 @@ class Miscellaneous(Cog):
         'Pong!?',
     )
 
+    SUPPORT_SERVER = 'https://discord.gg/bpnedYgFVd'
+
     @command(alias="pong")
     @simple_cooldown(2, 2)
     async def ping(self, ctx: Context) -> tuple[str, Any]:
@@ -62,8 +64,9 @@ class Miscellaneous(Cog):
 
         view = discord.ui.View()
         view.add_item(discord.ui.Button(label='Click here to invite me to your server!', url=link))
+        view.add_item(discord.ui.Button(label='Click here to join our offical Discord server!', url=self.SUPPORT_SERVER))
 
-        return f'<{link}>', view, REPLY
+        return 'For a direct text link, right click one of the buttons below and click "Copy Link"', view, REPLY
 
     @staticmethod
     async def _send_settings(ctx: Context):

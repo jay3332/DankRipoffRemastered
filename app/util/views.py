@@ -38,6 +38,11 @@ class ConfirmationView(UserView):
             self.value = toggle
             self._true_button.disabled = True
             self._false_button.disabled = True
+
+            if toggle:
+                self._false_button.style = discord.ButtonStyle.secondary
+            else:
+                self._true_button.style = discord.ButtonStyle.secondary
             self.stop()
 
         return callback

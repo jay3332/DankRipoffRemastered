@@ -195,7 +195,7 @@ class Farming(Cog):
 
     @staticmethod
     def get_land_buy_price(x: int, y: int) -> int:
-        return round(40 * 1.225 ** max(x, y)) * 100
+        return round(25 * 1.225 ** max(x, y)) * 100
 
     @farm.command('buy', aliases={'b', 'purchase', 'acquire'})
     @simple_cooldown(2, 4)

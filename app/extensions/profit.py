@@ -7,7 +7,7 @@ from collections import deque
 from datetime import timedelta
 from html import unescape
 from textwrap import dedent
-from typing import Any, Literal, NamedTuple, TYPE_CHECKING
+from typing import Any, Generic, Literal, NamedTuple, TypeVar
 
 import discord
 import requests
@@ -27,14 +27,11 @@ from app.core import (
 from app.core.helpers import cooldown_message
 from app.data.items import Item, Items
 from app.data.skills import RobberyTrainingButton
-from app.util.common import insert_random_u200b
+from app.util.common import humanize_list, insert_random_u200b
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
 from app.util.views import AnyUser, UserView
 from config import Colors, Emojis
-
-if TYPE_CHECKING:
-    pass
 
 
 class SearchArea(NamedTuple):
@@ -46,6 +43,21 @@ class SearchArea(NamedTuple):
     failure_responses: list[str] = []
     death_responses: list[str] = []
     items: dict[Item, float] = {}  # Similar situation with list literals
+
+
+class CrimeData(NamedTuple):
+    minimum: int
+    maximum: int
+
+    success_chance: float = 1
+    death_chance_if_fail: float = 0
+    success_responses: list[str] = []
+    failure_responses: list[str] = []
+    death_responses: list[str] = []
+
+    item_chance: float = 0
+    item_count: tuple[int, int] = 1, 1
+    items: dict[Item, float] = {}
 
 
 class SearchButton(discord.ui.Button['SearchView']):
@@ -60,23 +72,24 @@ class SearchButton(discord.ui.Button['SearchView']):
             button.style = discord.ButtonStyle.primary if button.label == self.label else discord.ButtonStyle.secondary
             button.disabled = True
 
-        cog = self.view.ctx.cog
-        assert isinstance(cog, Profit)
-
-        self.view.choice = self.label, cog.SEARCH_AREAS[self.label]
+        self.view.choice = self.label, self.view.mapping[self.label]
         await interaction.response.edit_message(view=self.view)
         self.view.stop()
 
 
-class SearchView(UserView):
-    def __init__(self, ctx: Context, choices: list[str]) -> None:
+T = TypeVar('T', SearchArea, CrimeData)
+
+
+class SearchView(UserView, Generic[T]):
+    def __init__(self, ctx: Context, choices: list[str], mapping: dict[str, T]) -> None:
         super().__init__(ctx.author, timeout=30)
         self.ctx: Context = ctx
 
         for choice in choices:
             self.add_item(SearchButton(choice))
 
-        self.choice: tuple[str, SearchArea] | None = None
+        self.choice: tuple[str, T] | None = None
+        self.mapping: dict[str, T] = mapping
 
     async def on_timeout(self) -> None:
         await self.ctx.send('Timed out.', reference=self.ctx.message)
@@ -460,7 +473,7 @@ class Profit(Cog):
     @user_max_concurrency(1)
     async def search(self, ctx: Context):
         """Search for coins."""
-        view = SearchView(ctx, random.sample(list(self.SEARCH_AREAS), 3))
+        view: SearchView[SearchArea] = SearchView(ctx, random.sample(list(self.SEARCH_AREAS), 3), self.SEARCH_AREAS)
         yield 'Where would you like to search?', view, REPLY
 
         await view.wait()
@@ -506,6 +519,141 @@ class Profit(Cog):
 
         embed.colour = Colors.success
         embed.add_field(name='Profit!', value=random.choice(choice.success_responses).format(message))
+
+        yield embed, REPLY
+
+    CRIMES = {
+        'shoplift': CrimeData(
+            minimum=100,
+            maximum=300,
+            success_chance=0.4,
+            death_chance_if_fail=0.3,
+            success_responses=[
+                'You stole {} from the shop!',
+                'You were caught stealing {} from the shop, but you got away just in time.',
+            ],
+            failure_responses=[
+                'The store was closed, maybe try shoplifting when the store is open next time.',
+                'You were caught stealing from the shop, but you got away just in time while having to drop your items.',
+            ],
+            death_responses=[
+                'You were caught stealing from the shop and you were reluctant to comply with the police; so they shot you instead.',
+                'You slipped on a banana peel while trying to run out of the shop and fell head first into concrete. You died.',
+            ],
+            item_chance=0.75,
+            item_count=(1, 2),
+            items={
+                Items.cup: 1.1,
+                Items.tomato: 1,
+                Items.corn: 1,
+                Items.bread: 0.8,
+                Items.padlock: 0.7,
+                Items.cheese: 0.6,
+                Items.lifesaver: 0.5,
+                Items.banknote: 0.15,
+                Items.fishing_pole: 0.1,
+            },
+        ),
+        'pickpocket': CrimeData(
+            minimum=400,
+            maximum=900,
+            success_chance=0.35,
+            death_chance_if_fail=0.45,
+            success_responses=[
+                'You stealthily take {} out of the victim\'s pocket.',
+                'You distract the victim and steal {} from their pocket.',
+            ],
+            failure_responses=[
+                'The victim had nothing in their pocket, lol.',
+                'You were caught stealing from the victim, but you got away just in time.',
+            ],
+            death_responses=[
+                'The victim caught you trying to steal from them and shot you in the head in self-defense.',
+                'You pickpocket a mine which explodes in your hand, killing you.'
+            ],
+            item_chance=0.4,
+            items={
+                Items.tobacco: 0.5,
+                Items.padlock: 0.3,
+                Items.key: 0.3,
+                Items.banknote: 0.1,
+            },
+        ),
+        'rob': CrimeData(
+            minimum=500,
+            maximum=800,
+            success_chance=0.4,
+            death_chance_if_fail=0.3,
+            success_responses=[
+                'You robbed an old lady on the street for {}.',
+                "You steal someone's paycheck which contained {}.",
+            ],
+            failure_responses=[
+                'Maybe don\'t try robbing a bank with a banana next time.',
+                'You tried robbing someone with a nerf gun, lol.',
+            ],
+            death_responses=[
+                'You were caught robbing a bank and got shot by the police.',
+                'You were beaten to death for trying to steal from the elderly.',
+            ],
+            item_chance=0.42,
+            items={
+                Items.tobacco: 0.7,
+                Items.key: 0.2,
+                Items.banknote: 0.2,
+            },
+        ),
+    }
+
+    @command(aliases={'ci', 'cri', 'felony', 'criminal'})
+    @simple_cooldown(1, 25)
+    @user_max_concurrency(1)
+    async def crime(self, ctx: Context):
+        """Commit a crime and hope for profit."""
+        view: SearchView[CrimeData] = SearchView(ctx, random.sample(list(self.CRIMES), 3), self.CRIMES)
+        yield 'Which crime would you like to commit?', view, REPLY
+
+        await view.wait()
+        if not view.choice:
+            return
+
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.add_random_exp(10, 16)
+        await record.add_random_bank_space(18, 24, chance=0.6)
+
+        name, choice = view.choice
+        embed = discord.Embed(timestamp=ctx.now)
+        embed.set_author(name=f'Crime: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_footer(text=f'Crime committed: {name}')
+
+        if random.random() > choice.success_chance:
+            embed.colour = Colors.error
+
+            if random.random() < choice.death_chance_if_fail:
+                cause = random.choice(choice.death_responses)
+                await record.make_dead(reason=f'While committing a crime, {cause}')
+
+                embed.add_field(name='You died!', value=cause)
+
+                yield embed, REPLY
+                return
+
+            message = random.choice(choice.failure_responses)
+            embed.add_field(name='You got nothing!', value=message)
+
+            yield embed, REPLY
+            return
+
+        async with ctx.db.acquire() as conn:
+            profit = await record.add_coins(random.randint(choice.minimum, choice.maximum), connection=conn)
+            message = [f'{Emojis.coin} **{profit:,}**']
+
+            if random.random() < choice.item_chance:
+                items = random.choices(list(choice.items), list(choice.items.values()), k=random.randint(*choice.item_count))
+                message.extend(item.get_sentence_chunk(1) for item in items)
+
+        embed.colour = Colors.success
+        embed.add_field(name='Profit!', value=random.choice(choice.success_responses).format(humanize_list(message)))
 
         yield embed, REPLY
 
@@ -1074,7 +1222,31 @@ class Profit(Cog):
             yield f'{Emojis.loading} Robbing {user.name}...', REPLY
             await asyncio.sleep(random.uniform(1.5, 3.5))
 
+            padlock_worked = False
+
             if their_record.padlock_active:
+                padlock_worked = True
+                inventory = await record.inventory_manager.wait()
+
+                if inventory.cached.quantity_of('key') > 0 and await ctx.confirm(
+                    f'{Items.padlock.emoji} {user.name} has a padlock active!\n'
+                    f'You have a {Items.key.get_display_name(bold=True)} in your inventory, do you want to use it to potentially open the padlock?',
+                    reference=ctx.message,
+                ):
+                    await inventory.add_item('key', -1)
+                    if random.random() < 0.25:
+                        padlock_worked = False
+                        await their_record.update(padlock_active=False)
+                        yield f'{Items.padlock.emoji} Unlocked {user.name}\'s padlock!', REPLY
+
+                        await notify(
+                            title='Someone unlocked your padlock!',
+                            content=f'{ctx.author.mention} used a {Items.key.get_display_name(bold=True)} to unlock your padlock!',
+                        )
+                    else:
+                        yield f'{Items.padlock.emoji} Failed to unlock {user.name}\'s padlock! (You also consumed your key)', REPLY
+
+            if padlock_worked:
                 fine_percent = random.uniform(.05, .25)
                 fine = max(500, round(record.wallet * fine_percent))
 

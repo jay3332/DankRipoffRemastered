@@ -311,6 +311,16 @@ class Items:
         buyable=True,
     )
 
+    key = Item(
+        type=ItemType.collectible,
+        key='key',
+        name='Key',
+        emoji='\U0001f511',
+        description='A key that has a small chance (25%) to open a padlock (when robbing). This can\'t be directrly bought; only received from commands.',
+        rarity=ItemRarity.rare,
+        sell=5_000,
+    )
+
     fishing_pole = Item(
         type=ItemType.tool,
         key='fishing_pole',
@@ -1029,6 +1039,69 @@ class Items:
             time=300,
             count=(1, 1),
             item=corn,
+        ),
+    )
+
+    lettuce = Harvest(
+        key='lettuce',
+        name='Lettuce',
+        plural='Lettuce',
+        emoji='<:lettuce:941136607594041344>',
+        description='A head of lettuce, grown from the lettuce crop.',
+        sell=100,
+    )
+
+    lettuce_crop = Crop(
+        key='lettuce_crop',
+        name='Lettuce Crop',
+        emoji='<:lettuce:941136607594041344>',
+        price=1500,
+        metadata=CropMetadata(
+            time=280,
+            count=(1, 2),
+            item=lettuce,
+        ),
+    )
+
+    potato = Harvest(
+        key='potato',
+        name='Potato',
+        plural='Potatoes',
+        emoji='<:potato:941139578226626682>',
+        description='A potato, grown from the potato crop.',
+        sell=250,
+    )
+
+    potato_crop = Crop(
+        key='potato_crop',
+        name='Potato Crop',
+        emoji='<:potato:941139578226626682>',
+        price=1800,
+        metadata=CropMetadata(
+            time=500,
+            count=(1, 2),
+            item=potato,
+        ),
+    )
+
+    tobacco = Harvest(
+        key='tobacco',
+        name='Tobacco',
+        plural='Tobacco',
+        emoji='<:tobacco:941445316765421688>',
+        description='A piece of tobacco, grown from the tobacco crop.',
+        sell=260,
+    )
+
+    tobacco_crop = Crop(
+        key='tobacco_crop',
+        name='Tobacco Crop',
+        emoji='<:tobacco:941445316765421688>',
+        price=2500,
+        metadata=CropMetadata(
+            time=420,
+            count=(1, 2),
+            item=tobacco,
         ),
     )
 
