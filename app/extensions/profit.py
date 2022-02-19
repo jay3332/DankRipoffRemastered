@@ -48,6 +48,7 @@ class SearchArea(NamedTuple):
 class CrimeData(NamedTuple):
     minimum: int
     maximum: int
+    image: str = ''
 
     success_chance: float = 1
     death_chance_if_fail: float = 0
@@ -526,6 +527,7 @@ class Profit(Cog):
         'shoplift': CrimeData(
             minimum=100,
             maximum=300,
+            image='https://cdn.discordapp.com/attachments/935327142332465222/942470170562138202/Untitled352_20220213120854.png',
             success_chance=0.4,
             death_chance_if_fail=0.3,
             success_responses=[
@@ -557,6 +559,7 @@ class Profit(Cog):
         'pickpocket': CrimeData(
             minimum=400,
             maximum=900,
+            image='https://cdn.discordapp.com/attachments/935327142332465222/942470170348244992/Untitled352_20220213121146.png',
             success_chance=0.35,
             death_chance_if_fail=0.45,
             success_responses=[
@@ -582,6 +585,7 @@ class Profit(Cog):
         'rob': CrimeData(
             minimum=500,
             maximum=800,
+            image='https://cdn.discordapp.com/attachments/935327142332465222/942470172286001203/Untitled347_20220212181014.png',
             success_chance=0.4,
             death_chance_if_fail=0.3,
             success_responses=[
@@ -601,6 +605,33 @@ class Profit(Cog):
                 Items.tobacco: 0.7,
                 Items.key: 0.2,
                 Items.banknote: 0.2,
+            },
+        ),
+        'arson': CrimeData(
+            minimum=500,
+            maximum=800,
+            image='https://cdn.discordapp.com/attachments/935327142332465222/942470172529291376/Untitled347_20220212180424.png',
+            success_chance=0.55,
+            death_chance_if_fail=0.5,
+            success_responses=[
+                'You burn down the house and get paid a bounty of {}.',
+                'You watch the building burn in flames and somehow receive {}.',
+            ],
+            failure_responses=[
+                'You burned down a house, now what?',
+                'You tried to burn down a fireproof building.',
+            ],
+            death_responses=[
+                'You tried to burn down a police station and ended up getting shot by the police.',
+                'You were caught in the fire you created and died.'
+            ],
+            item_chance=0.35,
+            items={
+                Items.fish: 0.8,
+                Items.padlock: 0.2,
+                Items.banknote: 0.1,
+                Items.fishing_pole: 0.1,
+                Items.key: 0.1,
             },
         ),
     }
@@ -625,6 +656,7 @@ class Profit(Cog):
         embed = discord.Embed(timestamp=ctx.now)
         embed.set_author(name=f'Crime: {ctx.author}', icon_url=ctx.author.avatar.url)
         embed.set_footer(text=f'Crime committed: {name}')
+        embed.set_thumbnail(url=choice.image)
 
         if random.random() > choice.success_chance:
             embed.colour = Colors.error

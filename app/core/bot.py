@@ -145,10 +145,6 @@ class Bot(commands.Bot):
         if isinstance(error, blacklist):
             return
 
-        if isinstance(error, commands.BadArgument):
-            ctx.command.reset_cooldown(ctx)
-            return await ctx.send(error)
-
         if ctx.is_interaction:
             if ctx.interaction.response.is_done():
                 respond = ctx.interaction.followup.send
@@ -156,6 +152,10 @@ class Bot(commands.Bot):
                 respond = functools.partial(ctx.interaction.response.send_message, ephemeral=True)
         else:
             respond = functools.partial(ctx.send, reference=ctx.message)
+
+        if isinstance(error, commands.BadArgument):
+            ctx.command.reset_cooldown(ctx)
+            return await respond(error)
 
         if isinstance(error, (commands.ConversionError, commands.MissingRequiredArgument, commands.BadLiteralArgument)):
             if error.param is None:
