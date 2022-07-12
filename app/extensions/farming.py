@@ -222,7 +222,7 @@ class Farming(Cog):
                 (x, y + 1),
             )
         ):
-            return 'Unlock all neighboring sections of land first before unlocking this one.', BAD_ARGUMENT
+            return 'Unlock at least one neighboring section of land first before unlocking this one.', BAD_ARGUMENT
 
         price = self.get_land_buy_price(*coordinate)
         if record.wallet < price:
