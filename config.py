@@ -29,7 +29,7 @@ description: str = 'Hmm...'
 
 # An ID or list of IDs
 owner: Collection[int] | int = 414556245178056706
-default_prefix: Collection[str] | str = '.'
+default_prefix: Collection[str] | str = '.' + '.' * beta
 token: str = env('DISCORD_TOKEN')
 
 allowed_mentions: AllowedMentions = AllowedMentions.none()

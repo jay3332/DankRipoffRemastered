@@ -15,6 +15,7 @@ from app.util.structures import LockWithReason
 
 if TYPE_CHECKING:
     from app.core.models import Context, Cog
+    from app.util.types import TypedInteraction
 
 __all__ = (
     'REPLY',
@@ -51,7 +52,7 @@ def clean_interaction_kwargs(kwargs: dict[str, Any]) -> None:
     kwargs.pop('files', None)
 
 
-async def _into_interaction_response(interaction: discord.Interaction, kwargs: dict[str, Any]) -> None:
+async def _into_interaction_response(interaction: TypedInteraction, kwargs: dict[str, Any]) -> None:
     clean_interaction_kwargs(kwargs)
 
     if kwargs.get('embed') and kwargs.get('embeds') is not None:
@@ -60,7 +61,7 @@ async def _into_interaction_response(interaction: discord.Interaction, kwargs: d
 
     if kwargs.pop('edit', False):
         if interaction.response.is_done():
-            await interaction.edit_original_message(**kwargs)
+            await interaction.edit_original_response(**kwargs)
         else:
             await interaction.response.edit_message(**kwargs)
 

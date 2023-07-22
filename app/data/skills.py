@@ -82,6 +82,12 @@ class RobberyTrainingButton(discord.ui.Button['RobberyTrainingView']):
         await interaction.response.edit_message(embed=self.view.embed, view=self.view)
 
 
+# This is the exact same as PlaceholderKeypadButton, but with different types for the sake of type checking.
+class TrainingPlaceholderKeypadButton(discord.ui.Button['RobberyTrainingView']):
+    def __init__(self, *, row: int | None = None) -> None:
+        super().__init__(label='\u200b', disabled=True, row=row)
+
+
 class RobberyTrainingView(UserView):
     def __init__(self, ctx: Context, embed: discord.Embed, code: int) -> None:
         super().__init__(ctx.author)
@@ -92,8 +98,8 @@ class RobberyTrainingView(UserView):
 
         self.dangling_interaction: discord.Interaction | None = None
 
-        self.clear_button = discord.ui.Button(label='Clear', style=discord.ButtonStyle.danger)
-        self.submit_button = discord.ui.Button(label='Submit', style=discord.ButtonStyle.success)
+        self.clear_button = discord.ui.Button(label='Clear', style=discord.ButtonStyle.danger, row=4)
+        self.submit_button = discord.ui.Button(label='Submit', style=discord.ButtonStyle.success, row=4)
 
         self.clear_button.callback = self.clear_callback
         self.submit_button.callback = self.submit_callback
@@ -104,17 +110,30 @@ class RobberyTrainingView(UserView):
         self.embed.remove_field(1)
 
         if self.entered:
-            self.embed.add_field(name='\u200b', value=f'```py\n{self.entered}```', inline=False)
+            self.embed.add_field(name='You entered:', value=f'```py\n{self.entered}```', inline=False)
 
         self.scramble_buttons()
 
     def scramble_buttons(self) -> None:
-        buttons = [RobberyTrainingButton(i) for i in range(10)]
+        buttons = list(range(10))
         random.shuffle(buttons)
 
+        b0, b1, b2, b3, b4, b5, b6, b7, b8, b9 = buttons
+        buttons = (
+            (b0, b1, b2),
+            (b3, b4, b5),
+            (b6, b7, b8),
+            (None, b9, None),
+        )
+
         self.clear_items()
-        for button in buttons:
-            self.add_item(button)
+        for i, row in enumerate(buttons):
+            for button in row:
+                self.add_item(
+                    TrainingPlaceholderKeypadButton(row=i)
+                    if button is None
+                    else RobberyTrainingButton(button, row=i)
+                )
 
         self.add_item(self.clear_button)
         self.add_item(self.submit_button)
@@ -272,7 +291,7 @@ class Skills:
 
         embed.description = (
             "Practice entering this combination into the keypad before time runs out!\n"
-            "Because this is Discord and I can do whatever I want, I made the keypad randomize each time."
+            "Because this is Discord and I can do whatever I want, the keypad will randomize each time."
         )
 
         code = random.randint(10000000, 99999999)
