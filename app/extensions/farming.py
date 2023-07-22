@@ -65,8 +65,8 @@ def parse_coordinate(argument: str) -> tuple[int, int]:
 class LandView(UserView):
     _placeholder = discord.ui.button(label='\u200b', style=discord.ButtonStyle.secondary, disabled=True)
 
-    LAND_EMOJI: Final[ClassVar[str]] = '<:land:940766001266577449>'
-    LAND_LOCKED_EMOJI: Final[ClassVar[str]] = '<:landl:940767617201893396>'
+    LAND_EMOJI: Final[ClassVar[str]] = '<:_:940766001266577449>'
+    LAND_LOCKED_EMOJI: Final[ClassVar[str]] = '<:_:940767617201893396>'
     REGIONAL_INDICATOR_OFFSET: Final[ClassVar[int]] = 127397
     NUMERIC_INDICATOR_SUFFIX: Final[ClassVar[str]] = '\ufe0f\u20e3'
 
