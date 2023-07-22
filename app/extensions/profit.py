@@ -30,6 +30,7 @@ from app.data.skills import RobberyTrainingButton
 from app.util.common import humanize_list, insert_random_u200b
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
+from app.util.types import TypedInteraction
 from app.util.views import AnyUser, UserView
 from config import Colors, Emojis
 
@@ -282,7 +283,7 @@ class Profit(Cog):
 
         for _ in range(5):
             if random.random() > 0.15:
-                multiplier += random.uniform(.14, .27)
+                multiplier += random.uniform(.14, .24)
 
                 embed = make_embed()
                 embed.description = f'{Emojis.loading} Investing...'
@@ -1446,7 +1447,7 @@ class ChopView(UserView):
             button.disabled = True
 
     @discord.ui.button(label='Abundance Forest')
-    async def abundance(self, button: discord.ui.Button, interaction: discord.Interaction) -> None:
+    async def abundance(self, interaction: TypedInteraction, button: discord.ui.Button) -> None:
         self.choice = self.ABUNDANCE
 
         self._disable_buttons()
@@ -1456,7 +1457,7 @@ class ChopView(UserView):
         self.stop()
 
     @discord.ui.button(label='Exotic Forest')
-    async def exotic(self, button: discord.ui.Button, interaction: discord.Interaction) -> None:
+    async def exotic(self, interaction: TypedInteraction, button: discord.ui.Button) -> None:
         self.choice = self.EXOTIC
 
         self._disable_buttons()
@@ -1573,14 +1574,14 @@ class RobbingKeypad(discord.ui.View):
 
         await interaction.response.edit_message(embed=self.embed, view=self)
 
-    async def submit_callback(self, interaction: discord.Interaction) -> None:
+    async def submit_callback(self, interaction: TypedInteraction) -> None:
         if interaction.user != self.ctx.author:
             return await interaction.response.send_message('nope', ephemeral=True)
 
         self.dangling_interaction = interaction
         self.stop()
 
-    async def catch_callback(self, interaction: discord.Interaction) -> None:
+    async def catch_callback(self, interaction: TypedInteraction) -> None:
         if interaction.user != self.opponent:
             return await interaction.response.send_message(f'Only {self.opponent.mention} can use this button.', ephemeral=True)
 

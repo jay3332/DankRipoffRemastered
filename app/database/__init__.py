@@ -14,7 +14,7 @@ from discord.utils import cached_property
 from app.data.items import CropMetadata, Item, Items
 from app.data.skills import Skill, Skills
 from app.util.common import calculate_level, get_by_key
-from config import DatabaseConfig, Emojis, beta
+from config import DatabaseConfig, Emojis
 from .migrations import Migrator
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class _Database:
             port=DatabaseConfig.port,
             user=DatabaseConfig.user,
             database=DatabaseConfig.name,
-            password=DatabaseConfig.beta_password if beta else DatabaseConfig.password
+            password=DatabaseConfig.password,
         )
 
         async with self.acquire() as conn:
@@ -606,10 +606,7 @@ class UserRecord:
         return self
 
     async def _update(self, key: Callable[[tuple[int, str]], str], values: dict[str, Any], *, connection: asyncpg.Connection | None = None) -> UserRecord:
-        query = """
-                UPDATE users SET {} WHERE user_id = $1
-                RETURNING *;
-                """
+        query = "/**/ UPDATE users SET {} WHERE user_id = $1 RETURNING *;"
 
         # noinspection PyTypeChecker
         self.data.update(
@@ -638,7 +635,7 @@ class UserRecord:
         return coins
 
     async def add_exp(self, exp: int, /, *, connection: asyncpg.Connection | None = None) -> bool:
-        """Return whether or not the user as leveled up."""
+        """Return whether the user has leveled up."""
         old = self.level
         await self.add(exp=exp, connection=connection)
 

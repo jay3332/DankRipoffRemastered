@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, TYPE_CHECKING, TypeAlias
 
 import discord
@@ -12,19 +12,11 @@ from app.util.views import AnyUser, UserView
 from config import Colors
 
 if TYPE_CHECKING:
-    from app.core import Context
+    from app.core import Bot, Context
 
     BenefitFmt: TypeAlias = Callable[[int], str]
     TrainingCallback: TypeAlias = 'Callable[[Skills, Context, Skill], Awaitable[Any]]'
     LevelRequirementMapping: TypeAlias = 'dict[int, int]'  # point_count: level_required
-
-
-DEFAULT_LEVEL_REQUIREMENT_MAPPING = {
-    5: 0,
-    15: 10,
-    35: 25,
-    75: 50,
-}
 
 
 @dataclass
@@ -35,9 +27,9 @@ class Skill:
     description: str
     benefit: str | BenefitFmt
     price: int
+    level_requirement_mapping: LevelRequirementMapping
 
     level_unlocked: int = 0
-    level_requirement_mapping: LevelRequirementMapping = field(default_factory=lambda: DEFAULT_LEVEL_REQUIREMENT_MAPPING)
     max_points: int | None = None
 
     training_cooldown: int = 600  # 10 minutes
@@ -80,7 +72,7 @@ class RobberyTrainingButton(discord.ui.Button['RobberyTrainingView']):
         self.digit: int = digit
         self._user: AnyUser | None = user
 
-    async def callback(self, interaction: discord.Interaction) -> None:
+    async def callback(self, interaction: discord.Interaction[Bot]) -> None:
         if self._user and interaction.user != self._user:
             return await interaction.response.send_message('Nope', ephemeral=True)
 
@@ -195,6 +187,28 @@ class DefenseTrainingView(UserView):
 
 class Skills:
     """Stores all of the skills."""
+
+    _common_requirement_mapping_max_100 = {
+        5: 0,
+        10: 5,
+        15: 10,
+        20: 15,
+        30: 20,
+        50: 30,
+        75: 40,
+        100: 50,
+    }
+    _common_requirement_mapping_max_50 = {
+        5: 0,
+        10: 5,
+        15: 10,
+        20: 15,
+        25: 20,
+        30: 25,
+        40: 30,
+        50: 40,
+    }
+
     begging = Skill(
         key='begging',
         name='Begging',
@@ -202,6 +216,7 @@ class Skills:
         benefit=lambda p: f'+{p / 2}% chance to get items from begging, +{p * 2}% coins from begging',
         price=2500,
         max_points=100,
+        level_requirement_mapping=_common_requirement_mapping_max_100,
     )
 
     TRAIN_BEGGING_PROMPTS = (
@@ -230,7 +245,7 @@ class Skills:
 
             try:
                 message = await ctx.bot.wait_for(
-                    event='message',
+                    'message',
                     check=lambda m: m.author == ctx.author and m.content.lower() == prompt,
                     timeout=15,
                 )
@@ -238,13 +253,6 @@ class Skills:
                 raise TrainingFailure("You didn't send the prompt in time, and you failed training for this session. Try again next time!")
 
             ctx.bot.loop.create_task(ctx.thumbs(message))
-
-    _common_requirement_mapping = {
-        5: 0,
-        15: 10,
-        35: 25,
-        50: 35,
-    }
 
     robbery = Skill(
         key='robbery',
@@ -254,7 +262,7 @@ class Skills:
         price=8000,
         training_cooldown=1800,
         max_points=50,
-        level_requirement_mapping=_common_requirement_mapping,
+        level_requirement_mapping=_common_requirement_mapping_max_50,
     )
 
     @robbery.to_train
@@ -292,7 +300,7 @@ class Skills:
         price=8000,
         training_cooldown=1800,
         max_points=50,
-        level_requirement_mapping=_common_requirement_mapping,
+        level_requirement_mapping=_common_requirement_mapping_max_50,
     )
 
     @defense.to_train

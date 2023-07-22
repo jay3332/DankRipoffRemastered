@@ -65,7 +65,7 @@ class DropView(discord.ui.View):
         return True
 
     @discord.ui.button(label='Claim!', style=discord.ButtonStyle.success)
-    async def claim(self, button: discord.ui.Button, interaction: discord.Interaction) -> None:
+    async def claim(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if self.winner:
             await interaction.response.send_message('This drop has already been claimed!', ephemeral=True)
 
@@ -233,15 +233,15 @@ class RecipeView(UserView):
         return min(item_max, self.record.wallet // self.current.price)
 
     @discord.ui.button(label='Craft One', style=discord.ButtonStyle.primary, row=1)
-    async def craft_one(self, _, interaction: discord.Interaction) -> None:
+    async def craft_one(self, interaction: discord.Interaction, _) -> None:
         await self._craft(1, interaction=interaction)
 
     @discord.ui.button(label='Craft Max', style=discord.ButtonStyle.primary, row=1)
-    async def craft_max(self, _, interaction: discord.Interaction) -> None:
+    async def craft_max(self, interaction: discord.Interaction, _) -> None:
         await self._craft(self._get_max(), interaction=interaction)
 
     @discord.ui.button(label='Craft Custom', style=discord.ButtonStyle.primary, row=1)
-    async def craft_custom(self, _, interaction: discord.Interaction) -> Any:
+    async def craft_custom(self, interaction: discord.Interaction, _) -> Any:
         async with self.input_lock:
             await interaction.response.send_message(
                 'How many of this item/recipe do you want to craft? Send a valid quantity in chat, e.g. "3" or "half".',
@@ -261,7 +261,7 @@ class RecipeView(UserView):
                 await self.ctx.reply(f'Error: {e.__class__.__name__}')
 
     @discord.ui.button(label='Stop', style=discord.ButtonStyle.danger, row=1)
-    async def stop_button(self, button: discord.ui.Button, interaction: discord.Interaction) -> None:
+    async def stop_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         for child in self.children:
             child.disabled = True
 

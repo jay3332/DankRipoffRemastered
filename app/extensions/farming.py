@@ -24,7 +24,7 @@ from app.data.items import Item, Items
 from app.database import CropInfo, CropManager, UserRecord
 from app.util.common import humanize_duration, image_url_from_emoji
 from app.util.converters import query_crop
-from app.util.types import TypedInteraction
+from app.util.types import CommandResponse, TypedInteraction
 from app.util.views import UserView
 from config import Colors, Emojis
 
@@ -67,6 +67,8 @@ class LandView(UserView):
 
     LAND_EMOJI: Final[ClassVar[str]] = '<:land:940766001266577449>'
     LAND_LOCKED_EMOJI: Final[ClassVar[str]] = '<:landl:940767617201893396>'
+    REGIONAL_INDICATOR_OFFSET: Final[ClassVar[int]] = 127397
+    NUMERIC_INDICATOR_SUFFIX: Final[ClassVar[str]] = '\ufe0f\u20e3'
 
     def __init__(self, ctx: Context, record: UserRecord):
         super().__init__(ctx.author)
@@ -94,13 +96,41 @@ class LandView(UserView):
         self.up.disabled = self.boundary_y <= 0
         self.down.disabled = self.boundary_y >= 56
 
+    @classmethod
+    def _regional_indicator(cls, c: str) -> str:
+        return chr(ord(c) + cls.REGIONAL_INDICATOR_OFFSET) + '\u200b'
+
     def update_embed(self) -> None:
-        lines = [
-            f'{Emojis.space}`{" ".join(format(CropInfo.get_letters(i), " <2") for i in range(self.boundary_x, self.boundary_x + 8))}`'
-        ]
+        # Calculate heading
+        top, bottom = Emojis.space, Emojis.space
+        no_top = True
+        for i in range(self.boundary_x, self.boundary_x + 8):
+            letters = CropInfo.get_letters(i)
+            if len(letters) == 2:
+                top += self._regional_indicator(letters[0])
+                bottom += self._regional_indicator(letters[1])
+                no_top = False
+                continue
+
+            top += Emojis.space
+            bottom += self._regional_indicator(letters)
+        lines = [bottom] if no_top else [top, bottom]
+
+        if pad := len(str(self.boundary_y + 8)) > 1:
+            for i, line in enumerate(lines):
+                lines[i] = Emojis.space + line
 
         for y in range(self.boundary_y, self.boundary_y + 8):
-            chunks = [f'`{y + 1: >2}`']
+            _ = lambda val: str(val) + self.NUMERIC_INDICATOR_SUFFIX
+            match pad, tuple(str(y + 1)):
+                case True, (left, right):
+                    chunks = [f'{_(left)}{_(right)}']
+                case True, (single,):
+                    chunks = [f'{Emojis.space}{_(single)}']
+                case False, (single,):
+                    chunks = [_(single)]
+                case _:
+                    chunks = []
 
             for x in range(self.boundary_x, self.boundary_x + 8):
                 crop = self.crop_manager.get_crop_info(x, y)
@@ -128,7 +158,7 @@ class LandView(UserView):
         pass
 
     @discord.ui.button(emoji='\u2b06', style=discord.ButtonStyle.primary)
-    async def up(self, _, interaction: TypedInteraction) -> None:
+    async def up(self, interaction: TypedInteraction, _) -> None:
         if self.boundary_y <= 0:
             await interaction.response.send_message('Cannot go any further', ephemeral=True)
 
@@ -142,7 +172,7 @@ class LandView(UserView):
         pass
 
     @discord.ui.button(emoji='\u2b05', style=discord.ButtonStyle.primary, row=1)
-    async def left(self, _, interaction: TypedInteraction) -> None:
+    async def left(self, interaction: TypedInteraction, _) -> None:
         if self.boundary_x <= 0:
             await interaction.response.send_message('Cannot go any further', ephemeral=True)
 
@@ -152,7 +182,7 @@ class LandView(UserView):
         await interaction.response.edit_message(content=self.message, view=self)
 
     @discord.ui.button(emoji='\u2b07', style=discord.ButtonStyle.primary, row=1)
-    async def down(self, _, interaction: TypedInteraction) -> None:
+    async def down(self, interaction: TypedInteraction, _) -> None:
         if self.boundary_y >= 56:
             await interaction.response.send_message('Cannot go any further', ephemeral=True)
 
@@ -162,7 +192,7 @@ class LandView(UserView):
         await interaction.response.edit_message(content=self.message, view=self)
 
     @discord.ui.button(emoji='\u27a1', style=discord.ButtonStyle.primary, row=1)
-    async def right(self, _, interaction: TypedInteraction) -> None:
+    async def right(self, interaction: TypedInteraction, _) -> None:
         if self.boundary_x >= 56:
             await interaction.response.send_message('Cannot go any further', ephemeral=True)
 
@@ -177,7 +207,7 @@ class Farming(Cog):
 
     @group(aliases={'crops', 'fa', 'crop', 'land', 'area'})
     @simple_cooldown(2, 4)
-    async def farm(self, ctx: Context) -> tuple[str, discord.Embed, UserView, Any]:
+    async def farm(self, ctx: Context) -> CommandResponse:
         """View your farm and it's crops.
 
         Buy land using the `land buy` command.
@@ -429,7 +459,7 @@ class Farming(Cog):
     @user_max_concurrency(1)
     @lock_transactions
     async def water(self, ctx: Context, coordinates: parse_coordinate):
-        """Water the crop at the given coordinate to increase it's EXP.
+        """Water the crop at the given coordinate to increase its EXP.
         The more EXP a crop has, the higher level it will become, and the faster it will take to harvest.
 
         You must have a Watering Can in your inventory.

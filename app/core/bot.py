@@ -3,7 +3,6 @@ from __future__ import annotations
 import functools
 import os
 import re
-from textwrap import dedent
 from typing import Any, ClassVar, Final, TYPE_CHECKING
 
 import discord
@@ -12,11 +11,13 @@ from aiohttp import ClientSession
 from discord.ext import commands
 
 from app.core.help import HelpCommand
+from app.core.flags import FlagMeta
 from app.core.models import Command, Context
 from app.database import Database
+from app.util.ansi import AnsiStringBuilder, AnsiColor
 from app.util.common import humanize_duration, pluralize
 from app.util.structures import LockWithReason
-from config import Colors, allowed_mentions, beta, beta_token, default_prefix, description, name, owner, token, version
+from config import Colors, allowed_mentions, default_prefix, description, name, owner, token, version
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -31,12 +32,15 @@ ANSI_REGEX: re.Pattern[str] = re.compile(r"\x1b\[\d{2};[01]m")
 class Bot(commands.Bot):
     """Dank Ripoff... Remastered."""
 
+    bypass_checks: bool
+    db: Database
     session: ClientSession
     startup_timestamp: datetime
     transaction_locks: dict[int, LockWithReason]
 
     INTENTS: Final[ClassVar[discord.Intents]] = discord.Intents(
         messages=True,
+        message_content=True,
         presences=True,
         members=True,
         guilds=True,
@@ -59,7 +63,6 @@ class Bot(commands.Bot):
         )
 
         self._BotBase__cogs = commands.core._CaseInsensitiveDict()
-        self.prepare()
 
     async def resolve_command_prefix(self, message: discord.Message) -> list[str]:
         """Resolves a command prefix from a message."""
@@ -70,27 +73,23 @@ class Bot(commands.Bot):
         await self.wait_until_ready()
         self.dispatch('first_ready')
 
-    def _load_extensions(self) -> None:
+    async def _load_extensions(self) -> None:
         """Loads all command extensions, including Jishaku."""
-        self.load_extension('jishaku')
+        await self.load_extension('jishaku')
 
         for file in os.listdir('./app/extensions'):
-            if file == 'slash.py':
-                continue
-
             if not file.startswith('_') and file.endswith('.py'):
-                self.load_extension(f'app.extensions.{file[:-3]}')
+                await self.load_extension(f'app.extensions.{file[:-3]}')
 
-        self.load_extension('app.extensions.slash')  # Load this last
-
-    def prepare(self) -> None:
+    async def setup_hook(self) -> None:
         """Prepares the bot for startup."""
-        self.db: Database = Database(self, loop=self.loop)
-        self.transaction_locks: dict[int, LockWithReason] = {}
-        self.session: ClientSession = ClientSession()
+        self.db = Database(self, loop=self.loop)
+        self.transaction_locks = {}
+        self.session = ClientSession()
+        self.bypass_checks = False
 
         self.loop.create_task(self._dispatch_first_ready())
-        self._load_extensions()
+        await self._load_extensions()
 
     async def process_commands(self, message: discord.Message, /) -> None:
         if message.author.bot:
@@ -107,17 +106,6 @@ class Bot(commands.Bot):
 
         print(format(center, f'=^{len(text)}'))
         print(text)
-
-    @staticmethod
-    def remove_ansi_if_mobile(ctx: Context, text: str) -> str:
-        """Currently, ANSI syntax highlighting does not render properly on mobile devices.
-
-        Here, we check if `mobile_status` is not offline - if it is, we remove all ANSI syntax higlighting.
-        """
-        if ctx.author.mobile_status != discord.Status.offline:
-            return ANSI_REGEX.sub('', text)
-
-        return text
 
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:
@@ -145,49 +133,11 @@ class Bot(commands.Bot):
         if isinstance(error, blacklist):
             return
 
-        if ctx.is_interaction:
-            if ctx.interaction.response.is_done():
-                respond = ctx.interaction.followup.send
-            else:
-                respond = functools.partial(ctx.interaction.response.send_message, ephemeral=True)
-        else:
-            respond = functools.partial(ctx.send, reference=ctx.message)
+        respond = functools.partial(ctx.send, reference=ctx.message, delete_after=30, ephemeral=True)
 
         if isinstance(error, commands.BadArgument):
             ctx.command.reset_cooldown(ctx)
             return await respond(error)
-
-        if isinstance(error, (commands.ConversionError, commands.MissingRequiredArgument, commands.BadLiteralArgument)):
-            if error.param is None:
-                return await respond("Could not parse your command input properly.")
-
-            ctx.command.reset_cooldown(ctx)
-            ansi, length, carets = Command.ansi_signature_until(ctx.command, error.param.name)
-
-            invoked_with = ' '.join((*ctx.invoked_parents, ctx.invoked_with))
-
-            alias_message = (
-                f'Hint: \x1b[00;0mcommand alias \x1b[36;1m{invoked_with!r} \x1b[00;0mpoints to '
-                f'\x1b[32;1m{ctx.command.qualified_name}\x1b[00;0m, is this correct?'
-            ) if ctx.command.qualified_name != invoked_with else ''
-
-            # inspired by Rust error messages
-            #
-            # this looks really nice on PC, but it looks horrible on mobile
-            # maybe make it look different on mobile?
-            return await respond(self.remove_ansi_if_mobile(ctx, dedent(f"""
-                Could not parse your command input properly:
-                ```ansi
-                Attempted to parse signature:
-                
-                    \x1b[37;1m{ctx.clean_prefix}\x1b[32;1m{invoked_with} {ansi}\x1b[30;1m
-                    {' ' * (length + len(ctx.clean_prefix) + len(invoked_with))} {'^' * carets} Error occured here
-                
-                \x1b[31;1m{error} \x1b[37;1m
-                
-                {alias_message}
-                ```
-            """)))
 
         if isinstance(error, commands.MaxConcurrencyReached):
             # noinspection PyUnresolvedReferences
@@ -212,12 +162,77 @@ class Bot(commands.Bot):
 
             return await respond(embed=embed)
 
-        await respond(f'`panic!({error!r})`')
-        raise error
+        if isinstance(error, (commands.ConversionError, commands.MissingRequiredArgument, commands.BadLiteralArgument)):
+            ctx.command.reset_cooldown(ctx)
+            param = ctx.current_parameter
+        elif isinstance(error, commands.MissingRequiredArgument):
+            param = error.param
+        else:
+            await ctx.send(f'panic!({error})', reference=ctx.message)
+            raise error
+
+        builder = AnsiStringBuilder()
+        builder.append('Attempted to parse command signature:').newline(2)
+        builder.append('    ' + ctx.clean_prefix, color=AnsiColor.white, bold=True)
+
+        if ctx.invoked_parents and ctx.invoked_subcommand:
+            invoked_with = ' '.join((*ctx.invoked_parents, ctx.invoked_with))
+        elif ctx.invoked_parents:
+            invoked_with = ' '.join(ctx.invoked_parents)
+        else:
+            invoked_with = ctx.invoked_with
+
+        builder.append(invoked_with + ' ', color=AnsiColor.green, bold=True)
+
+        command = ctx.command
+        signature = Command.ansi_signature_of(command)
+        builder.extend(signature)
+        signature = signature.raw
+
+        if match := re.search(
+                fr"[<\[](--)?{re.escape(param.name)}((=.*)?| [<\[]\w+(\.{{3}})?[>\]])(\.{{3}})?[>\]](\.{{3}})?",
+                signature,
+        ):
+            lower, upper = match.span()
+        elif isinstance(param.annotation, FlagMeta):
+            param_store = command.params
+            old = command.params.copy()
+
+            flag_key, _ = next(filter(lambda p: p[1].annotation is command.custom_flags, param_store.items()))
+
+            del param_store[flag_key]
+            lower = len(command.raw_signature) + 1
+
+            command.params = old
+            del param_store
+
+            upper = len(command.signature) - 1
+        else:
+            lower, upper = 0, len(command.signature) - 1
+
+        builder.newline()
+
+        offset = len(ctx.clean_prefix) + len(invoked_with)  # noqa
+        content = f'{" " * (lower + offset + 5)}{"^" * (upper - lower)} Error occured here'
+        builder.append(content, color=AnsiColor.gray, bold=True).newline(2)
+        builder.append(str(error), color=AnsiColor.red, bold=True)
+
+        if invoked_with != ctx.command.qualified_name:
+            builder.newline(2)
+            builder.append('Hint: ', color=AnsiColor.white, bold=True)
+
+            builder.append('command alias ')
+            builder.append(repr(invoked_with), color=AnsiColor.cyan, bold=True)
+            builder.append(' points to ')
+            builder.append(ctx.command.qualified_name, color=AnsiColor.green, bold=True)
+            builder.append(', is this correct?')
+
+        ansi = builder.ensure_codeblock().dynamic(ctx)
+        await ctx.send(f'Could not parse your command input properly:\n{ansi}', reference=ctx.message, ephemeral=True)
 
     async def close(self) -> None:
         await self.session.close()
         await super().close()
 
-    def run(self) -> None:
-        return super().run(beta_token if beta else token)
+    def run(self, token_override: str | None = None, **kwargs) -> None:
+        return super().run(token_override or token, **kwargs)

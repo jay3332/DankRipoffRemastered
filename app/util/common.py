@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     T = TypeVar('T')
 
 __all__ = (
-    'setinel',
+    'sentinel',
     'level_requirement_for',
     'calculate_level',
     'converter',
@@ -32,7 +32,7 @@ class ConstantT:
     pass
 
 
-def setinel(name: str, **dunders) -> ConstantT:
+def sentinel(name: str, **dunders) -> ConstantT:
     attrs = {f'__{k}__': lambda _: v for k, v in dunders.items()}
     return type(name, (ConstantT,), attrs)()
 

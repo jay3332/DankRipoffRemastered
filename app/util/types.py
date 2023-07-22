@@ -1,30 +1,47 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, AsyncGenerator, AsyncIterable, Awaitable, Callable, ParamSpec, TYPE_CHECKING, TypeAlias, TypeVar
 
-from discord import Interaction
+from discord import Embed, File, Interaction
 from discord.ext import commands
+from discord.ui import View
+
+from app.util.ansi import AnsiStringBuilder
+from app.util.common import ConstantT
+from app.util.pagination import Paginator
 
 if TYPE_CHECKING:
     from inspect import Parameter
 
     from discord import ClientUser, Guild, Member, Message, User, VoiceProtocol
     from discord.abc import Messageable
-    from discord.interactions import InteractionChannel
+    from discord.interactions import InteractionChannel, InteractionResponse
 
     from app.core.bot import Bot
     from app.core.models import Command, Cog
 
+P = ParamSpec('P')
+R = TypeVar('R')
 
 __all__ = (
     'TypedContext',
     'TypedInteraction',
 )
 
+AsyncCallable: TypeAlias = Callable[P, Awaitable[R] | AsyncIterable[R]]
+
+CommandResponseFragment: TypeAlias = (
+    str | Embed | File | Paginator | View | dict[str, Any] | ConstantT | AnsiStringBuilder
+)
+SingleCommandResponse: TypeAlias = CommandResponseFragment | tuple[CommandResponseFragment, ...]
+CommandResponse: TypeAlias = SingleCommandResponse | AsyncGenerator[SingleCommandResponse, Any]
+OptionalCommandResponse: TypeAlias = CommandResponse | None
+
 
 class TypedInteraction(Interaction):
     client: Bot
     channel: InteractionChannel
+    response: InteractionResponse[Bot]
 
 
 # noinspection PyPropertyDefinition

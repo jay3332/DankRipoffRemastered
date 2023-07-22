@@ -6,8 +6,10 @@ import discord
 from discord.ext import commands
 
 from app.core.models import Command
+from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.common import cutoff, humanize_duration, pluralize
 from app.util.pagination import Paginator, PaginatorView, FieldBasedFormatter
+from app.util.types import TypedInteraction
 from app.util.views import UserView
 from config import Colors
 
@@ -47,7 +49,7 @@ class CogSelect(discord.ui.Select[PaginatorView]):
 
         return embed
 
-    async def callback(self, interaction: discord.Interaction) -> None:
+    async def callback(self, interaction: TypedInteraction) -> None:
         ctx = self.view.paginator.ctx
 
         try:
@@ -208,16 +210,15 @@ class HelpCommand(commands.HelpCommand):
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar.url)
 
-        if not command.usage:
-            usage, _, _ = Command.ansi_signature_until(command, str())
-        else:
-            usage = command.usage
-
         body = command.help or 'No description provided.'
-        embed.description = ctx.bot.remove_ansi_if_mobile(
-            ctx,
-            f'```ansi\n\u001b[37;1m{ctx.clean_prefix}\u001b[32;1m{command.qualified_name} {usage}```\n{body}',
-        )
+
+        signature = AnsiStringBuilder()
+        signature.append(ctx.clean_prefix, color=AnsiColor.white, bold=True)
+        signature.append(command.qualified_name + ' ', color=AnsiColor.green, bold=True)
+        signature.extend(Command.ansi_signature_of(command))
+
+        signature = signature.ensure_codeblock(fallback='md').dynamic(ctx)
+        embed.description = f'{signature}\n{body.replace("{PREFIX}", ctx.clean_prefix)}'
 
         if command.aliases:
             embed.add_field(name='Aliases', value='\u2002'.join(f'`{alias}`' for alias in command.aliases))
@@ -233,6 +234,18 @@ class HelpCommand(commands.HelpCommand):
 
         if humanized is not None:
             embed.add_field(name='Cooldown', value=humanized)
+
+        if isinstance(command, Command):
+            spec = command.permission_spec
+            parts = []
+
+            if user := spec.user:
+                parts.append('User: ' + ', '.join(map(spec.permission_as_str, user)))
+
+            if bot := spec.bot:
+                parts.append('Bot: ' + ', '.join(map(spec.permission_as_str, bot)))
+
+            embed.add_field(name='Required Permissions', value='\n'.join(parts), inline=False)
 
         return embed
 

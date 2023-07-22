@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from asyncio import Lock
-from typing import Any, Collection, Generic, TYPE_CHECKING, TypeVar
+from copy import deepcopy
+from typing import Collection, Generic, TYPE_CHECKING, TypeVar
 
-from discord import ButtonStyle, Embed, Interaction
-from discord.ui import Button
+from discord import ButtonStyle, Embed
+from discord.ui import Button, Modal, TextInput
 
 from app.util.views import UserView
 from config import Emojis
@@ -14,9 +14,10 @@ if TYPE_CHECKING:
     from discord.ui import Item
 
     from app.core.models import Context
-
+    from app.util.types import TypedInteraction as Interaction
 
 T = TypeVar('T')
+V = TypeVar('V')
 
 __all__ = (
     'Paginator',
@@ -24,7 +25,7 @@ __all__ = (
 )
 
 
-class _PaginatorButton(Button['_PaginatorView']):
+class _PaginatorButton(Button['PaginatorView']):
     def __init__(self, paginator: Paginator, page: int, *, emoji: str, row: int | None = None) -> None:
         page += 1
         self.paginator: Paginator = paginator
@@ -38,7 +39,55 @@ class _PaginatorButton(Button['_PaginatorView']):
 
     async def callback(self, interaction: Interaction) -> None:
         self.paginator.current_page = self.page - 1
-        await self.view._update(interaction)
+        await self.view._update(interaction)  # type: ignore
+
+
+class _PageInputButton(Button['PaginatorView']):
+    def __init__(self, paginator: Paginator, *, row: int | None = None) -> None:
+        self.paginator: Paginator = paginator
+
+        label = f'Page {paginator.current_page + 1}/{paginator.max_pages}'
+        super().__init__(style=ButtonStyle.primary, label=label, row=row, disabled=self.paginator.max_pages <= 1)
+
+    async def callback(self, interaction: Interaction) -> None:
+        await interaction.response.send_modal(_PageInputModal(self.view))
+
+
+class _PageInputModal(Modal, title='Select Page'):
+    page: TextInput = TextInput(
+        label='Which page would you like to jump to?',
+        placeholder='Enter an integer...',
+        min_length=1,
+        max_length=5,
+        required=True,
+    )
+
+    def __init__(self, view: PaginatorView) -> None:
+        super().__init__()
+        self.view: PaginatorView = view
+        self.paginator: Paginator = view.paginator
+
+    async def on_submit(self, interaction: Interaction) -> None:
+        try:
+            page = int(self.page.value)
+        except ValueError:
+            return await interaction.response.send_message(
+                content='Invalid page number. (You should submit an **integer**.)',
+                ephemeral=True,
+            )
+
+        if not 1 <= page <= self.paginator.max_pages:
+            return await interaction.response.send_message(
+                content=f'Invalid page number. (Page number should be between 1 and {self.paginator.max_pages}.)',
+                ephemeral=True,
+            )
+
+        self.paginator.current_page = page - 1
+
+        self.view._update_view()
+        embed = await self.paginator.get_page(self.paginator.current_page)
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
 
 
 class PaginatorView(UserView):
@@ -53,57 +102,14 @@ class PaginatorView(UserView):
     ) -> None:
         super().__init__(paginator.ctx.author, timeout=timeout)
         self.paginator: Paginator = paginator
-        self.input_lock: Lock = Lock()
-
         self.dont_render_pagination_buttons: bool = False
 
-        self._center_button: Button | None = center_button
+        self._center_button: Button | None = center_button or _PageInputButton(self.paginator, row=row)
         self._other_components: Collection[Item] = other_components or ()
         self._row: int | None = row
 
-    def _get_input_button(self) -> Button:
-        label = f'Page {self.paginator.current_page + 1}/{self.paginator.max_pages}'
-        button = Button(style=ButtonStyle.primary, label=label, row=self._row)
-
-        async def wrapper(interaction: Interaction) -> None:
-            async with self.input_lock:
-                button.disabled = True
-                await interaction.response.edit_message(view=self)
-
-                ctx = self.paginator.ctx
-                prompt = await ctx.send('What page would you like to go to?')
-
-                msg = await ctx.bot.wait_for(
-                    'message', timeout=None, check=lambda message:
-                    message.author == ctx.author and message.channel == ctx.channel
-                )
-
-                async def _fallback(content: str) -> None:
-                    await ctx.send(content, delete_after=6)
-                    await prompt.delete(delay=6)
-
-                    button.disabled = False
-                    await interaction.message.edit(view=self)
-
-                try:
-                    response = int(msg.content)
-                except ValueError:
-                    return await _fallback('Invalid page.')
-
-                if not 1 <= response <= self.paginator.max_pages:
-                    return await _fallback(f'Page number must be between 1 and {self.paginator.max_pages:,}.')
-
-                self.paginator.current_page = response - 1
-
-                await prompt.delete()
-                ctx.bot.loop.create_task(ctx.thumbs(msg))
-                await self._update(interaction)
-
-        button.callback = wrapper
-        return button
-
     def _update_view(self) -> None:
-        # Super weird implementation but it's the best I could do
+        # Super weird implementation, but it's the best I could do
         self.clear_items()
 
         current = self.paginator.current_page
@@ -116,8 +122,14 @@ class PaginatorView(UserView):
             self.add_item(_PaginatorButton(self.paginator, 0, emoji=Emojis.Arrows.first, row=self._row))
             self.add_item(_PaginatorButton(self.paginator, current - 1, emoji=Emojis.Arrows.previous, row=self._row))
 
-        if not self.dont_render_pagination_buttons or self._center_button is not None:
-            self.add_item(self._center_button or self._get_input_button())
+        if not self.dont_render_pagination_buttons and isinstance(self._center_button, _PageInputButton):
+            label = f'Page {self.paginator.current_page + 1}/{self.paginator.max_pages}'
+            self._center_button.label = label
+
+            self.add_item(self._center_button)
+
+        elif not isinstance(self._center_button, _PageInputButton):
+            self.add_item(self._center_button)
 
         if not self.dont_render_pagination_buttons:
             self.add_item(_PaginatorButton(self.paginator, current + 1, emoji=Emojis.Arrows.forward, row=self._row))
@@ -130,10 +142,12 @@ class PaginatorView(UserView):
     async def _update(self, interaction: Interaction) -> None:
         self._update_view()
         embed = await self.paginator.get_page(self.paginator.current_page)
-        await interaction.message.edit(embed=embed, view=self)
+        await interaction.response.edit_message(embed=embed, view=self)
 
 
 class Paginator:
+    """An interface around a message with pages."""
+
     def __init__(
         self,
         ctx: Context,
@@ -159,7 +173,7 @@ class Paginator:
 
     async def get_page(self, page: int, /) -> Embed:
         return await self.formatter.format_page(
-            self, self.formatter.get_page(page)
+            self, self.formatter.get_page(page),
         )
 
     async def start(self, *, edit: bool = False, page: int = None, interaction: Interaction = None, **send_kwargs) -> None:
@@ -174,8 +188,7 @@ class Paginator:
         else:
             responder = self.ctx.send if interaction is None else interaction.response.send_message
 
-        # If there is only one page,
-        # only send the embed
+        # If there is only one page, only send the embed
         if self.max_pages <= 1:
             if self._underlying_view._center_button is None and not self._underlying_view._other_components:
                 self._underlying_view.stop()
@@ -213,7 +226,7 @@ class Formatter(ABC, Generic[T]):
 
     @abstractmethod
     async def format_page(self, paginator: Paginator, entry: T | list[T]) -> Embed:
-        ...
+        raise NotImplementedError
 
 
 class LineBasedFormatter(Formatter[str]):
@@ -234,11 +247,11 @@ class LineBasedFormatter(Formatter[str]):
         return embed
 
 
-class FieldBasedFormatter(Formatter[dict[str, Any]]):
+class FieldBasedFormatter(Formatter[dict[str, V]]):
     def __init__(
         self,
         embed: Embed,
-        field_kwargs: list[dict[str, Any]],
+        field_kwargs: list[dict[str, V]],
         *,
         page_in_footer: bool = False,
         per_page: int = 5,
@@ -248,8 +261,8 @@ class FieldBasedFormatter(Formatter[dict[str, Any]]):
 
         super().__init__(field_kwargs, per_page=per_page)
 
-    async def format_page(self, paginator: Paginator, fields: list[dict[str, Any]]) -> Embed:
-        embed = self.embed.copy()
+    async def format_page(self, paginator: Paginator, fields: list[dict[str, V]]) -> Embed:
+        embed = Embed.from_dict(deepcopy(self.embed.to_dict()))
         for field in fields:
             embed.add_field(**field)
 

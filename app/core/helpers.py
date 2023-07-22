@@ -8,8 +8,8 @@ from typing import Any, Callable, Final, Iterable, TYPE_CHECKING
 import discord
 from discord.ext import commands
 
-from app.core.models import Command, GroupCommand
-from app.util.common import setinel
+from app.core.models import Command, GroupCommand, HybridCommand, HybridGroupCommand
+from app.util.common import sentinel
 from app.util.pagination import Paginator
 from app.util.structures import LockWithReason
 
@@ -25,15 +25,15 @@ __all__ = (
     'command',
     'group',
     'simple_cooldown',
-    # 'database_cooldown',
+    'database_cooldown',
 )
 
-EDIT  = setinel('EDIT', repr='EDIT')
-REPLY = setinel('REPLY', repr='REPLY')
-BAD_ARGUMENT = setinel('BAD_ARGUMENT', repr='BAD_ARGUMENT')
-NO_EXTRA = setinel('NO_EXTRA', repr='NO_EXTRA')
+EDIT  = sentinel('EDIT', repr='EDIT')
+REPLY = sentinel('REPLY', repr='REPLY')
+BAD_ARGUMENT = sentinel('BAD_ARGUMENT', repr='BAD_ARGUMENT')
+NO_EXTRA = sentinel('NO_EXTRA', repr='NO_EXTRA')
 
-MISSING = setinel('MISSING', bool=False, repr='MISSING')
+MISSING = sentinel('MISSING', bool=False, repr='MISSING')
 
 CURRENCY_COGS: Final[frozenset[str]] = frozenset({
     'Casino',
@@ -241,12 +241,14 @@ def command(
     brief: str = MISSING,
     help: str = MISSING,
     easy_callback: bool = True,
-    **_other_kwargs
-) -> Callable[[Any, ...], Command]:
+    hybrid: bool = False,
+    **other_kwargs: Any,
+) -> Callable[..., Command]:
     kwargs = _resolve_command_kwargs(
-        Command, name=name, alias=alias, aliases=aliases, brief=brief, help=help, usage=usage,
+        HybridCommand if hybrid else Command,
+        name=name, alias=alias, aliases=aliases, brief=brief, help=help, usage=usage,
     )
-    result = commands.command(**kwargs, **_other_kwargs)
+    result = commands.command(**kwargs, **other_kwargs)
 
     if easy_callback:
         return lambda func: result(easy_command_callback(func))
@@ -264,14 +266,16 @@ def group(
     brief: str = MISSING,
     help: str = MISSING,
     easy_callback: bool = True,
+    hybrid: bool = False,
     iwc: bool = True,
-    **_other_kwargs
-) -> Callable[[Any, ...], GroupCommand]:
+    **other_kwargs: Any,
+) -> Callable[..., GroupCommand]:
     kwargs = _resolve_command_kwargs(
-        GroupCommand, name=name, alias=alias, aliases=aliases, brief=brief, help=help, usage=usage,
+        HybridGroupCommand if hybrid else GroupCommand,
+        name=name, alias=alias, aliases=aliases, brief=brief, help=help, usage=usage,
     )
     kwargs['invoke_without_command'] = iwc
-    result = commands.group(**kwargs, **_other_kwargs)
+    result = commands.group(**kwargs, **other_kwargs)
 
     if easy_callback:
         return lambda func: result(easy_command_callback(func))

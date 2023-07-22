@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from time import perf_counter
-from typing import TypeVar
+from typing import Generic, Self, TypeVar
 
-T = TypeVar('T', bound='Timer')
-
-__all__ = (
-    'Timer',
-)
+T = TypeVar('T')
+V = TypeVar('V')
 
 
 class Timer:
@@ -16,7 +13,7 @@ class Timer:
         self.start_time: float | None = None
         self.end_time: float | None = None
 
-    def __enter__(self: T) -> T:
+    def __enter__(self) -> Self:
         self.start_time = perf_counter()
         return self
 
@@ -64,3 +61,19 @@ class LockWithReason(asyncio.Lock):
 
     def with_reason(self, reason: str | None) -> LockReasonMonitor:
         return LockReasonMonitor(self, reason)
+
+
+class TemporaryAttribute(Generic[T, V]):
+    __slots__ = ('obj', 'attr', 'value')
+
+    def __init__(self, obj: T, attr: str, value: V) -> None:
+        self.obj: T = obj
+        self.attr: str = attr
+        self.value: V = value
+
+    def __enter__(self) -> T:
+        setattr(self.obj, self.attr, self.value)
+        return self.obj
+
+    def __exit__(self, _type, _val, _tb) -> None:
+        delattr(self.obj, self.attr)
