@@ -1055,7 +1055,7 @@ class Items:
         key='lettuce_crop',
         name='Lettuce Crop',
         emoji='<:lettuce:941136607594041344>',
-        price=1500,
+        price=1800,
         metadata=CropMetadata(
             time=280,
             count=(1, 2),
@@ -1076,7 +1076,7 @@ class Items:
         key='potato_crop',
         name='Potato Crop',
         emoji='<:potato:941139578226626682>',
-        price=2000,
+        price=2400,
         metadata=CropMetadata(
             time=500,
             count=(1, 2),
@@ -1097,11 +1097,31 @@ class Items:
         key='tobacco_crop',
         name='Tobacco Crop',
         emoji='<:tobacco:941445316765421688>',
-        price=3000,
+        price=3400,
         metadata=CropMetadata(
             time=420,
             count=(1, 2),
             item=tobacco,
+        ),
+    )
+    
+    cotton_ball = Harvest(
+        key='cotton_ball',
+        name='Cotton Ball',
+        emoji='<:cottonball:1132871115014950964>',
+        description='A ball of cotton, grown from the cottom crop.',
+        sell=185,
+    )
+
+    cotton_crop = Crop(
+        key='cotton_crop',
+        name='Cotton Crop',
+        emoji='<:cotton:1132867001057030184>',
+        price=4000,
+        metadata=CropMetadata(
+            time=600,
+            count=(1, 2),
+            item=cotton,
         ),
     )
 
