@@ -1121,7 +1121,7 @@ class Items:
         metadata=CropMetadata(
             time=600,
             count=(1, 2),
-            item=cotton,
+            item=cotton_ball,
         ),
     )
 
