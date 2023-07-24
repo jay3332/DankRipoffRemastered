@@ -1069,14 +1069,14 @@ class Items:
         plural='Potatoes',
         emoji='<:potato:941139578226626682>',
         description='A potato, grown from the potato crop.',
-        sell=250,
+        sell=150,
     )
 
     potato_crop = Crop(
         key='potato_crop',
         name='Potato Crop',
         emoji='<:potato:941139578226626682>',
-        price=1800,
+        price=2000,
         metadata=CropMetadata(
             time=500,
             count=(1, 2),
@@ -1090,14 +1090,14 @@ class Items:
         plural='Tobacco',
         emoji='<:tobacco:941445316765421688>',
         description='A piece of tobacco, grown from the tobacco crop.',
-        sell=260,
+        sell=170,
     )
 
     tobacco_crop = Crop(
         key='tobacco_crop',
         name='Tobacco Crop',
         emoji='<:tobacco:941445316765421688>',
-        price=2500,
+        price=3000,
         metadata=CropMetadata(
             time=420,
             count=(1, 2),
