@@ -59,6 +59,10 @@ class CropMetadata(NamedTuple):
     item: Item
 
 
+class HarvestMetadata(NamedTuple):
+    get_source_crop: Callable[[], Item[CropMetadata]]
+
+
 @dataclass
 class Item(Generic[T]):
     """Stores data about an item."""
@@ -1111,6 +1115,7 @@ class Items:
         emoji='<:cottonball:1132871115014950964>',
         description='A ball of cotton, grown from the cottom crop.',
         sell=185,
+        metadata=HarvestMetadata(lambda: Items.cotton_crop),
     )
 
     cotton_crop = Crop(

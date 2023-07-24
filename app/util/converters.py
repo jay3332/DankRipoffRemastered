@@ -6,7 +6,7 @@ from typing import Literal, NamedTuple, Type, TYPE_CHECKING
 import discord
 from discord.ext.commands import BadArgument, Converter, MemberConverter, MemberNotFound
 
-from app.data.items import Item, ItemType, Items
+from app.data.items import CropMetadata, Item, ItemType, Items, HarvestMetadata
 from app.data.recipes import Recipe, Recipes
 from app.data.settings import Setting, Settings
 from app.data.skills import Skill, Skills
@@ -225,14 +225,19 @@ def query_item(query: str, /) -> Item:
 
 def query_crop(query: str, /) -> Item:
     try:
-        crop = query_item(query.removesuffix(' crop') + ' crop')
+        crop = query_item(query.lower().removesuffix(' crop') + ' crop')
     except BadArgument:
         crop = query_item(query)
 
-        if crop.type is not ItemType.crop:
-            crop = query_item(crop.name + ' crop')
+    if crop is None:
+        raise BadArgument(f"I couldn't find a crop named {query!r}.")
+    if crop.type not in (ItemType.crop, ItemType.harvest):
+        crop = query_item(crop.name + ' crop')
 
-    if crop.type is not ItemType.crop:
+    if crop.type is ItemType.harvest and crop.metadata is not None:
+        crop: Item[HarvestMetadata]
+        crop: Item[CropMetadata] = crop.metadata.get_source_crop()
+    if not isinstance(crop, Item) or crop.type is not ItemType.crop:
         raise BadArgument(f'{crop.name} is not a crop.')
 
     return crop
