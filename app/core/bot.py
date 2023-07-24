@@ -12,7 +12,7 @@ from discord.ext import commands
 
 from app.core.help import HelpCommand
 from app.core.flags import FlagMeta
-from app.core.models import Command, Context
+from app.core.models import Command, Context, GroupCommand
 from app.database import Database
 from app.util.ansi import AnsiStringBuilder, AnsiColor
 from app.util.common import humanize_duration, pluralize
@@ -63,6 +63,17 @@ class Bot(commands.Bot):
         )
 
         self._BotBase__cogs = commands.core._CaseInsensitiveDict()
+
+    def add_command(self, command: Command, /) -> None:
+        if isinstance(command, Command):
+            command.transform_flag_parameters()
+
+        if isinstance(command, GroupCommand):
+            for child in command.walk_commands():
+                if isinstance(child, Command):
+                    child.transform_flag_parameters()  # type: ignore
+
+        super().add_command(command)
 
     async def resolve_command_prefix(self, message: discord.Message) -> list[str]:
         """Resolves a command prefix from a message."""
