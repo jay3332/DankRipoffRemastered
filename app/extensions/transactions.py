@@ -4,7 +4,7 @@ import asyncio
 import re
 from functools import partial
 from textwrap import dedent
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, TypeAlias
 
 import discord
 
@@ -20,9 +20,10 @@ from app.core import (
     simple_cooldown,
     user_max_concurrency,
 )
-from app.data.items import Item, Items
+from app.core.flags import Flags, flag
+from app.data.items import Item, ItemType, Items
 from app.data.recipes import Recipe, Recipes
-from app.util.common import cutoff, get_by_key, image_url_from_emoji, walk_collection
+from app.util.common import cutoff, get_by_key, image_url_from_emoji, query_collection, walk_collection
 from app.util.converters import (
     BUY,
     BankTransaction,
@@ -44,7 +45,8 @@ from app.util.views import UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.database import UserRecord
+    from app.database import InventoryManager, UserRecord
+    from app.util.types import CommandResponse, TypedInteraction
 
 
 class DropView(discord.ui.View):
@@ -272,6 +274,148 @@ class RecipeView(UserView):
         await interaction.response.edit_message(view=self)
 
 
+if TYPE_CHECKING:
+    query_item_type: TypeAlias = ItemType | None
+else:
+    def query_item_type(arg: str) -> ItemType | None:
+        if arg.lower() in ('all', '*'):
+            return None
+        return query_collection(ItemType, ItemType, arg, get_key=lambda value: value.name)
+
+
+class ShopFlags(Flags):
+    category: query_item_type = flag(aliases=('cat', 'type', 'ty'), short='c')
+    search: str = flag(aliases=('query', 'q', 'filter'), short='s', default=None)
+
+
+TITLE = 0
+DESCRIPTION = 1
+
+
+def shop_paginator(
+    ctx: Context,
+    *,
+    record: UserRecord,
+    inventory: InventoryManager,
+    type: ItemType | None = None,
+    query: str | None = None,
+) -> Paginator:
+    fields = []
+    embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+    query = query and query.lower()
+    offset = len(query)
+
+    for i in walk_collection(Items, Item):
+        if not i.buyable:
+            continue
+        if type is not None and i.type is not type:
+            continue
+
+        loc = match_loc = None
+        if query is not None:
+            if (loc := i.name.lower().find(query)) != -1:
+                match_loc = TITLE
+            elif i.key.find(query) != -1:
+                pass
+            elif (loc := i.description.lower().find(query)) != -1 and len(i.description) + offset < 100:
+                match_loc = DESCRIPTION
+            else:
+                continue
+
+        embed.title = 'Item Shop'
+        embed.description = f'To buy an item, see `{ctx.clean_prefix}buy`.\nTo view information on an item, see `{ctx.clean_prefix}iteminfo`.'
+
+        comment = '*You cannot afford this item.*\n' if i.price > record.wallet else ''
+        owned = inventory.cached.quantity_of(i)
+        owned = f'(You own {owned:,})' if owned else ''
+
+        description = cutoff(i.description, max_length=100)
+
+        name = i.display_name
+        end = loc + offset
+
+        if match_loc == TITLE:
+            name = f'{name[:loc]}**{name[loc:end]}**{name[end:]}'
+        elif match_loc == DESCRIPTION:
+            description = f'{description[:loc]}**{description[loc:end]}**{description[end:]}'
+
+        fields.append({
+            'name': f'• {name} — {Emojis.coin} {i.price:,} {owned}',
+            'value': comment + description,
+            'inline': False,
+        })
+
+    return Paginator(
+        ctx,
+        FieldBasedFormatter(embed, fields, per_page=5),
+        other_components=[ShopCategorySelect(ctx, record=record, inventory=inventory)],
+        row=1,
+    )
+
+
+class ShopSearchModal(discord.ui.Modal):
+    query = discord.ui.TextInput(
+        label='Search Query',
+        placeholder='Enter a search query for the item shop... (e.g. "spinning coin")',
+        min_length=2,
+        max_length=50,
+    )
+
+    def __init__(self) -> None:
+        super().__init__(timeout=60, title='Item Search')
+        self.interaction: TypedInteraction | None = None
+
+    async def on_submit(self, interaction: TypedInteraction) -> None:
+        self.interaction = interaction
+
+
+class ShopCategorySelect(discord.ui.Select):
+    def __init__(
+        self,
+        ctx: Context,
+        *,
+        record: UserRecord,
+        inventory: InventoryManager,
+    ) -> None:
+        super().__init__(
+            placeholder='Filter by category...',
+            options=[
+                discord.SelectOption(label='All Items', value='all'),
+                *(
+                    discord.SelectOption(label=category.name.title(), value=str(category.value))
+                    for category in walk_collection(ItemType, ItemType)
+                ),
+                discord.SelectOption(label='Search...', value='search'),
+            ],
+            row=0,
+        )
+        self.ctx = ctx
+        self.record = record
+        self.inventory = inventory
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        value = self.values[0]
+        if value == 'all':
+            query_type = None
+            query_search = None
+        elif value == 'search':
+            query_type = None
+            modal = ShopSearchModal()
+            await interaction.response.send_modal(modal)
+            await modal.wait()
+            query_search = modal.query.value
+            interaction = modal.interaction
+        else:
+            query_type = ItemType(int(value))
+            query_search = None
+
+        paginator = shop_paginator(
+            self.ctx, record=self.record, inventory=self.inventory,
+            type=query_type, query=query_search,
+        )
+        await paginator.start(edit=True, interaction=interaction)
+
+
 class Transactions(Cog):
     """Commands that handle transactions between the bank or other users."""
 
@@ -321,8 +465,16 @@ class Transactions(Cog):
 
     @command(aliases={"store", "market", "sh", "iteminfo", "ii"})
     @simple_cooldown(1, 6)
-    async def shop(self, ctx: Context, *, item: query_item = None) -> tuple[Paginator | discord.Embed, Any]:
-        """View the item shop, or view information on a specific item."""
+    async def shop(self, ctx: Context, *, item: query_item = None, flags: ShopFlags) -> CommandResponse:
+        """View the item shop, or view information on a specific item.
+
+        Arguments:
+        - `item`: The item to view information on. Leave blank to the view the item shop.
+
+        Flags:
+        - `--category <category>`: The category of items to view. Defaults to all.
+        - `--search <query>`: Filter shop results by query. This is case-insensitive.
+        """
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         record = await ctx.db.get_user_record(ctx.author.id)
 
@@ -330,28 +482,8 @@ class Transactions(Cog):
         await inventory.wait()
 
         if not item:
-            fields = []
-
-            for i in walk_collection(Items, Item):
-                if not i.buyable:
-                    continue
-
-                embed.title = 'Item Shop'
-                embed.description = f'To buy an item, see `{ctx.clean_prefix}buy`.\nTo view information on an item, see `{ctx.clean_prefix}iteminfo`.'
-
-                comment = '*You cannot afford this item.*\n' if i.price > record.wallet else ''
-                owned = inventory.cached.quantity_of(i)
-                owned = f'(You own {owned:,})' if owned else ''
-
-                description = cutoff(i.description, max_length=100)
-
-                fields.append({
-                    'name': f'• {i.display_name} — {Emojis.coin} {i.price:,} {owned}',
-                    'value': comment + description,
-                    'inline': False,
-                })
-
-            return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5)), REPLY
+            paginator = shop_paginator(ctx, record=record, inventory=inventory, type=flags.category, query=flags.search)
+            return paginator, REPLY
 
         item: Item
 

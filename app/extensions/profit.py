@@ -750,10 +750,10 @@ class Profit(Cog):
         inventory = await record.inventory_manager.wait()
 
         if not inventory.cached.quantity_of('fishing_pole'):
-            yield f'You need {Items.fishing_pole.get_sentence_chunk(1)} to fish.', BAD_ARGUMENT
+            yield f'You need {Items.fishing_pole.get_sentence_chunk()} to fish.', BAD_ARGUMENT
             return
 
-        if inventory.cached.quantity_of('fish_bait'):
+        if used_bait := inventory.cached.quantity_of('fish_bait'):
             mapping = self.FISH_CHANCES_WITH_BAIT
             await inventory.add_item('fish_bait', -1)
         else:
@@ -808,6 +808,15 @@ class Profit(Cog):
 
         embed.add_field(name='You caught:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in fish.items()))
         embed.set_author(name=f'Fishing: {ctx.author}', icon_url=ctx.author.avatar.url)
+        if used_bait:
+            embed.add_field(
+                name=f'{Items.fish_bait.emoji} Fish Bait',
+                value=(
+                    f'Consumed {Items.fish_bait.get_sentence_chunk()}, which increased the chance of catching better fish.\n'
+                    f'You now have {Items.fish_bait.get_sentence_chunk(used_bait - 1)} left.'
+                ),
+                inline=False,
+            )
 
         yield '', embed, EDIT
 
@@ -1062,18 +1071,11 @@ class Profit(Cog):
             pass
 
         async with self._trivia_questions_fetch_lock:
-            # async with self.bot.session.get('https://opentdb.com/api.php?amount=50') as response:
-            #     if not response.ok:
-            #         raise RuntimeError('failed to retrieve trivia question')
-            #
-            #     data = await response.json(encoding='utf-8')
+            async with self.bot.session.get('https://opentdb.com/api.php?amount=50') as response:
+                if not response.ok:
+                    raise RuntimeError('failed to retrieve trivia question')
 
-            # aiohttp does not work with this on windows due to the fact that aiohttp utilizes OS certs
-            response = await asyncio.to_thread(requests.get, 'https://opentdb.com/api.php?amount=50')
-            if not response.ok:
-                raise RuntimeError('failed to retrieve trivia question')
-
-            data = await asyncio.to_thread(response.json)
+                data = await response.json(encoding='utf-8')
 
             if data['response_code'] != 0:
                 raise RuntimeError('failed to retrieve trivia question')

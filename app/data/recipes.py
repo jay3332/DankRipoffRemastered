@@ -91,6 +91,37 @@ class Recipes:
         },
     )
 
+    sheet_of_paper = Recipe(
+        key="sheet_of_paper",
+        name="Sheet of Paper",
+        description=Items.sheet_of_paper.description,
+        emoji=Items.sheet_of_paper.emoji,
+        price=5000,
+        ingredients={
+            Items.wood: 2,
+            Items.banknote: 1,
+        },
+        result={
+            Items.sheet_of_paper: 1,
+        },
+    )
+
+    cigarette = Recipe(
+        key="cigarette",
+        name="Cigarette",
+        description=Items.cigarette.description,
+        emoji=Items.cigarette.emoji,
+        price=100,
+        ingredients={
+            Items.tobacco: 2,
+            Items.cotton_ball: 2,
+            Items.sheet_of_paper: 1,
+        },
+        result={
+            Items.cigarette: 1,
+        },
+    )
+
     flour = Recipe(
         key="flour",
         name="Flour",

@@ -304,6 +304,20 @@ class Items:
             You now have a **{record.exp_multiplier:.02%}** EXP multiplier.
         '''))
 
+    cigarette = Item(
+        type=ItemType.tool,
+        key='cigarette',
+        name='Cigarette',
+        emoji='<:cigarette:1133107777359847585>',
+        description=(
+            'A standard cigarette. Smoking (using) these will do something beneficial in the future (WIP for now). '
+            'These cannot be bought; you must craft this item.'
+        ),
+        rarity=ItemRarity.rare,
+        sell=12500,
+        dispose=True,
+    )
+
     spinning_coin = Item(
         type=ItemType.collectible,
         key='spinning_coin',
@@ -1149,6 +1163,17 @@ class Items:
         description='A normal loaf of wheat bread.',
         sell=500,
         rarity=ItemRarity.uncommon,
+    )
+
+    sheet_of_paper = Item(
+        type=ItemType.miscellaneous,
+        key='sheet_of_paper',
+        name='Sheet of Paper',
+        plural='Sheets of Paper',
+        emoji='<:paper:1133127585258291240>',
+        description='A sheet of paper.',
+        sell=10000,
+        rarity=ItemRarity.rare,
     )
 
     @classmethod

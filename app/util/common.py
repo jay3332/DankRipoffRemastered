@@ -93,18 +93,25 @@ def get_by_key(collection: type, key: str) -> Any:
             return obj
 
 
-def query_collection(collection: type, cls: Type[Q], query: str) -> Optional[Q]:
+def query_collection(
+    collection: type,
+    cls: Type[Q],
+    query: str,
+    *,
+    get_key: Callable[[Q], str] = lambda item: item.key,
+    get_name: Callable[[Q], str] = lambda item: item.name,
+) -> Optional[Q]:
     query = query.lower()
     queued = []
 
     for obj in walk_collection(collection, cls):
         query = query.lower()
-        name = obj.name.lower()
+        name = get_name(obj).lower()
 
-        if query in (name, obj.key):
+        if query in (name, get_key(obj)):
             return obj
 
-        if len(query) >= 3 and query in name or query in obj.key:
+        if len(query) >= 3 and query in name or query in get_key(obj):
             queued.append(obj)
 
         matcher = SequenceMatcher(None, query, name)
@@ -112,7 +119,7 @@ def query_collection(collection: type, cls: Type[Q], query: str) -> Optional[Q]:
             queued.append(obj)
 
     if queued:
-        return min(queued, key=lambda item: len(item.key))
+        return min(queued, key=lambda item: len(get_key(item)))
 
 
 def cutoff(string: str, /, max_length: int = 64, *, exact: bool = False) -> str:
