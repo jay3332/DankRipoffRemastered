@@ -303,7 +303,7 @@ def shop_paginator(
     fields = []
     embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
     query = query and query.lower()
-    offset = len(query)
+    offset = query and len(query)
 
     for i in walk_collection(Items, Item):
         if not i.buyable:
