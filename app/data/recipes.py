@@ -111,7 +111,7 @@ class Recipes:
         name="Cigarette",
         description=Items.cigarette.description,
         emoji=Items.cigarette.emoji,
-        price=100,
+        price=7000,
         ingredients={
             Items.tobacco: 2,
             Items.cotton_ball: 2,

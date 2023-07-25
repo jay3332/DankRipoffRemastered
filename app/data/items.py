@@ -314,7 +314,7 @@ class Items:
             'These cannot be bought; you must craft this item.'
         ),
         rarity=ItemRarity.rare,
-        sell=12500,
+        sell=15000,
         dispose=True,
     )
 
