@@ -4,7 +4,7 @@ import random
 from datetime import timedelta
 from string import ascii_letters
 from textwrap import dedent
-from typing import Any, ClassVar, Final, TYPE_CHECKING, Type, Union
+from typing import ClassVar, Final, TYPE_CHECKING, Type, Union
 
 import discord
 from discord.ext.commands import BadArgument, Greedy
