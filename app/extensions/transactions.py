@@ -422,6 +422,8 @@ class ShopCategorySelect(discord.ui.Select):
 class Transactions(Cog):
     """Commands that handle transactions between the bank or other users."""
 
+    emoji = '\U0001f91d'
+
     # noinspection PyTypeChecker
     @command(aliases={"w", "with", "wd"})
     @simple_cooldown(1, 8)

@@ -45,6 +45,8 @@ class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
 class Stats(Cog):
     """Useful statistical commands. These commands do not have any action behind them."""
 
+    emoji = '\U0001f4ca'
+
     # noinspection PyTypeChecker
     @command(aliases={"bal", "coins", "stats", "b", "wallet"})
     @simple_cooldown(2, 5)

@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 class Skill(Cog):
     """Commands for the skill and training system."""
 
+    emoji = '\U0001f52e'
+
     # noinspection PyTypeChecker
     @group(aliases={'skills', 'sk'})
     @simple_cooldown(2, 2)

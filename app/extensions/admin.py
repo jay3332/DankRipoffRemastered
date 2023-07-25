@@ -92,6 +92,7 @@ class Admin(Cog):
     """Administrator/owner-only commands."""
 
     __hidden__ = True
+    emoji = f'\U0001f6e0\ufe0f'
 
     async def cog_check(self, ctx: Context) -> bool:
         return await ctx.bot.is_owner(ctx.author)

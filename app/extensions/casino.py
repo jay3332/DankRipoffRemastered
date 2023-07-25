@@ -174,6 +174,8 @@ class ScratchView(UserView):
 class Casino(Cog):
     """Gamble off all of your coins at the casino!"""
 
+    emoji = '\U0001f911'
+
     @staticmethod
     def _format_roll(roll: list[int]) -> str:
         assert len(roll) == 2

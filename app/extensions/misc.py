@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 class Miscellaneous(Cog):
     """Miscellaneous commands."""
 
+    emoji = '<:thumbs_up:1131835741358530640>'
+
     PONG_MESSAGES = (
         'Pong.',
         'Pong!',

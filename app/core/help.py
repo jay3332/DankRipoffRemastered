@@ -166,10 +166,9 @@ class HelpCommand(commands.HelpCommand):
         embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar.url)
 
         mapping = cls.filter_mapping(mapping)
-
         fields = [
             {
-                'name': cog.qualified_name,
+                'name': f'{getattr(cog, "emoji", "")} {cog.qualified_name}',
                 'value': f'{cog.description}\n{cls.format_commands(cmds)}',
                 'inline': False,
             }

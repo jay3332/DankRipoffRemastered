@@ -16,6 +16,8 @@ from app.util.types import TypedContext
 from app.util.views import AnyUser, ConfirmationView
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from app.core.bot import Bot
     from app.database import Database
     from app.util.types import AsyncCallable
@@ -122,6 +124,7 @@ class Context(TypedContext):
 
 class Cog(commands.Cog):
     __hidden__: bool = False
+    emoji: ClassVar[str]
 
     def __init__(self, bot: Bot) -> None:
         self.bot: Bot = bot

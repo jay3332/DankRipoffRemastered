@@ -133,6 +133,8 @@ class TriviaQuestion(NamedTuple):
 class Profit(Cog):
     """Commands you use to grind for profit."""
 
+    emoji = '\U0001f4b0'
+
     def __setup__(self) -> None:
         self._recent_robs: dict[int, RobData] = {}
         self._trivia_questions: deque[TriviaQuestion] = deque(maxlen=50)

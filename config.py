@@ -1,5 +1,6 @@
 from os import getenv as env
 from platform import system
+from random import randint
 from typing import Collection
 
 from discord import AllowedMentions
@@ -36,8 +37,13 @@ allowed_mentions: AllowedMentions = AllowedMentions.none()
 allowed_mentions.users = True
 
 
+class _RandomColor:
+    def __get__(self, *_) -> int:
+        return randint(0, 0xffffff)
+
+
 class Colors:
-    primary: int = 0x6199f2
+    primary: int = _RandomColor()  # 0x6199f2
     success: int = 0x17ff70
     warning: int = 0xfcba03
     error: int = 0xff1759
