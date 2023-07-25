@@ -63,7 +63,6 @@ def parse_coordinate(argument: str) -> tuple[int, int]:
 
 
 class LandView(UserView):
-    emoji = '\U0001f468\u200d\U0001f33e'
     _placeholder = discord.ui.button(label='\u200b', style=discord.ButtonStyle.secondary, disabled=True)
 
     LAND_EMOJI: Final[ClassVar[str]] = '<:_:940766001266577449>'
@@ -205,6 +204,8 @@ class LandView(UserView):
 
 class Farming(Cog):
     """Commands that assist with the farming and crop system of the bot."""
+
+    emoji = '\U0001f468\u200d\U0001f33e'
 
     @group(aliases={'crops', 'fa', 'crop', 'land', 'area'})
     @simple_cooldown(2, 4)

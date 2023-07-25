@@ -7,7 +7,7 @@ from discord.ext import commands
 
 from app.core.models import Command
 from app.util.ansi import AnsiColor, AnsiStringBuilder
-from app.util.common import cutoff, humanize_duration, pluralize
+from app.util.common import cutoff, humanize_duration, image_url_from_emoji, pluralize
 from app.util.pagination import Paginator, PaginatorView, FieldBasedFormatter
 from app.util.types import TypedInteraction
 from app.util.views import UserView
@@ -29,6 +29,7 @@ class CogSelect(discord.ui.Select[PaginatorView]):
             self.add_option(
                 label=cog.qualified_name,
                 value=cog.qualified_name,
+                emoji=cog.emoji,
                 description=cutoff(cog.description, max_length=50, exact=True),
                 default=cog is default,
             )
@@ -46,6 +47,8 @@ class CogSelect(discord.ui.Select[PaginatorView]):
         embed.description = f'There are {len(cog.get_commands())} commands in this category.'
         embed.set_author(name=f'Help ({cog.qualified_name}): {ctx.author.name}', icon_url=ctx.author.avatar.url)
         embed.set_footer(text=f'Run `{ctx.clean_prefix}help <command>` to get help on a specific command.')
+        if emoji := getattr(cog, 'emoji', None):
+            embed.set_thumbnail(url=image_url_from_emoji(emoji))
 
         return embed
 
@@ -208,6 +211,8 @@ class HelpCommand(commands.HelpCommand):
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar.url)
+        if emoji := getattr(ctx.cog, 'emoji', None):
+            embed.set_thumbnail(url=image_url_from_emoji(emoji))
 
         body = command.help or 'No description provided.'
 
