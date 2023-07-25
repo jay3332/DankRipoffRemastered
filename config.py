@@ -1,8 +1,8 @@
 from os import getenv as env
 from platform import system
-from random import randint
 from typing import Collection
 
+import discord
 from discord import AllowedMentions
 from dotenv import load_dotenv
 
@@ -39,7 +39,7 @@ allowed_mentions.users = True
 
 class _RandomColor:
     def __get__(self, *_) -> int:
-        return randint(0, 0xffffff)
+        return discord.Color.random().value
 
 
 class Colors:
