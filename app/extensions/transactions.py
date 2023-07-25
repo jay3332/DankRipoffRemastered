@@ -370,6 +370,16 @@ class ShopSearchModal(discord.ui.Modal):
 
 
 class ShopCategorySelect(discord.ui.Select):
+    OPTIONS = [
+        discord.SelectOption(label='All Items', value='all'),
+        *(
+            discord.SelectOption(label=category.name.title(), value=str(category.value))
+            for category in walk_collection(ItemType, ItemType)
+            if any(item.type is category and item.buyable for item in walk_collection(Items, Item))
+        ),
+        discord.SelectOption(label='Search...', value='search'),
+    ]
+
     def __init__(
         self,
         ctx: Context,
@@ -379,14 +389,7 @@ class ShopCategorySelect(discord.ui.Select):
     ) -> None:
         super().__init__(
             placeholder='Filter by category...',
-            options=[
-                discord.SelectOption(label='All Items', value='all'),
-                *(
-                    discord.SelectOption(label=category.name.title(), value=str(category.value))
-                    for category in walk_collection(ItemType, ItemType)
-                ),
-                discord.SelectOption(label='Search...', value='search'),
-            ],
+            options=self.OPTIONS,
             row=0,
         )
         self.ctx = ctx
