@@ -332,7 +332,7 @@ def shop_paginator(
         description = cutoff(i.description, max_length=100)
 
         name = i.display_name
-        end = loc + offset
+        end = loc and loc + offset
 
         if match_loc == TITLE:
             name = f'{name[:loc]}**{name[loc:end]}**{name[end:]}'
