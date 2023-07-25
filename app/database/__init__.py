@@ -5,7 +5,7 @@ import datetime
 import random
 from collections import defaultdict
 from string import ascii_letters
-from typing import Any, Awaitable, Callable, Literal, NamedTuple, overload, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Iterable, Literal, NamedTuple, overload, TYPE_CHECKING
 
 import asyncpg
 import discord.utils
@@ -531,7 +531,7 @@ class CropManager:
         new = await self._record.db.fetchrow(query, self._record.user_id, x, y)
         self.cached[x, y] = CropInfo.from_record(new)
 
-    async def plant_crop(self, x: int, y: int, crop: Item | str) -> None:
+    async def plant_crop(self, coordinates: Iterable[tuple[int, int]], crop: Item | str) -> None:
         if isinstance(crop, Item):
             crop = crop.key
 
@@ -542,9 +542,9 @@ class CropManager:
                 WHERE user_id = $1 AND x = $3 AND y = $4
                 RETURNING *;
                 """
-
-        new = await self._record.db.fetchrow(query, self._record.user_id, crop, x, y)
-        self.cached[x, y] = CropInfo.from_record(new)
+        for x, y in coordinates:
+            new = await self._record.db.fetchrow(query, self._record.user_id, crop, x, y)
+            self.cached[x, y] = CropInfo.from_record(new)
 
     async def add_land(self, x: int, y: int) -> None:
         await self.wait()

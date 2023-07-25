@@ -7,7 +7,7 @@ from textwrap import dedent
 from typing import Any, ClassVar, Final, TYPE_CHECKING, Type, Union
 
 import discord
-from discord.ext.commands import BadArgument
+from discord.ext.commands import BadArgument, Greedy
 
 from app.core import (
     BAD_ARGUMENT,
@@ -376,31 +376,48 @@ class Farming(Cog):
     @simple_cooldown(2, 4)
     @user_max_concurrency(1)
     @lock_transactions
-    async def plant(self, ctx: Context, coordinate: parse_coordinate, *, crop: query_crop):
-        """Plant a crop in your farm."""
+    async def plant(self, ctx: Context, coordinates: Greedy[parse_coordinate], *, crop: query_crop):
+        """Plant a crop (or multiple) in your farm."""
+        if not coordinates:
+            return 'You must specify at least one coordinate to plant at.', BAD_ARGUMENT
+
         record = await ctx.db.get_user_record(ctx.author.id)
         manager = await record.crop_manager.wait()
 
-        if coordinate not in manager.cached:
+        if coordinates not in manager.cached:
             return 'You do not own the land in this coordinate, disallowing you to plant there.', BAD_ARGUMENT
 
         inventory = await record.inventory_manager.wait()
         if not inventory.cached.quantity_of(crop):
             return f'You do not have any {crop.get_display_name(plural=True)} in your inventory.', BAD_ARGUMENT
 
-        maybe_crop = manager.cached[coordinate].crop
-        if maybe_crop is not None and not await ctx.confirm(
-            f'You already have {maybe_crop.get_sentence_chunk(1)} planted in this spot. '
-            'If you plant this crop here, the previous crop will be disposed of without any refund. Are you sure you want to do this?',
-            delete_after=True,
-            reference=ctx.message,
-        ):
+        message = None
+        if len(coordinates) == 1:
+            coordinate = coordinates[0]
+            maybe_crop = manager.cached[coordinate].crop
+            if maybe_crop is not None:
+                message = (
+                    f'You already have {maybe_crop.get_sentence_chunk(1)} planted in this spot. '
+                    'If you plant this crop here, the previous crop will be disposed of without any refund. '
+                    'Are you sure you want to do this?'
+                )
+        elif conflicts := sum(manager.cached[coord] is not None for coord in coordinates):
+            message = (
+                f'You are trying to plant {len(coordinates)} crops, but {conflicts} of those coordinates already have '
+                f'crops planted in them. Are you sure you want to dispose {conflicts} crops without refund?'
+            )
+
+        if message is not None and not await ctx.confirm(message, delete_after=True, reference=ctx.message):
             return 'Alright, I guess not', BAD_ARGUMENT
 
         await inventory.add_item(crop, -1)
-        await manager.plant_crop(*coordinate, crop)
+        await manager.plant_crop(coordinates, crop)
 
         ctx.bot.loop.create_task(ctx.thumbs())
+        if len(coordinates) > 1:
+            return f'Planted {crop.get_sentence_chunk(len(coordinates))} at {len(coordinates)} coordinates.', REPLY
+
+        coordinate = coordinates[0]
         return f'Planted {crop.get_sentence_chunk(1)} at coordinate **{CropInfo.into_coordinates(*coordinate)}**.', REPLY
 
     @command(aliases={'har', 'ha', 'hv', 'gather', 'collect'})
