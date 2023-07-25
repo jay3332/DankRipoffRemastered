@@ -283,11 +283,6 @@ else:
         return query_collection(ItemType, ItemType, arg, get_key=lambda value: value.name)
 
 
-class ShopFlags(Flags):
-    category: query_item_type = flag(aliases=('cat', 'type', 'ty'), short='c')
-    search: str = flag(aliases=('query', 'q', 'filter'), short='s', default=None)
-
-
 TITLE = 0
 DESCRIPTION = 1
 
@@ -344,6 +339,11 @@ def shop_paginator(
             'value': comment + description,
             'inline': False,
         })
+    fields = fields or [{
+        'name': 'No items found!',
+        'value': f'No items found for query: `{query}`',
+        'inline': False,
+    }]
 
     return Paginator(
         ctx,
@@ -468,15 +468,11 @@ class Transactions(Cog):
 
     @command(aliases={"store", "market", "sh", "iteminfo", "ii"})
     @simple_cooldown(1, 6)
-    async def shop(self, ctx: Context, *, item: query_item = None, flags: ShopFlags) -> CommandResponse:
+    async def shop(self, ctx: Context, *, item: query_item = None) -> CommandResponse:
         """View the item shop, or view information on a specific item.
 
         Arguments:
         - `item`: The item to view information on. Leave blank to the view the item shop.
-
-        Flags:
-        - `--category <category>`: The category of items to view. Defaults to all.
-        - `--search <query>`: Filter shop results by query. This is case-insensitive.
         """
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -485,7 +481,7 @@ class Transactions(Cog):
         await inventory.wait()
 
         if not item:
-            paginator = shop_paginator(ctx, record=record, inventory=inventory, type=flags.category, query=flags.search)
+            paginator = shop_paginator(ctx, record=record, inventory=inventory)
             return paginator, REPLY
 
         item: Item
