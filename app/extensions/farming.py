@@ -384,12 +384,24 @@ class Farming(Cog):
         record = await ctx.db.get_user_record(ctx.author.id)
         manager = await record.crop_manager.wait()
 
-        if coordinates not in manager.cached:
-            return 'You do not own the land in this coordinate, disallowing you to plant there.', BAD_ARGUMENT
+        for coordinate in coordinates:
+            if coordinate not in manager.cached:
+                return (
+                    f'You do not own the land at coordinates {CropInfo.into_coordinates(*coordinate)}, '
+                    f'disallowing you to plant there.',
+                    BAD_ARGUMENT,
+                )
 
         inventory = await record.inventory_manager.wait()
-        if not inventory.cached.quantity_of(crop):
-            return f'You do not have any {crop.get_display_name(plural=True)} in your inventory.', BAD_ARGUMENT
+        owned = inventory.cached.quantity_of(crop)
+        if owned < len(coordinates):
+            if len(coordinates) == 1:
+                return f'You do not have any {crop.get_display_name(plural=True)} in your inventory.', BAD_ARGUMENT
+            return (
+                f'You only have {owned} {crop.get_display_name(plural=True)} in your inventory,'
+                f' which is not enough to plant over {len(coordinates)} coordinates.',
+                BAD_ARGUMENT,
+            )
 
         message = None
         if len(coordinates) == 1:
