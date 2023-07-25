@@ -413,7 +413,7 @@ class Farming(Cog):
                     'If you plant this crop here, the previous crop will be disposed of without any refund. '
                     'Are you sure you want to do this?'
                 )
-        elif conflicts := sum(manager.cached[coord] is not None for coord in coordinates):
+        elif conflicts := sum(manager.cached[coord].crop is not None for coord in coordinates):
             message = (
                 f'You are trying to plant {len(coordinates)} crops, but {conflicts} of those coordinates already have '
                 f'crops planted in them. Are you sure you want to dispose {conflicts} crops without refund?'
