@@ -331,8 +331,8 @@ def shop_paginator(
 
         description = cutoff(i.description, max_length=100)
 
-        name = i.display_name
         end = loc and loc + offset
+        name = i.name
 
         if match_loc == TITLE:
             name = f'{name[:loc]}**{name[loc:end]}**{name[end:]}'
@@ -340,7 +340,7 @@ def shop_paginator(
             description = f'{description[:loc]}**{description[loc:end]}**{description[end:]}'
 
         fields.append({
-            'name': f'• {name} — {Emojis.coin} {i.price:,} {owned}',
+            'name': f'• {i.emoji} {name} — {Emojis.coin} {i.price:,} {owned}',
             'value': comment + description,
             'inline': False,
         })
