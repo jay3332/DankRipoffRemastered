@@ -1143,7 +1143,7 @@ class Profit(Cog):
         await record.inventory_manager.wait()
 
         view = DivingView(ctx, record=record)
-        yield view, REPLY
+        yield view, view.make_embed(message='You begin your dive at the surface.'), REPLY
         await view.wait()
 
     @command(aliases={'da', 'day'})
@@ -1628,7 +1628,10 @@ class DivingView(UserView):
         embed.set_author(name=f'{self.ctx.author.name}: Diving', icon_url=self.ctx.author.avatar.url)
 
         embed.add_field(name='Depth', value=f'{self._depth}m' if self._depth else 'Surface')
-        embed.add_field(name='Oxygen', value=f'{progress_bar(self._oxygen / 50, length=6)} {max(0, self._oxygen):,}/50')
+        embed.add_field(
+            name=f'Oxygen: **{max(0, self._oxygen):,}**/50',
+            value=f'{progress_bar(self._oxygen / 50, length=6)}',
+        )
 
         if message is not None:
             embed.description = message
@@ -1646,7 +1649,7 @@ class DivingView(UserView):
         for item, quantity in self._items:
             earnings.append(f'- {item.get_display_name(bold=True)} x{quantity}')
 
-        embed.add_field(name='Earnings', value='\n'.join(earnings) or 'Nothing yet!')
+        embed.insert_field_at(0, name='Earnings', value='\n'.join(earnings) or 'Nothing yet!', inline=False)
         return embed
 
     async def suspend(self, interaction: TypedInteraction | None, message: str | None = None) -> None:
