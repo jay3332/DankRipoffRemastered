@@ -100,16 +100,18 @@ class Stats(Cog):
 
         # XP Multi
         details = []
+        total_exp_multi = data.total_exp_multiplier - 1
         if data.base_exp_multiplier:
             details.append(f'- Base Multiplier\\*: +**{data.base_exp_multiplier:.1%}** (global)')
             embed.set_footer(text='* This multiplier is accumulated from using items like cheese')
         if data.prestige:
             details.append(f'- Prestige {data.prestige}: +**{data.prestige * 25}%** (global)')
         if ctx.guild.id in multiplier_guilds:
+            total_exp_multi += 0.5
             details.append(f'- {ctx.guild}: +**50%**')
 
         embed.add_field(
-            name=f"Total XP Multiplier: **{data.total_exp_multiplier - 1:.1%}**",
+            name=f"Total XP Multiplier: **{total_exp_multi:.1%}**",
             value='\n'.join(details) or 'No XP multipliers applied.',
             inline=False
         )
