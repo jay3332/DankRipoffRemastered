@@ -35,7 +35,7 @@ def get_number(argument: str) -> int:
         case 'm':
             argument = float(argument.rstrip("m")) * 1_000_000
         case 'b':
-            argument = float(argument.rstrip("k")) * 1_000_000_000
+            argument = float(argument.rstrip("b")) * 1_000_000_000
         case _:
             if re.match(r"\de\d+", argument):
                 num, exp = argument.split("e")
@@ -46,6 +46,10 @@ def get_number(argument: str) -> int:
 
 
 class NotAnInteger(Exception):
+    pass
+
+
+class ZeroQuantity(NotAnInteger):
     pass
 
 
@@ -100,6 +104,8 @@ def get_amount(total: float, minimum: int, maximum: int, arg: str) -> int:
         raise NotEnough()
 
     if amount <= 0:
+        if total == 0:
+            raise ZeroQuantity()
         raise NotAnInteger()
 
     if minimum <= amount <= maximum:
@@ -174,17 +180,18 @@ def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemA
             if not item:
                 raise BadArgument(f'Item "{argument}" not found.')
 
+            plural = item.get_display_name(plural=True)
             if method == BUY and not item.buyable:
-                raise BadArgument('This item is currently not buyable.')
+                raise BadArgument(f'{plural} are currently not buyable.')
 
             if method == SELL and not item.sellable:
-                raise BadArgument('This item is not sellable.')
+                raise BadArgument(f'{plural} are not sellable.')
 
             if method == USE and not item.usable:
-                raise BadArgument('This item is not usable.')
+                raise BadArgument(f'{plural} are not usable.')
 
             if method == DROP and not item.giftable:
-                raise BadArgument('This item is not giftable.')
+                raise BadArgument(f'{plural} are not giftable.')
 
             record = await ctx.db.get_user_record(ctx.author.id)
 
@@ -196,16 +203,17 @@ def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemA
 
             try:
                 quantity = get_amount(maximum, 1, maximum, quantity)
-
             except PastMinimum:
                 raise BadArgument(f'You must {method} at least one of that item.')
-
+            except ZeroQuantity:
+                raise BadArgument(f'You don\'t have any {plural}.')
             except NotAnInteger:
-                raise BadArgument(f'Invalid quantity {quantity} - either what you specified yields 0, or it is not an integer.')
-
+                raise BadArgument(
+                    f'Invalid quantity {quantity} - either what you specified yields 0, is negative, or it is not an integer.',
+                )
             except NotEnough:
                 raise BadArgument(
-                    'Insufficient funds - you do not have enough coins to make this purchase.'
+                    f'Insufficient funds - you do not have enough coins to buy {item.get_sentence_chunk(quantity)}.'
                     if method == BUY
                     else 'You do not have that many of that item.'
                 )
