@@ -1146,8 +1146,7 @@ class Profit(Cog):
 
         streak_benefit = record.daily_streak * 250
         profit = 5000 + streak_benefit
-
-        await record.add(wallet=profit)
+        profit = await record.add_coins(profit)
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f'{ctx.author.name}: Claim Daily', icon_url=ctx.author.avatar.url)
@@ -1177,8 +1176,7 @@ class Profit(Cog):
 
         streak_benefit = record.weekly_streak * 2000
         profit = 20000 + streak_benefit
-
-        await record.add(wallet=profit)
+        profit = await record.add_coins(profit)
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f'{ctx.author.name}: Claim Weekly', icon_url=ctx.author.avatar.url)

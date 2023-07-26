@@ -301,7 +301,7 @@ class Items:
 
         await original.edit(content=dedent(f'''
             {item.emoji} You ate {readable} and gained a **{gain:.02%}** EXP multiplier.
-            You now have a **{record.exp_multiplier:.02%}** EXP multiplier.
+            You now have a **{record.base_exp_multiplier:.02%}** base EXP multiplier.
         '''))
 
     cigarette = Item(

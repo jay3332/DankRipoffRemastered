@@ -100,12 +100,12 @@ def query_collection(
     *,
     get_key: Callable[[Q], str] = lambda item: item.key,
     get_name: Callable[[Q], str] = lambda item: item.name,
+    prioritizer: Callable[[Q], int] = lambda _: 0,
 ) -> Optional[Q]:
     query = query.lower()
     queued = []
 
     for obj in walk_collection(collection, cls):
-        query = query.lower()
         name = get_name(obj).lower()
 
         if query in (name, get_key(obj)):
@@ -119,7 +119,7 @@ def query_collection(
             queued.append(obj)
 
     if queued:
-        return min(queued, key=lambda item: len(get_key(item)))
+        return min(queued, key=lambda item: (prioritizer(item), len(get_key(item))))
 
 
 def cutoff(string: str, /, max_length: int = 64, *, exact: bool = False) -> str:

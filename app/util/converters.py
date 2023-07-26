@@ -231,7 +231,7 @@ def query_crop(query: str, /) -> Item:
 
     if crop is None:
         raise BadArgument(f"I couldn't find a crop named {query!r}.")
-    if crop.type not in (ItemType.crop, ItemType.harvest):
+    if crop.type is not ItemType.crop:
         crop = query_item(crop.name + ' crop')
 
     if crop.type is ItemType.harvest and crop.metadata is not None:

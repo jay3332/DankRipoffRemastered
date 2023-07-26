@@ -667,8 +667,7 @@ class UserRecord:
 
     async def add_coins(self, coins: int, /, *, connection: asyncpg.Connection | None = None) -> int:
         """Adds coins including applying multipliers. Returns the amount of coins added."""
-        multiplier = 1 + self.prestige * 0.25
-        coins = round(coins * multiplier)
+        coins = round(coins * self.coin_multiplier)
 
         await self.add(wallet=coins, connection=connection)
         return coins
@@ -676,8 +675,7 @@ class UserRecord:
     async def add_exp(self, exp: int, /, *, connection: asyncpg.Connection | None = None) -> bool:
         """Return whether the user has leveled up."""
         old = self.level
-        multiplier = 1 + self.prestige * 0.25 + self.exp_multiplier
-        exp = round(exp * multiplier)
+        exp = round(exp * self.total_exp_multiplier)
         await self.add(exp=exp, connection=connection)
 
         if self.level > old:
@@ -704,8 +702,6 @@ class UserRecord:
             return 0
 
         amount = random.randint(minimum, maximum)
-        amount += round(amount * self.exp_multiplier)
-
         await self.add_exp(amount, connection=connection)
         return amount
 
@@ -781,8 +777,16 @@ class UserRecord:
         return self.level_data[2]
 
     @property
-    def exp_multiplier(self) -> float:
+    def base_exp_multiplier(self) -> float:
         return self.data['exp_multiplier']
+
+    @property
+    def total_exp_multiplier(self) -> float:
+        return 1 + self.prestige * 0.25 + self.base_exp_multiplier
+
+    @property
+    def coin_multiplier(self) -> float:
+        return 1 + self.prestige * 0.25
 
     @property
     def prestige(self) -> int:
