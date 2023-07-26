@@ -948,11 +948,14 @@ class PrestigeView(UserView):
                 )
             }
             await self.record.update(wallet=0, bank=0, max_bank=0, exp=0, prestige=self.next_prestige, connection=conn)
-            await self.record.inventory_manager.wipe(connection=conn)
+            inventory = self.record.inventory_manager
+            await inventory.wipe(connection=conn)
             await self.record.crop_manager.wipe_keeping_land(connection=conn)
 
             # Replenish promised items
-            await self.record.inventory_manager.update(**keep)
+            await inventory.update(**keep)
+            await inventory.add_item(Items.banknote, self.next_prestige, connection=conn)
+            await inventory.add_item(Items.legendary_crate, 1, connection=conn)
 
         self.stop()
         await view.interaction.response.send_message(
