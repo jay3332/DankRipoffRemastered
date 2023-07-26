@@ -80,6 +80,18 @@ class Database(_Database):
         self.user_records: dict[int, UserRecord] = {}
         self.bot: Bot = bot
 
+        # FIXME: for now, fetch all users and cache them
+        #  since there aren't that many records to fetch.
+        #  if we ever have to scale, we can remove the following line.
+        bot.loop.create_task(self.register_all_records())
+
+    async def register_all_records(self) -> None:
+        query = 'SELECT * FROM users'
+        for data in await self.fetch(query):
+            user_id = data['user_id']
+            self.user_records[user_id] = record = UserRecord(user_id, db=self)
+            record.data.update(data)
+
     @overload
     def get_user_record(self, user_id: int, *, fetch: Literal[True] = True) -> Awaitable[UserRecord]:
         ...
