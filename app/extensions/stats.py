@@ -102,6 +102,7 @@ class Stats(Cog):
         details = []
         if data.base_exp_multiplier:
             details.append(f'- Base Multiplier\\*: +**{data.base_exp_multiplier:.1%}** (global)')
+            embed.set_footer(text='* This multiplier is accumulated from using items like cheese')
         if data.prestige:
             details.append(f'- Prestige {data.prestige}: +**{data.prestige * 25}%** (global)')
         if ctx.guild.id in multiplier_guilds:
@@ -112,7 +113,6 @@ class Stats(Cog):
             value='\n'.join(details) or 'No XP multipliers applied.',
             inline=False
         )
-        embed.set_footer(text='\\*This multiplier is accumulated from using items like cheese')
 
         # Coin Multi
         details = []
