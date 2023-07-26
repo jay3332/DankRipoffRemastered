@@ -686,7 +686,7 @@ class Transactions(Cog):
         return embed, REPLY
 
     @command(aliases={'giveaway'})
-    @simple_cooldown(1, 4)
+    @simple_cooldown(1, 30)
     @user_max_concurrency(1)
     @lock_transactions
     async def drop(self, ctx: Context, *, entity: DropAmount | ItemAndQuantityConverter(DROP)):
