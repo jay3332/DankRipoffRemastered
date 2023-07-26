@@ -26,7 +26,7 @@ from app.core import (
 from app.core.helpers import cooldown_message
 from app.data.items import Item, Items
 from app.data.skills import RobberyTrainingButton
-from app.util.common import humanize_list, insert_random_u200b, progress_bar
+from app.util.common import humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
 from app.util.views import AnyUser, UserView
@@ -1133,6 +1133,7 @@ class Profit(Cog):
     @command(aliases={'dv', 'submerge'})
     @user_max_concurrency(1)
     @lock_transactions
+    @simple_cooldown(1, 60)
     @cooldown_message("You're too tired out from diving.")
     async def dive(self, ctx: Context) -> CommandResponse:
         """Dive underwater for treasure!
@@ -1623,9 +1624,10 @@ class DivingView(UserView):
         self._multipliers_applied: bool = False
         self._items: defaultdict[Item, int] = defaultdict()
 
-    def make_embed(self, *, message: str | None = None, error: bool = False) -> discord.Embed:
+    def make_embed(self, *, message: str | None = None, error: bool = False, emoji: str = '\u23ec') -> discord.Embed:
         embed = discord.Embed(color=Colors.warning, timestamp=self.ctx.now)
         embed.set_author(name=f'{self.ctx.author.name}: Diving', icon_url=self.ctx.author.avatar.url)
+        embed.set_thumbnail(url=image_url_from_emoji(emoji))
 
         embed.add_field(name='Depth', value=f'{self._depth}m' if self._depth else 'Surface')
         embed.add_field(
@@ -1705,7 +1707,7 @@ class DivingView(UserView):
     }
 
     @discord.ui.button(label='Dive Deeper', style=discord.ButtonStyle.primary, emoji='\u23ec')
-    async def dive_deeper(self, interaction: TypedInteraction, _):
+    async def dive_deeper(self, interaction: TypedInteraction, _) -> None:
         self._depth += 50
         self._oxygen -= random.randint(5, 15)
 
@@ -1719,7 +1721,7 @@ class DivingView(UserView):
         # general loss chance
         if random.random() < 0.03:  # this number will change based on submarine
             return await self.make_dead(interaction, random.choice(self.DEATH_MESSAGES))
-        if random.random() < 0.15:  # this number will change based on submarine
+        if random.random() < 0.14:  # this number will change based on submarine
             return await self.suspend(interaction, random.choice(self.LOSS_MESSAGES))
 
         profit = random.randint(100, 250)
@@ -1727,7 +1729,7 @@ class DivingView(UserView):
 
         found = f'{Emojis.coin} **{profit:,}**'
 
-        if random.random() < 0.15:  # item chance. this number will change based on submarine
+        if random.random() < 0.2:  # item chance. this number will change based on submarine
             item = random.choices(list(self.ITEMS.keys()), weights=list(self.ITEMS.values()))[0]
             self._items[item] += 1
             found += f' and {item.get_sentence_chunk(bold=True)}'
@@ -1736,7 +1738,7 @@ class DivingView(UserView):
         await interaction.response.edit_message(embed=self.make_embed(message=message))
 
     @discord.ui.button(label='Surface', style=discord.ButtonStyle.success, emoji='\u23eb')
-    async def surface(self, interaction: TypedInteraction, _):
+    async def surface(self, interaction: TypedInteraction, button: discord.ui.Button):
         self._profit = await self.record.add_coins(self._profit)
         self._multipliers_applied = True
 
@@ -1744,7 +1746,10 @@ class DivingView(UserView):
             for item, quantity in self._items.items():
                 await self.record.inventory_manager.add_item(item, quantity, connection=conn)
 
-        embed = self.make_embed(message='You come back up to the surface safely. Your dive was successful!')
+        embed = self.make_embed(
+            message='You come back up to the surface safely. Your dive was successful!',
+            emoji=str(button.emoji),
+        )
         embed.colour = Colors.success
 
         self.stop()
