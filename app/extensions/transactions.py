@@ -947,7 +947,9 @@ class PrestigeView(UserView):
                     or item.rarity is ItemRarity.mythic
                 )
             }
-            await self.record.update(wallet=0, bank=0, max_bank=0, exp=0, prestige=self.next_prestige, connection=conn)
+            await self.record.update(
+                wallet=0, bank=0, max_bank=100, exp=0, prestige=self.next_prestige, connection=conn,
+            )
             inventory = self.record.inventory_manager
             await inventory.wipe(connection=conn)
             await self.record.crop_manager.wipe_keeping_land(connection=conn)
