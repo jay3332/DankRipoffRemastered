@@ -868,17 +868,17 @@ class Transactions(Cog):
         )
         embed.set_author(name=f'Prestige: {ctx.author}', icon_url=ctx.author.avatar.url)
         embed.add_field(
-            name=f'Level **{record.level}**/{level_requirement} {_(meets_level)}',
-            value=progress_bar(record.level / level_requirement),
+            name=f'{_(meets_level)} Level **{record.level}**/{level_requirement}',
+            value=progress(record.level / level_requirement),
             inline=False,
         )
         embed.add_field(
-            name=f'Coins in Bank: {Emojis.coin} **{record.bank:,}**/{bank_requirement} {_(meets_bank)}',
-            value=progress_bar(record.bank / bank_requirement),
+            name=f'{_(meets_bank)} Coins in Bank: {Emojis.coin} **{record.bank:,}**/{bank_requirement}',
+            value=progress(record.bank / bank_requirement),
             inline=False,
         )
         embed.add_field(
-            name=f'Unique Items: {unique_items}/{unique_items_requirement} {_(meets_unique_items)}',
+            name=f'{_(meets_unique_items)} Unique Items: **{unique_items}**/{unique_items_requirement}',
             value=progress(unique_items / unique_items_requirement),
             inline=False,
         )
