@@ -9,7 +9,7 @@ from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group
 from app.data.items import Items
 from app.database import UserRecord
 from app.extensions.transactions import query_item_type
-from app.util.common import cutoff, progress_bar
+from app.util.common import cutoff, image_url_from_emoji, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
 from app.util.types import CommandResponse
@@ -97,6 +97,7 @@ class Stats(Cog):
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f"Multipliers: {ctx.author}", icon_url=ctx.author.avatar.url)
+        embed.set_thumbnail(url=image_url_from_emoji('\U0001f4c8'))
 
         # XP Multi
         details = []
