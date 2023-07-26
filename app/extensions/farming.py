@@ -383,6 +383,7 @@ class Farming(Cog):
         if not coordinates:
             return 'You must specify at least one coordinate to plant at.', BAD_ARGUMENT
 
+        coordinates = list(set(coordinates))
         record = await ctx.db.get_user_record(ctx.author.id)
         manager = await record.crop_manager.wait()
 
@@ -424,7 +425,7 @@ class Farming(Cog):
         if message is not None and not await ctx.confirm(message, delete_after=True, reference=ctx.message):
             return 'Alright, I guess not', BAD_ARGUMENT
 
-        await inventory.add_item(crop, -1)
+        await inventory.add_item(crop, -len(coordinates))
         await manager.plant_crop(coordinates, crop)
 
         ctx.bot.loop.create_task(ctx.thumbs())
