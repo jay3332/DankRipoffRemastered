@@ -754,7 +754,7 @@ class UserRecord:
 
     @property
     def bank_ratio(self) -> float:
-        return self.bank / self.max_bank
+        return self.max_bank and self.bank / self.max_bank
 
     @property
     def total_coins(self) -> int:
