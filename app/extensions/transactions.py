@@ -21,7 +21,7 @@ from app.core import (
     user_max_concurrency,
 )
 from app.core.flags import Flags, flag
-from app.data.items import Item, ItemType, Items
+from app.data.items import Item, ItemRarity, ItemType, Items
 from app.data.recipes import Recipe, Recipes
 from app.util.common import cutoff, get_by_key, image_url_from_emoji, progress_bar, query_collection, walk_collection
 from app.util.converters import (
@@ -41,7 +41,7 @@ from app.util.converters import (
     query_recipe,
 )
 from app.util.pagination import FieldBasedFormatter, Paginator
-from app.util.views import UserView
+from app.util.views import ConfirmationView, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -824,16 +824,19 @@ class Transactions(Cog):
     PRESTIGE_WHAT_DO_I_LOSE = (
         '- Your wallet, bank, and bank space will be wiped.\n'
         '- Your level will be reset.\n'
-        '- Your inventory will be wiped, except for collectibles and the choice of one single item.\n'
+        '- Your inventory will be wiped, except for:\n'
+        '  - Any collectibles,\n'
+        '  - Any crates, and\n'
+        '  - Any items of **Mythic** rarity.\n'
         '- All crops will be wiped on your farm, however you will keep all claimed land.\n'
     )
     PRESTIGE_WHAT_DO_I_KEEP = (
-        '- Any collectibles in your inventory and the choice of one single item.\n'
-        '- All claimed land on your farm.\n'
-        '- All skills and training progress.\n'
-        '- All pets and their levels.\n'
-        '- All crafting recipes you have discovered.\n'
-        '- Non-tangible items such as notifications and cooldowns.'
+        '- You keep the aforementioned subset of items in your inventory,\n'
+        '- All claimed land on your farm,\n'
+        '- All skills and training progress,\n'
+        '- All pets and their levels,\n'
+        '- All crafting recipes you have discovered, and\n'
+        '- Any non-tangible entities such as notifications and cooldowns.'
     )
 
     @command(aliases={'pres', 'pr', 'prest', 'rebirth'})
@@ -908,16 +911,48 @@ class PrestigeView(UserView):
         self.prestige.emoji = self.emoji = Emojis.get_prestige_emoji(next_prestige)
 
     @discord.ui.button(label='Prestige!', style=discord.ButtonStyle.primary)
-    async def prestige(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+    async def prestige(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:
+        receive = (
+            f'- {Items.banknote.get_sentence_chunk(self.next_prestige)},\n'
+            f'- {Items.legendary_crate.get_sentence_chunk()},\n'
+            f'- {self.next_prestige * 50}% faster bank space gain,\n'
+            f'- {self.next_prestige * 25}% XP multiplier,\n'
+            f'- {self.next_prestige * 25}% coin multiplier, and\n'
+            f'- {self.emoji} **Prestige {self.next_prestige}** badge'
+        )
         message = (
-            f'You are about to prestige to {self.emoji} **Prestige {self.next_prestige}**.\n'
-            f'Prestiging is \n\n'
+            f'You are about to prestige to {self.emoji} **Prestige {self.next_prestige}**!\n\n'
+            'Prestiging is required to get far into the economy. '
+            'With it, you gain perks, multipliers, and increased limits that are unobtainable without doing so.\n'
             '## What will I lose?\n'
-            f'{Transactions.PRESTIGE_WHAT_DO_I_LOSE}\n\n'
+            f'{Transactions.PRESTIGE_WHAT_DO_I_LOSE}\n'
             '## What will I keep?\n'
-            f'{Transactions.PRESTIGE_WHAT_DO_I_KEEP}\n\n'
-            '## What will I get in exchange for prestiging?\n'
-            '- '
+            f'{Transactions.PRESTIGE_WHAT_DO_I_KEEP}\n'
+            f'## What will I get in exchange for prestiging?\n{receive}'
+        )
+        view = ConfirmationView(user=self.ctx.author, true="Yes, let's prestige!", false='Maybe next time', timeout=120)
+        if not await self.ctx.confirm(message, interaction=interaction, view=view):
+            return
+
+        async with self.ctx.db.acquire() as conn:
+            keep = {
+                item.key: quantity
+                for item, quantity in self.inventory.cached.items()
+                if quantity > 0 and (
+                    item.type in (ItemType.collectible, ItemType.crate)
+                    or item.rarity is ItemRarity.mythic
+                )
+            }
+            await self.record.update(wallet=0, bank=0, max_bank=0, exp=0, prestige=self.next_prestige, connection=conn)
+            await self.record.inventory_manager.wipe(connection=conn)
+            await self.record.crop_manager.wipe_keeping_land(connection=conn)
+
+            # Replenish promised items
+            await self.record.inventory_manager.update(**keep)
+
+        await view.interaction.response.send_message(
+            f'\U0001f389 What a legend, after prestiging you are now {self.emoji} **Prestige {self.next_prestige}**.\n'
+            f'## You have received:\n{receive}'
         )
 
 

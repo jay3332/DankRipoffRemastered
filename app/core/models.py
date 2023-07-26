@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from app.core.bot import Bot
     from app.database import Database
-    from app.util.types import AsyncCallable
+    from app.util.types import AsyncCallable, TypedInteraction
 
 
 class Context(TypedContext):
@@ -68,6 +68,7 @@ class Context(TypedContext):
         *,
         delete_after: bool = False,
         view: ConfirmationView = None,
+        interaction: TypedInteraction = None,
         user: AnyUser = None,
         timeout: float = 60.,
         true: str = 'Yes',
@@ -76,13 +77,20 @@ class Context(TypedContext):
     ) -> bool:
         user = user or self.author
         view = view or ConfirmationView(user=user, true=true, false=false, timeout=timeout)
-        message = await self.send(content, view=view, **kwargs)
+        message = None
+        if interaction is not None:
+            await interaction.response.send_message(content, view=view, **kwargs)
+        else:
+            message = await self.send(content, view=view, **kwargs)
 
         await view.wait()
-        if delete_after:
-            await message.delete(delay=0)
+        if interaction is None:
+            if delete_after:
+                await message.delete(delay=0)
+            else:
+                await message.edit(view=view)
         else:
-            await message.edit(view=view)
+            await interaction.edit_original_response(view=view)
 
         return view.value
 

@@ -1,6 +1,11 @@
-from typing import Awaitable, Callable, TypeAlias
+from __future__ import annotations
+
+from typing import Awaitable, Callable, TypeAlias, TYPE_CHECKING
 
 import discord
+
+if TYPE_CHECKING:
+    from app.util.types import TypedInteraction
 
 AnyUser: TypeAlias = discord.User | discord.Member
 
@@ -29,12 +34,13 @@ class ConfirmationView(UserView):
 
         self._true_button.callback = self._make_callback(True)
         self._false_button.callback = self._make_callback(False)
+        self.interaction: TypedInteraction | None = None
 
         self.add_item(self._true_button)
         self.add_item(self._false_button)
 
     def _make_callback(self, toggle: bool) -> Callable[[discord.Interaction], Awaitable[None]]:
-        async def callback(_: discord.Interaction) -> None:
+        async def callback(itx: discord.Interaction) -> None:
             self.value = toggle
             self._true_button.disabled = True
             self._false_button.disabled = True
@@ -43,6 +49,8 @@ class ConfirmationView(UserView):
                 self._false_button.style = discord.ButtonStyle.secondary
             else:
                 self._true_button.style = discord.ButtonStyle.secondary
+
+            self.interaction = itx
             self.stop()
 
         return callback

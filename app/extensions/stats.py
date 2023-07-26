@@ -8,6 +8,7 @@ import discord
 from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
 from app.data.items import Items
 from app.database import UserRecord
+from app.extensions.transactions import query_item_type
 from app.util.common import cutoff, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
@@ -142,10 +143,15 @@ class Stats(Cog):
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY, NO_EXTRA if ctx.author != user else None
 
-    @command(aliases={"itembook", "uniqueitems", "discovered"})
+    @command(aliases={"itembook", "uniqueitems", "discovered", "ib"})
     @simple_cooldown(2, 6)
-    async def book(self, ctx: Context, rarity: Literal['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'all'] = 'all'):
-        """View a summary of all of the unique items you have discovered (and what you are missing)."""
+    async def book(
+        self,
+        ctx: Context,
+        rarity: Literal['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'all'] | None = 'all',
+        category: query_item_type = None,
+    ):
+        """View a summary of all unique items you have discovered (and what you are missing)."""
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = await record.inventory_manager.wait()
         quantity = inventory.cached.quantity_of
@@ -154,7 +160,9 @@ class Stats(Cog):
 
         lines = [
             f'{item.get_display_name(bold=quantity(item) > 0)} ({item.rarity.name.title()}) x{quantity(item):,}'
-            for item in Items.all() if rarity in ('all', item.rarity.name.lower())
+            for item in Items.all()
+            if rarity in ('all', item.rarity.name.lower())
+            and (category is None or item.type is category)
         ]
 
         count = sum(quantity > 0 for quantity in inventory.cached.values())

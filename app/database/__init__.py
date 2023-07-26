@@ -165,6 +165,22 @@ class InventoryManager:
         row = await (connection or self._record.db).fetchrow(query, self._record.user_id, str(item), amount)
         self.cached[item] = row['count']
 
+    async def update(self, *, connection: asyncpg.Connection | None = None, **items: int) -> None:
+        await self.wait()
+
+        query = """
+                INSERT INTO items (user_id, item, count) VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, item) DO UPDATE SET count = $3
+                """
+
+        await (connection or self._record.db).executemany(
+            query,
+            [(self._record.user_id, k, v) for k, v in items.items()],
+        )
+        # update is not atomic, so we have to do this
+        for k, v in items.items():
+            self.cached[k] = v
+
     async def wipe(self, *, connection: asyncpg.Connection | None = None) -> None:
         await self.wait()  # this is so the cache isn't prone to data races
 
@@ -391,7 +407,7 @@ class CooldownManager:
 class CropInfo(NamedTuple):
     x: int
     y: int
-    crop: Item[CropMetadata]
+    crop: Item[CropMetadata] | None
     exp: int
     last_harvest: datetime.datetime | None
     created_at: datetime.datetime
@@ -575,6 +591,18 @@ class CropManager:
 
         await self._record.db.execute(query, self._record.user_id, x, y)
         self.cached.pop((x, y), None)
+
+    async def wipe_keeping_land(self, connection: asyncpg.Connection | None = None) -> None:
+        await self.wait()
+
+        query = """
+                UPDATE crops SET crop = NULL, exp = 0, last_harvest = NULL
+                WHERE user_id = $1;
+                """
+
+        await (connection or self._record.db).execute(query, self._record.user_id)
+        for k in self.cached:
+            self.cached[k] = self.cached[k]._replace(crop=None, exp=0, last_harvest=None)
 
 
 class UserRecord:

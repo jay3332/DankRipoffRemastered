@@ -327,6 +327,7 @@ class Items:
         price=500_000,
         rarity=ItemRarity.epic,
         buyable=True,
+        sellable=False,
     )
 
     key = Item(
@@ -360,7 +361,7 @@ class Items:
     )
 
     stick = Item(
-        type=ItemType.collectible,
+        type=ItemType.miscellaneous,
         key='stick',
         name='Stick',
         emoji='<:stick:939923767344394240>',
@@ -387,7 +388,7 @@ class Items:
         await ctx.invoke(ctx.bot.get_command('chop'))
 
     dirt = Item(
-        type=ItemType.collectible,
+        type=ItemType.miscellaneous,
         key='dirt',
         name='Dirt',
         emoji='<:dirt:939297925283086396>',
@@ -1127,7 +1128,7 @@ class Items:
         key='cotton_ball',
         name='Cotton Ball',
         emoji='<:cottonball:1132871115014950964>',
-        description='A ball of cotton, grown from the cottom crop.',
+        description='A ball of cotton, grown from the cotton crop.',
         sell=185,
         metadata=HarvestMetadata(lambda: Items.cotton_crop),
     )
@@ -1178,7 +1179,7 @@ class Items:
 
     nineteen_dollar_fortnite_card = Item(
         type=ItemType.collectible,
-        key='19_dollar_fortnite_card',
+        key='nineteen_dollar_fortnite_card',
         name='19 Dollar Fortnite Card',
         emoji='<a:19dollar:1133500138959163442>',
         description=(
