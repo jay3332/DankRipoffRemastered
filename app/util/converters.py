@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import functools
 import re
-from typing import Literal, NamedTuple, Type, TYPE_CHECKING
+from typing import Callable, Literal, NamedTuple, Type, TYPE_CHECKING
 
 import discord
 from discord.ext.commands import BadArgument, Converter, MemberConverter, MemberNotFound
@@ -143,22 +144,22 @@ USE = 'use'
 DROP = 'drop'
 
 
-def parse_quantity_and_item(argument) -> tuple[Item | None, str]:
+def parse_quantity_and_item(argument: str, **kwargs) -> tuple[Item | None, str]:
     item: Item | None = None
     quantity = '1'
 
-    if result := try_query_item(argument):
+    if result := try_query_item(argument, **kwargs):
         item = result
 
     elif len(split := argument.split()) > 1:
         result, quantity = ' '.join(split[:-1]), split[-1]
 
-        if result := try_query_item(result):
+        if result := try_query_item(result, **kwargs):
             item = result
 
         if not item:
             result, quantity = ' '.join(split[1:]), split[0]
-            if result := try_query_item(result):
+            if result := try_query_item(result, **kwargs):
                 item = result
 
     return item, quantity
@@ -167,7 +168,8 @@ def parse_quantity_and_item(argument) -> tuple[Item | None, str]:
 def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemAndQuantity]:
     class Wrapper(Converter):
         async def convert(self, ctx: Context, argument: str) -> ItemAndQuantity:
-            item, quantity = parse_quantity_and_item(argument)
+            kwargs = {'prioritizer': lambda it: it.buyable} if method == BUY else {}
+            item, quantity = parse_quantity_and_item(argument, **kwargs)
 
             if not item:
                 raise BadArgument(f'Item "{argument}" not found.')
@@ -216,8 +218,11 @@ def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemA
     return Wrapper
 
 
-def query_item(query: str, /) -> Item:
-    if match := query_collection(Items, Item, query):
+try_query_item = functools.partial(query_collection, Items, Item)
+
+
+def query_item(query: str, /, *, prioritizer: Callable[[Item], int] = lambda _: 0) -> Item:
+    if match := try_query_item(query, prioritizer=prioritizer):
         return match
 
     raise BadArgument(f"I couldn't find a item named {query!r}.")
@@ -241,13 +246,6 @@ def query_crop(query: str, /) -> Item:
         raise BadArgument(f'{crop.name} is not a crop.')
 
     return crop
-
-
-def try_query_item(query: str, /) -> Item | None:
-    try:
-        return query_item(query)
-    except BadArgument:
-        return None
 
 
 def query_skill(query: str, /) -> Skill:

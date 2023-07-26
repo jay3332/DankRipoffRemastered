@@ -100,7 +100,7 @@ def query_collection(
     *,
     get_key: Callable[[Q], str] = lambda item: item.key,
     get_name: Callable[[Q], str] = lambda item: item.name,
-    prioritizer: Callable[[Q], int] = lambda _: 0,
+    prioritizer: Callable[[Q], int] = lambda _: 0,  # higher priority = more favorable
 ) -> Optional[Q]:
     query = query.lower()
     queued = []
@@ -119,7 +119,7 @@ def query_collection(
             queued.append(obj)
 
     if queued:
-        return min(queued, key=lambda item: (prioritizer(item), len(get_key(item))))
+        return min(queued, key=lambda item: (-prioritizer(item), len(get_key(item))))
 
 
 def cutoff(string: str, /, max_length: int = 64, *, exact: bool = False) -> str:
