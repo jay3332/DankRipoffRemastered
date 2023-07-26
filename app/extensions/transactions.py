@@ -935,6 +935,7 @@ class PrestigeView(UserView):
         )
         view = ConfirmationView(user=self.ctx.author, true="Yes, let's prestige!", false='Maybe next time', timeout=120)
         if not await self.ctx.confirm(message, interaction=interaction, view=view):
+            self.stop()
             return await view.interaction.response.send_message('Okay, we will postpone your prestige.', ephemeral=True)
 
         async with self.ctx.db.acquire() as conn:
@@ -953,6 +954,7 @@ class PrestigeView(UserView):
             # Replenish promised items
             await self.record.inventory_manager.update(**keep)
 
+        self.stop()
         await view.interaction.response.send_message(
             f'\U0001f389 What a legend, after prestiging you are now {self.emoji} **Prestige {self.next_prestige}**.\n'
             f'## You have received:\n{receive}'
