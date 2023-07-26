@@ -823,7 +823,6 @@ class Transactions(Cog):
 
     PRESTIGE_WHAT_DO_I_LOSE = (
         '- Your wallet, bank, and bank space will be wiped.\n'
-        '- Your level will be reset.\n'
         '- Your inventory will be wiped, except for:\n'
         '  - Any collectibles,\n'
         '  - Any crates, and\n'
@@ -843,7 +842,7 @@ class Transactions(Cog):
     @simple_cooldown(1, 10)
     @lock_transactions
     async def prestige(self, ctx: Context) -> CommandResponse:
-        """Prestige and start over with a brand-new wallet, bank, and level in exchange for long-term multipliers."""
+        """Prestige and start over with a brand-new wallet, bank, and inventory in exchange for long-term multipliers."""
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = await record.inventory_manager.wait()
 
@@ -948,7 +947,7 @@ class PrestigeView(UserView):
                 )
             }
             await self.record.update(
-                wallet=0, bank=0, max_bank=100, exp=0, prestige=self.next_prestige, connection=conn,
+                wallet=0, bank=0, max_bank=100, prestige=self.next_prestige, connection=conn,
             )
             inventory = self.record.inventory_manager
             await inventory.wipe(connection=conn)
