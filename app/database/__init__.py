@@ -664,7 +664,8 @@ class UserRecord:
 
     async def add_coins(self, coins: int, /, *, connection: asyncpg.Connection | None = None) -> int:
         """Adds coins including applying multipliers. Returns the amount of coins added."""
-        coins = round(coins)
+        multiplier = 1 + self.prestige * 0.25
+        coins = round(coins * multiplier)
 
         await self.add(wallet=coins, connection=connection)
         return coins
@@ -672,6 +673,8 @@ class UserRecord:
     async def add_exp(self, exp: int, /, *, connection: asyncpg.Connection | None = None) -> bool:
         """Return whether the user has leveled up."""
         old = self.level
+        multiplier = 1 + self.prestige * 0.25 + self.exp_multiplier
+        exp = round(exp * multiplier)
         await self.add(exp=exp, connection=connection)
 
         if self.level > old:
@@ -688,7 +691,9 @@ class UserRecord:
         if random.random() > chance:
             return 0
 
-        await self.add(max_bank=(amount := random.randint(minimum, maximum)), connection=connection)
+        multiplier = 1 + self.prestige * 0.5
+        amount = round(random.randint(minimum, maximum) * multiplier)
+        await self.add(max_bank=amount, connection=connection)
         return amount
 
     async def add_random_exp(self, minimum: int, maximum: int, *, chance: float = 1, connection: asyncpg.Connection | None = None) -> int:
