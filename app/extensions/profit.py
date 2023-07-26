@@ -1677,7 +1677,7 @@ class DivingView(UserView):
 
         See <https://www.desmos.com/calculator/bors91xu3x>
         """
-        k = 0.625  # this constant will change based on submarine
+        k = 0.46  # this constant will change based on submarine
         return -1 / (0.02 * self._depth ** k + 1) + 1
 
     LOSS_MESSAGES = (
@@ -1712,7 +1712,7 @@ class DivingView(UserView):
         if self._oxygen <= 0:
             return await self.make_dead(interaction, 'You ran out of oxygen and drowned. You died.')
         # death due to pressure:
-        if self._depth > 50 and random.random() > self.calculate_pressure_chance():
+        if self._depth > 50 and random.random() < self.calculate_pressure_chance():
             return await self.make_dead(
                 interaction, 'You dive a bit too deep and the water pressure crushes you. You died.',
             )
