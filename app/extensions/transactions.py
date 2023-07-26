@@ -828,7 +828,7 @@ class Transactions(Cog):
         '  - Any collectibles,\n'
         '  - Any crates, and\n'
         '  - Any items of **Mythic** rarity.\n'
-        '- All crops will be wiped on your farm, however you will keep all claimed land.\n'
+        '- All crops will be wiped on your farm, however you will keep all claimed land.'
     )
     PRESTIGE_WHAT_DO_I_KEEP = (
         '- You keep the aforementioned subset of items in your inventory,\n'
@@ -935,7 +935,7 @@ class PrestigeView(UserView):
         )
         view = ConfirmationView(user=self.ctx.author, true="Yes, let's prestige!", false='Maybe next time', timeout=120)
         if not await self.ctx.confirm(message, interaction=interaction, view=view):
-            return
+            return await view.interaction.response.send_message('Okay, we will postpone your prestige.', ephemeral=True)
 
         async with self.ctx.db.acquire() as conn:
             keep = {
