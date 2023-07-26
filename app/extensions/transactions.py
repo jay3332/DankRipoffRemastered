@@ -857,7 +857,7 @@ class Transactions(Cog):
         meets_bank = record.bank >= bank_requirement
 
         unique_items = sum(value > 0 for value in inventory.cached.values())
-        unique_items_requirement = min(30 + next_prestige * 2, len(list(Items.all())) - 2)
+        unique_items_requirement = min(48 + next_prestige * 2, len(list(Items.all())) - 2)
         meets_unique_items = unique_items >= unique_items_requirement
 
         _ = lambda b: Emojis.enabled if b else Emojis.disabled
