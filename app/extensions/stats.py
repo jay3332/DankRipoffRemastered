@@ -100,8 +100,8 @@ class Stats(Cog):
 
         # XP Multi
         details = []
-        if data.base_exp_multiplier > 1:
-            details.append(f'- Base Multiplier\\*: +**{data.base_exp_multiplier - 1:.1%}** (global)')
+        if data.base_exp_multiplier:
+            details.append(f'- Base Multiplier\\*: +**{data.base_exp_multiplier:.1%}** (global)')
         if data.prestige:
             details.append(f'- Prestige {data.prestige}: +**{data.prestige * 25}%** (global)')
         if ctx.guild.id in multiplier_guilds:
