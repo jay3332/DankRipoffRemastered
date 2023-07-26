@@ -866,7 +866,7 @@ class Transactions(Cog):
             color=Colors.primary,
             timestamp=ctx.now,
             description=(
-                f'Current prestige level: {current_emoji} **{record.prestige}**.\n'
+                f'Current prestige level: {current_emoji} **{record.prestige}**\n'
                 f'Next prestige level: {next_emoji} **{next_prestige}**'
             ),
         )
