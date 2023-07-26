@@ -1758,5 +1758,9 @@ class DivingView(UserView):
 
         await interaction.response.edit_message(embed=embed, view=self)
 
+    async def on_timeout(self) -> None:
+        self.stop()
+        await self.ctx.maybe_edit(self.ctx.message, embed=self.make_embed(message='You ran out of time!'), view=self)
+
 
 setup = Profit.simple_setup
