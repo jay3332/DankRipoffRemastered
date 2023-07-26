@@ -1648,7 +1648,7 @@ class DivingView(UserView):
                 if self._multipliers_applied and self.record.coin_multiplier > 1 else ''
             )
             earnings.append(f'- {Emojis.coin} **{self._profit:,}**{with_multi}')
-        for item, quantity in self._items:
+        for item, quantity in self._items.items():
             earnings.append(f'- {item.get_display_name(bold=True)} x{quantity}')
 
         embed.insert_field_at(0, name='Earnings', value='\n'.join(earnings) or 'Nothing yet!', inline=False)
