@@ -60,7 +60,7 @@ class Stats(Cog):
         prestige_text = (
             f'{Emojis.get_prestige_emoji(data.prestige)} Prestige {data.prestige}' if data.prestige else 'Coins'
         )
-        embed.set_author(name=f"Balance: {user}", icon_url=image_url_from_emoji('\U0001f911'))
+        embed.set_author(name=f"Balance: {user}", icon_url=user.avatar)
         embed.add_field(name=prestige_text, value=dedent(f"""
             - Wallet: {Emojis.coin} **{data.wallet:,}**
             - Bank: {Emojis.coin} **{data.bank:,}**/{data.max_bank:,} *[{data.bank_ratio:.1%}]*
