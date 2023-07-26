@@ -1622,7 +1622,7 @@ class DivingView(UserView):
 
         self._profit: int = 0
         self._multipliers_applied: bool = False
-        self._items: defaultdict[Item, int] = defaultdict()
+        self._items: defaultdict[Item, int] = defaultdict(int)
 
     def make_embed(self, *, message: str | None = None, error: bool = False, emoji: str = '\u23ec') -> discord.Embed:
         embed = discord.Embed(color=Colors.warning, timestamp=self.ctx.now)
