@@ -1656,6 +1656,9 @@ class DivingView(UserView):
 
     async def suspend(self, interaction: TypedInteraction | None, message: str | None = None) -> None:
         self.stop()
+        for button in self.children:
+            button.disabled = True
+
         if interaction is not None:
             return await interaction.response.edit_message(
                 embed=self.make_embed(message=message, error=True), view=self,
