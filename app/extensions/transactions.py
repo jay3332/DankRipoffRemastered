@@ -23,7 +23,7 @@ from app.core import (
 from app.core.flags import Flags, flag
 from app.data.items import Item, ItemType, Items
 from app.data.recipes import Recipe, Recipes
-from app.util.common import cutoff, get_by_key, image_url_from_emoji, query_collection, walk_collection
+from app.util.common import cutoff, get_by_key, image_url_from_emoji, progress_bar, query_collection, walk_collection
 from app.util.converters import (
     BUY,
     BankTransaction,
@@ -820,6 +820,105 @@ class Transactions(Cog):
         )
 
         return embed, REPLY
+
+    PRESTIGE_WHAT_DO_I_LOSE = (
+        '- Your wallet, bank, and bank space will be wiped.\n'
+        '- Your level will be reset.\n'
+        '- Your inventory will be wiped, except for collectibles and the choice of one single item.\n'
+        '- All crops will be wiped on your farm, however you will keep all claimed land.\n'
+    )
+    PRESTIGE_WHAT_DO_I_KEEP = (
+        '- Any collectibles in your inventory and the choice of one single item.\n'
+        '- All claimed land on your farm.\n'
+        '- All skills and training progress.\n'
+        '- All pets and their levels.\n'
+        '- All crafting recipes you have discovered.\n'
+        '- Non-tangible items such as notifications and cooldowns.'
+    )
+
+    @command(aliases={'pres', 'pr', 'prest', 'rebirth'})
+    @simple_cooldown(1, 10)
+    async def prestige(self, ctx: Context) -> CommandResponse:
+        """Prestige and start over with a brand-new wallet, bank, and level in exchange for long-term multipliers."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+
+        current_emoji = Emojis.get_prestige_emoji(record.prestige, trailing_ws=True)
+        next_emoji = Emojis.get_prestige_emoji(next_prestige := record.prestige + 1, trailing_ws=True)
+
+        level_requirement = next_prestige * 20
+        meets_level = record.level >= level_requirement
+
+        bank_requirement = next_prestige * 50_000
+        meets_bank = record.bank >= bank_requirement
+
+        unique_items = sum(value > 0 for value in inventory.cached.values())
+        unique_items_requirement = max(30 + next_prestige * 2, len(list(Items.all())) - 2)
+        meets_unique_items = unique_items >= unique_items_requirement
+
+        _ = lambda b: Emojis.enabled if b else Emojis.disabled
+        progress = lambda ratio: f'{progress_bar(ratio)} ({max(ratio, 1.0):.1%})'
+        embed = discord.Embed(
+            color=Colors.primary,
+            timestamp=ctx.now,
+            description=(
+                f'Currently prestige level {current_emoji} **{record.prestige}**.\n'
+                f'Next prestige level: {next_emoji} **{next_prestige}**'
+            ),
+        )
+        embed.set_author(name=f'Prestige: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.add_field(
+            name=f'Level **{record.level}**/{level_requirement} {_(meets_level)}',
+            value=progress_bar(record.level / level_requirement),
+            inline=False,
+        )
+        embed.add_field(
+            name=f'Coins in Bank: {Emojis.coin} **{record.bank:,}**/{bank_requirement} {_(meets_bank)}',
+            value=progress_bar(record.bank / bank_requirement),
+            inline=False,
+        )
+        embed.add_field(
+            name=f'Unique Items: {unique_items}/{unique_items_requirement} {_(meets_unique_items)}',
+            value=progress(unique_items / unique_items_requirement),
+            inline=False,
+        )
+        if meets_level and meets_bank and meets_unique_items:
+            embed.set_footer(text='You meet all requirements to prestige!')
+            view = PrestigeView(ctx, record=record, next_prestige=next_prestige)
+            return embed, view, REPLY
+
+        view = discord.ui.View(timeout=1)  # timeout=0 gives weird problems
+        view.add_item(
+            discord.ui.Button(
+                label='You do not meet prestige requirements yet.',
+                style=discord.ButtonStyle.secondary,
+                disabled=True,
+            ),
+        )
+        return embed, view, REPLY
+
+
+class PrestigeView(UserView):
+    def __init__(self, ctx: Context, *, record: UserRecord, next_prestige: int) -> None:
+        super().__init__(ctx.author, timeout=60)
+        self.ctx = ctx
+        self.record: UserRecord = record
+        self.inventory: InventoryManager = record.inventory_manager
+        self.next_prestige = next_prestige
+        self.prestige.emoji = self.emoji = Emojis.get_prestige_emoji(next_prestige)
+
+    @discord.ui.button(label='Prestige!', style=discord.ButtonStyle.primary)
+    async def prestige(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        message = (
+            f'You are about to prestige to {self.emoji} **Prestige {self.next_prestige}**.\n'
+            f'Prestiging is \n\n'
+            '## What will I lose?\n'
+            f'{Transactions.PRESTIGE_WHAT_DO_I_LOSE}\n\n'
+            '## What will I keep?\n'
+            f'{Transactions.PRESTIGE_WHAT_DO_I_KEEP}\n\n'
+            '## What will I get in exchange for prestiging?\n'
+            '- '
+        )
 
 
 setup = Transactions.simple_setup

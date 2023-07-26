@@ -5,6 +5,13 @@ import os
 from asyncpg import Connection
 
 
+def migrations_key(file: str) -> int:
+    """Gets the timestamp from a migration file."""
+    if not file.endswith('.migration.sql'):
+        return -1
+    return int(file.removesuffix('.migration.sql').split('-')[-1])
+
+
 class Migrator:
     """Handles database migrations."""
 
@@ -67,7 +74,7 @@ class Migrator:
             # This ensures we are on a newline
             fp.seek(0, io.SEEK_END)
 
-            for file in os.listdir('./migrations'):
+            for file in sorted(os.listdir('./migrations'), key=migrations_key):
                 if file in migrated or not file.endswith('.sql'):
                     continue
                     

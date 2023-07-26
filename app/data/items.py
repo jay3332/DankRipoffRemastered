@@ -1176,6 +1176,19 @@ class Items:
         rarity=ItemRarity.rare,
     )
 
+    nineteen_dollar_fortnite_card = Item(
+        type=ItemType.collectible,
+        key='19_dollar_fortnite_card',
+        name='19 Dollar Fortnite Card',
+        emoji='<a:19dollar:1133500138959163442>',
+        description=(
+            'Okay, 19 dollar Fortnite card, who wants it? And yes, I\'m giving it away. Remember; share, share share. '
+            'And trolls, don\'t get blocked!'
+        ),
+        sell=50000,
+        rarity=ItemRarity.mythic,
+    )
+
     @classmethod
     def all(cls) -> Generator[Item, Any, Any]:
         """Lazily iterates through all items."""

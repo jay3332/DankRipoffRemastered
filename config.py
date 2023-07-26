@@ -87,6 +87,35 @@ class Emojis:
         '<:_:935228010062282752>',
     )
 
+    prestige = (
+        '',  # Index 0 is nothing
+        '<:prestige1:722846087622164560>',
+        '<:prestige2:722846800175956080>',
+        '<:prestige3:722847524427137125>',
+        '<:prestige4:722848108501008436>',
+        '<:prestige5:722849078794387547>',
+        '<:prestige6:722850899692880013>',
+        '<:prestige7:722853221755781200>',
+        '<:prestige8:722853234888146944>',
+        '<:prestige9:722853244606480505>',
+        '<:prestige10:722853256048541696>',
+        '<:prestige11:722961247305334874>',
+        '<:prestige12:722961494660218900>',
+        '<:prestige13:722966966603612201>',
+        '<:prestige14:722966985700409405>',
+        '<:prestige15:722966989307641876>',
+        '<:prestige16:723205927188299787>',
+        '<:prestige17:723205942635659325>',
+        '<:prestige18:723205964270141440>',
+        '<:prestige19:723205981927899266>',
+        '<:prestige20:723205998625423371>',
+    )
+
+    @classmethod
+    def get_prestige_emoji(cls, prestige: int, *, trailing_ws: bool = False) -> str:
+        base = cls.prestige[prestige] if prestige < len(cls.prestige) else cls.prestige[-1]
+        return base and f'{base} ' if trailing_ws else base
+
     class ProgressBars:
         left_empty = '<:_:937082616333602836>'
         left_low = '<:_:937082634046173194>'

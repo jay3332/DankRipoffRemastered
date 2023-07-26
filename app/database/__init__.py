@@ -165,6 +165,13 @@ class InventoryManager:
         row = await (connection or self._record.db).fetchrow(query, self._record.user_id, str(item), amount)
         self.cached[item] = row['count']
 
+    async def wipe(self, *, connection: asyncpg.Connection | None = None) -> None:
+        await self.wait()  # this is so the cache isn't prone to data races
+
+        query = 'DELETE FROM items WHERE user_id = $1'
+        await (connection or self._record.db).execute(query, self._record.user_id)
+        self.cached.clear()
+
 
 class Notification(NamedTuple):
     created_at: datetime.datetime
@@ -573,7 +580,7 @@ class CropManager:
 class UserRecord:
     """Stores data about a user."""
 
-    LEVELING_CURVE = dict(base=100, factor=1.26)
+    LEVELING_CURVE = dict(base=100, factor=1.22)
 
     def __init__(self, user_id: int, *, db: Database) -> None:
         self.db: Database = db
@@ -740,6 +747,10 @@ class UserRecord:
     @property
     def exp_multiplier(self) -> float:
         return self.data['exp_multiplier']
+
+    @property
+    def prestige(self) -> int:
+        return self.data['prestige']
 
     @property
     def padlock_active(self) -> bool:

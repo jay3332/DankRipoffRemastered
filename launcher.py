@@ -21,7 +21,7 @@ async def run_migrations() -> None:
 
 if __name__ == '__main__':
     match argv:
-        case [_, 'migrate' | 'm' | 'migration' | 'migrations', *args]:
+        case [_, 'migrate' | 'm' | 'mig' | 'migration' | 'migrations', *args]:
             match args:
                 case ['add' | 'new' | 'create' | '+', name]:
                     Migrator.create_migration(name)
