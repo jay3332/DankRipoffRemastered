@@ -841,6 +841,7 @@ class Transactions(Cog):
 
     @command(aliases={'pres', 'pr', 'prest', 'rebirth'})
     @simple_cooldown(1, 10)
+    @lock_transactions
     async def prestige(self, ctx: Context) -> CommandResponse:
         """Prestige and start over with a brand-new wallet, bank, and level in exchange for long-term multipliers."""
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -888,7 +889,9 @@ class Transactions(Cog):
         if meets_level and meets_bank and meets_unique_items:
             embed.set_footer(text='You meet all requirements to prestige!')
             view = PrestigeView(ctx, record=record, next_prestige=next_prestige)
-            return embed, view, REPLY
+            yield embed, view, REPLY
+            await view.wait()
+            return
 
         view = discord.ui.View(timeout=1)  # timeout=0 gives weird problems
         view.add_item(
@@ -898,7 +901,7 @@ class Transactions(Cog):
                 disabled=True,
             ),
         )
-        return embed, view, REPLY
+        yield embed, view, REPLY
 
 
 class PrestigeView(UserView):
