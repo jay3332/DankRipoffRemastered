@@ -607,6 +607,15 @@ class Items:
         sell=6500,
     )
 
+    eel = Fish(
+        key='eel',
+        name='Eel',
+        emoji='<:eel:1133878774706995262>',
+        description='A long fish that is commonly found in the ocean. These are not obtainable from fishing.',
+        rarity=ItemRarity.mythic,
+        sell=35000,
+    )
+
     wood = Wood(
         key='wood',
         name='Wood',

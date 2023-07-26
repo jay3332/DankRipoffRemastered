@@ -3,14 +3,13 @@ from __future__ import annotations
 import asyncio
 import datetime
 import random
-from collections import deque
+from collections import defaultdict, deque
 from datetime import timedelta
 from html import unescape
 from textwrap import dedent
-from typing import Any, Generic, Literal, NamedTuple, TypeVar
+from typing import Any, Generic, Literal, NamedTuple, TypeVar, TYPE_CHECKING
 
 import discord
-import requests
 
 from app.core import (
     BAD_ARGUMENT,
@@ -27,12 +26,15 @@ from app.core import (
 from app.core.helpers import cooldown_message
 from app.data.items import Item, Items
 from app.data.skills import RobberyTrainingButton
-from app.util.common import humanize_list, insert_random_u200b
+from app.util.common import humanize_list, insert_random_u200b, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
-from app.util.types import TypedInteraction
 from app.util.views import AnyUser, UserView
 from config import Colors, Emojis
+
+if TYPE_CHECKING:
+    from app.database import UserRecord
+    from app.util.types import CommandResponse, TypedInteraction
 
 
 class SearchArea(NamedTuple):
@@ -1128,6 +1130,22 @@ class Profit(Cog):
 
         yield f'Wrong, the correct answer was **{question.correct_answer}**', REPLY
 
+    @command(aliases={'dv', 'submerge'})
+    @user_max_concurrency(1)
+    @lock_transactions
+    @cooldown_message("You're too tired out from diving.")
+    async def dive(self, ctx: Context) -> CommandResponse:
+        """Dive underwater for treasure!
+
+        The deeper you dive, the more likely you are to either lose all earnings, or die from water pressure or drowning.
+        """
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.inventory_manager.wait()
+
+        view = DivingView(ctx, record=record)
+        yield view, REPLY
+        await view.wait()
+
     @command(aliases={'da', 'day'})
     @database_cooldown(86_400)
     @user_max_concurrency(1)
@@ -1470,7 +1488,7 @@ class ChopView(UserView):
 
 
 class TriviaButton(discord.ui.Button['TriviaView']):
-    async def callback(self, interaction: discord.Interaction) -> None:
+    async def callback(self, interaction: TypedInteraction) -> None:
         self.view.choice = self.label
 
         color = Colors.success if self.view.correct == self.label else Colors.error
@@ -1567,7 +1585,7 @@ class RobbingKeypad(discord.ui.View):
         self.add_item(self.submit_button)
         self.add_item(self.catch_button)
 
-    async def clear_callback(self, interaction: discord.Interaction) -> None:
+    async def clear_callback(self, interaction: TypedInteraction) -> None:
         if interaction.user != self.ctx.author:
             return await interaction.response.send_message('nope', ephemeral=True)
 
@@ -1590,6 +1608,147 @@ class RobbingKeypad(discord.ui.View):
         self.caught = True
         self.dangling_interaction = interaction
         self.stop()
+
+
+class DivingView(UserView):
+    def __init__(self, ctx: Context, *, record: UserRecord) -> None:
+        self.record = record
+        self.ctx = ctx
+        super().__init__(ctx.author, timeout=30)
+
+        self._depth: int = 0
+        self._oxygen: int = 50
+
+        self._profit: int = 0
+        self._multipliers_applied: bool = False
+        self._items: defaultdict[Item, int] = defaultdict()
+
+    def make_embed(self, *, message: str | None = None, error: bool = False) -> discord.Embed:
+        embed = discord.Embed(color=Colors.warning, timestamp=self.ctx.now)
+        embed.set_author(name=f'{self.ctx.author.name}: Diving', icon_url=self.ctx.author.avatar.url)
+
+        embed.add_field(name='Depth', value=f'{self._depth}m' if self._depth else 'Surface')
+        embed.add_field(name='Oxygen', value=f'{progress_bar(self._oxygen / 50, length=6)} {max(0, self._oxygen):,}/50')
+
+        if message is not None:
+            embed.description = message
+        if error:
+            embed.colour = Colors.error
+            return embed
+
+        earnings = []
+        if self._profit:
+            with_multi = (
+                f' (applied {self.record.coin_multiplier - 1:.1%} coin multiplier)'
+                if self._multipliers_applied and self.record.coin_multiplier > 1 else ''
+            )
+            earnings.append(f'- {Emojis.coin} **{self._profit:,}**{with_multi}')
+        for item, quantity in self._items:
+            earnings.append(f'- {item.get_display_name(bold=True)} x{quantity}')
+
+        embed.add_field(name='Earnings', value='\n'.join(earnings) or 'Nothing yet!')
+        return embed
+
+    async def suspend(self, interaction: TypedInteraction | None, message: str | None = None) -> None:
+        self.stop()
+        if interaction is not None:
+            return await interaction.response.edit_message(
+                embed=self.make_embed(message=message, error=True), view=self,
+            )
+        await self.ctx.maybe_edit(self.ctx.message, embed=self.make_embed(message=message), view=self)
+
+    async def make_dead(self, interaction: TypedInteraction, message: str) -> None:
+        self.stop()
+        for button in self.children:
+            button.disabled = True
+
+        await self.record.make_dead(reason=message)
+        await interaction.response.edit_message(embed=self.make_embed(message=message, error=True), view=self)
+
+    def calculate_pressure_chance(self) -> float:
+        """Calculate the chance of dying due to water pressure.
+
+        For any "death resistance" factor k, the chance can be calculated as: ::
+
+            -1 / (0.02 * x ** k + 1) + 1
+
+        See <https://www.desmos.com/calculator/bors91xu3x>
+        """
+        k = 0.625  # this constant will change based on submarine
+        return -1 / (0.02 * self._depth ** k + 1) + 1
+
+    LOSS_MESSAGES = (
+        'You got lost and surface back up without any coins or items.',
+        'The strong current pulls away your coins and items and you come back empty-handed.',
+        'A shark attacks you and you drop all your coins and items while trying to escape. You come back empty-handed.',
+    )
+    DEATH_MESSAGES = (
+        'You got lost and couldn\'t find your way back to the surface. You died.',
+        'You got attacked by a shark and died.',
+        'You got attacked by a giant squid and died.',
+        'You were eaten by a whale. You died.',
+    )
+    # this could maybe also change based on submarine
+    ITEMS = {
+        Items.fish: 0.15,
+        Items.fish_bait: 0.15,
+        Items.crab: 0.15,
+        Items.shark: 0.15,
+        Items.fishing_pole: 0.1,
+        Items.padlock: 0.1,
+        Items.banknote: 0.1,
+        Items.key: 0.098,
+        Items.eel: 0.002,
+    }
+
+    @discord.ui.button(label='Dive Deeper', style=discord.ButtonStyle.primary, emoji='\u23ec')
+    async def dive_deeper(self, interaction: TypedInteraction, _):
+        self._depth += 50
+        self._oxygen -= random.randint(5, 15)
+
+        if self._oxygen <= 0:
+            return await self.make_dead(interaction, 'You ran out of oxygen and drowned. You died.')
+        # death due to pressure:
+        if self._depth > 50 and random.random() > self.calculate_pressure_chance():
+            return await self.make_dead(
+                interaction, 'You dive a bit too deep and the water pressure crushes you. You died.',
+            )
+        # general loss chance
+        if random.random() < 0.03:  # this number will change based on submarine
+            return await self.make_dead(interaction, random.choice(self.DEATH_MESSAGES))
+        if random.random() < 0.15:  # this number will change based on submarine
+            return await self.suspend(interaction, random.choice(self.LOSS_MESSAGES))
+
+        profit = random.randint(100, 250)
+        self._profit += profit
+
+        found = f'{Emojis.coin} **{profit:,}**'
+
+        if random.random() < 0.15:  # item chance. this number will change based on submarine
+            item = random.choices(list(self.ITEMS.keys()), weights=list(self.ITEMS.values()))[0]
+            self._items[item] += 1
+            found += f' and {item.get_sentence_chunk(bold=True)}'
+
+        message = f'You dive deeper into the ocean. At **{self._depth:,} meters** deep you find an additional {found}.'
+        await interaction.response.edit_message(embed=self.make_embed(message=message))
+
+    @discord.ui.button(label='Surface', style=discord.ButtonStyle.success, emoji='\u23eb')
+    async def surface(self, interaction: TypedInteraction, _):
+        self._profit = await self.record.add_coins(self._profit)
+        self._multipliers_applied = True
+
+        async with self.record.db.acquire() as conn:
+            for item, quantity in self._items.items():
+                await self.record.inventory_manager.add_item(item, quantity, connection=conn)
+
+        embed = self.make_embed(message='You come back up to the surface safely. Your dive was successful!')
+        embed.colour = Colors.success
+
+        self.stop()
+        for button in self.children:
+            button.disabled = True
+
+        await interaction.response.edit_message(embed=embed, view=self)
 
 
 setup = Profit.simple_setup
