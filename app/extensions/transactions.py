@@ -542,7 +542,7 @@ class Transactions(Cog):
         inventory = record.inventory_manager
 
         async with ctx.db.acquire() as conn:
-            await record.add_random_exp(10, 15, chance=0.5, connection=conn)
+            await record.add_random_exp(10, 15, chance=0.5, ctx=ctx, connection=conn)
             await record.add_random_bank_space(10, 15, chance=0.5, connection=conn)
 
             await record.add(wallet=-price, connection=conn)
@@ -575,7 +575,7 @@ class Transactions(Cog):
         inventory = record.inventory_manager
 
         async with ctx.db.acquire() as conn:
-            await record.add_random_exp(10, 15, chance=0.4, connection=conn)
+            await record.add_random_exp(10, 15, chance=0.4, ctx=ctx, connection=conn)
             await record.add_random_bank_space(10, 15, chance=0.4, connection=conn)
 
             await record.add(wallet=value, connection=conn)
@@ -599,7 +599,7 @@ class Transactions(Cog):
         record = await ctx.db.get_user_record(ctx.author.id)
 
         async with ctx.db.acquire() as conn:
-            await record.add_random_exp(10, 15, chance=0.5, connection=conn)
+            await record.add_random_exp(10, 15, chance=0.5, ctx=ctx, connection=conn)
             await record.add_random_bank_space(10, 15, chance=0.4, connection=conn)
 
             quantity = await item.use(ctx, quantity)
@@ -618,7 +618,7 @@ class Transactions(Cog):
         record = await ctx.db.get_user_record(ctx.author.id)
 
         async with ctx.db.acquire() as conn:
-            await record.add_random_exp(10, 15, chance=0.4, connection=conn)
+            await record.add_random_exp(10, 15, chance=0.4, ctx=ctx, connection=conn)
             await record.add_random_bank_space(10, 15, chance=0.4, connection=conn)
 
             await item.remove(ctx)
@@ -914,9 +914,10 @@ class PrestigeView(UserView):
 
     @discord.ui.button(label='Prestige!', style=discord.ButtonStyle.primary)
     async def prestige(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:
+        crate = Items.mythic_crate if self.next_prestige % 5 == 0 else Items.legendary_crate
         receive = (
             f'- {Items.banknote.get_sentence_chunk(self.next_prestige)},\n'
-            f'- {Items.legendary_crate.get_sentence_chunk()},\n'
+            f'- {crate.get_sentence_chunk()},\n'
             f'- {self.next_prestige * 50}% faster bank space gain,\n'
             f'- {self.next_prestige * 25}% XP multiplier,\n'
             f'- {self.next_prestige * 25}% coin multiplier, and\n'

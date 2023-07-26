@@ -9,10 +9,11 @@ from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group
 from app.data.items import Items
 from app.database import UserRecord
 from app.extensions.transactions import query_item_type
-from app.util.common import cutoff, image_url_from_emoji, progress_bar
+from app.util.common import cutoff, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
-from config import Colors, Emojis
+from app.util.types import CommandResponse
+from config import Colors, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
     pass
@@ -87,6 +88,55 @@ class Stats(Cog):
         )
 
         return embed, REPLY, NO_EXTRA
+
+    @command(aliases={'mul', 'ml', 'mti', 'multi', 'multipliers'})
+    @simple_cooldown(2, 5)
+    async def multiplier(self, ctx: Context) -> CommandResponse:
+        """View a detailed breakdown of all multipliers."""
+        data = await ctx.db.get_user_record(ctx.author.id)
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f"Multipliers: {ctx.author}", icon_url=ctx.author.avatar.url)
+
+        # XP Multi
+        details = []
+        if data.base_exp_multiplier > 1:
+            details.append(f'- Base Multiplier\\*: +**{data.base_exp_multiplier - 1:.1%}** (global)')
+        if data.prestige:
+            details.append(f'- Prestige {data.prestige}: +**{data.prestige * 25}%** (global)')
+        if ctx.guild.id in multiplier_guilds:
+            details.append(f'- {ctx.guild}: +**50%**')
+
+        embed.add_field(
+            name=f"Total XP Multiplier: **{data.total_exp_multiplier - 1:.1%}**",
+            value='\n'.join(details) or 'No XP multipliers applied.',
+            inline=False
+        )
+        embed.set_footer(text='\\*This multiplier is accumulated from using items like cheese')
+
+        # Coin Multi
+        details = []
+        if data.prestige:
+            details.append(f'- Prestige {data.prestige}: +**{data.prestige * 25}%** (global)')
+
+        embed.add_field(
+            name=f"Total Coin Multiplier: **{data.coin_multiplier - 1:.1%}**",
+            value='\n'.join(details) or 'No coin multipliers applied.',
+            inline=False
+        )
+
+        # Bank space growth multi
+        details = []
+        if data.prestige:
+            details.append(f'- Prestige {data.prestige}: +**{data.prestige * 50}%** (global)')
+
+        embed.add_field(
+            name=f"Total Bank Space Growth Multiplier: **{data.bank_space_growth_multiplier - 1:.1%}**",
+            value='\n'.join(details) or 'No bank space multipliers applied.',
+            inline=False
+        )
+
+        return embed, REPLY
 
     @command(aliases={"rich", "lb", "top", "richest", "wealthiest"})
     @simple_cooldown(1, 15)

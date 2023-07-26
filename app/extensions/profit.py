@@ -227,7 +227,7 @@ class Profit(Cog):
         await asyncio.sleep(random.uniform(2, 4))
 
         record = await ctx.db.get_user_record(ctx.author.id)
-        await record.add_random_exp(4, 7)
+        await record.add_random_exp(4, 7, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.45)
 
         if random.random() < 0.4:
@@ -270,7 +270,7 @@ class Profit(Cog):
     async def invest(self, ctx: Context, *, amount: Investment()):
         """Invest your coins and potentially get more money. There is a chance that you could fail and lose your investment, however."""
         record = await ctx.db.get_user_record(ctx.author.id)
-        await record.add_random_exp(4, 7)
+        await record.add_random_exp(4, 7, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.45)
         await record.add(wallet=-amount)
 
@@ -485,7 +485,7 @@ class Profit(Cog):
             return
 
         record = await ctx.db.get_user_record(ctx.author.id)
-        await record.add_random_exp(10, 16)
+        await record.add_random_exp(10, 16, ctx=ctx)
         await record.add_random_bank_space(18, 24, chance=0.6)
 
         name, choice = view.choice
@@ -652,7 +652,7 @@ class Profit(Cog):
             return
 
         record = await ctx.db.get_user_record(ctx.author.id)
-        await record.add_random_exp(10, 16)
+        await record.add_random_exp(10, 16, ctx=ctx)
         await record.add_random_bank_space(18, 24, chance=0.6)
 
         name, choice = view.choice
@@ -761,7 +761,7 @@ class Profit(Cog):
         else:
             mapping = self.FISH_CHANCES
 
-        await record.add_random_exp(12, 18, chance=0.8)
+        await record.add_random_exp(12, 18, chance=0.8, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.6)
 
         fish = random.choices(list(mapping), weights=list(mapping.values()), k=5)
@@ -857,7 +857,7 @@ class Profit(Cog):
         items = random.choices(list(mapping), weights=list(mapping.values()), k=7)
         items = {item: items.count(item) for item in set(items) if item is not None}
 
-        await record.add_random_exp(12, 18, chance=0.8)
+        await record.add_random_exp(12, 18, chance=0.8, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.6)
 
         yield f'{Emojis.loading} Digging through the ground using your {shovel.name}...', REPLY
@@ -943,7 +943,7 @@ class Profit(Cog):
         items = random.choices(list(mapping), weights=list(mapping.values()), k=6)
         items = {item: items.count(item) for item in set(items) if item is not None}
 
-        await record.add_random_exp(12, 18, chance=0.8)
+        await record.add_random_exp(12, 18, chance=0.8, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.6)
 
         yield f'{Emojis.loading} Mining using your {pickaxe.name}...', REPLY
@@ -1039,7 +1039,7 @@ class Profit(Cog):
         wood = random.choices(list(mapping), weights=list(mapping.values()), k=13)
         wood = {item: wood.count(item) for item in set(wood) if item is not None}
 
-        await record.add_random_exp(12, 18, chance=0.8)
+        await record.add_random_exp(12, 18, chance=0.8, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.6)
 
         yield f'{Emojis.loading} Chopping down some trees...', REPLY
@@ -1119,7 +1119,7 @@ class Profit(Cog):
 
         async with ctx.db.acquire() as conn:
             await record.add_random_bank_space(10, 15, chance=0.5, connection=conn)
-            await record.add_random_exp(10, 15, chance=0.65, connection=conn)
+            await record.add_random_exp(10, 15, chance=0.65, ctx=ctx, connection=conn)
 
             if view.choice == question.correct_answer:
                 profit = await record.add_coins(prize)
@@ -1252,7 +1252,7 @@ class Profit(Cog):
 
             async with ctx.db.acquire() as conn:
                 await record.add_random_bank_space(10, 15, chance=0.6, connection=conn)
-                await record.add_random_exp(12, 17, chance=0.7, connection=conn)
+                await record.add_random_exp(12, 17, chance=0.7, ctx=ctx, connection=conn)
 
             yield f'{Emojis.loading} Robbing {user.name}...', REPLY
             await asyncio.sleep(random.uniform(1.5, 3.5))

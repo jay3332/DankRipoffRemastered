@@ -36,6 +36,11 @@ token: str = env('DISCORD_TOKEN')
 allowed_mentions: AllowedMentions = AllowedMentions.none()
 allowed_mentions.users = True
 
+multiplier_guilds: set[int] = {
+    635944376761057282,  # CAIF
+    893991611262976091,  # Unnamed bot testing
+}
+
 
 class _RandomColor:
     def __get__(self, *_) -> int:

@@ -14,11 +14,11 @@ from discord.utils import cached_property
 from app.data.items import CropMetadata, Item, Items
 from app.data.skills import Skill, Skills
 from app.util.common import calculate_level, get_by_key
-from config import DatabaseConfig, Emojis
+from config import DatabaseConfig, Emojis, multiplier_guilds
 from .migrations import Migrator
 
 if TYPE_CHECKING:
-    from app.core import Bot, Command
+    from app.core import Bot, Command, Context
 
 __all__ = (
     'Database',
@@ -684,10 +684,13 @@ class UserRecord:
         await self.add(wallet=coins, connection=connection)
         return coins
 
-    async def add_exp(self, exp: int, /, *, connection: asyncpg.Connection | None = None) -> bool:
+    async def add_exp(
+        self, exp: int, /, *, ctx: Context | None = None, connection: asyncpg.Connection | None = None,
+    ) -> bool:
         """Return whether the user has leveled up."""
         old = self.level
-        exp = round(exp * self.total_exp_multiplier)
+        multiplier = self.exp_multiplier_in_ctx(ctx) if ctx else self.total_exp_multiplier
+        exp = round(exp * multiplier)
         await self.add(exp=exp, connection=connection)
 
         if self.level > old:
@@ -704,17 +707,19 @@ class UserRecord:
         if random.random() > chance:
             return 0
 
-        multiplier = 1 + self.prestige * 0.5
-        amount = round(random.randint(minimum, maximum) * multiplier)
+        amount = round(random.randint(minimum, maximum) * self.bank_space_growth_multiplier)
         await self.add(max_bank=amount, connection=connection)
         return amount
 
-    async def add_random_exp(self, minimum: int, maximum: int, *, chance: float = 1, connection: asyncpg.Connection | None = None) -> int:
+    async def add_random_exp(
+        self, minimum: int, maximum: int, *, chance: float = 1,
+        ctx: Context | None = None, connection: asyncpg.Connection | None = None,
+    ) -> int:
         if random.random() > chance:
             return 0
 
         amount = random.randint(minimum, maximum)
-        await self.add_exp(amount, connection=connection)
+        await self.add_exp(amount, ctx=ctx, connection=connection)
         return amount
 
     async def make_dead(self, *, reason: str | None = None, connection: asyncpg.Connection | None = None) -> None:
@@ -796,9 +801,19 @@ class UserRecord:
     def total_exp_multiplier(self) -> float:
         return 1 + self.prestige * 0.25 + self.base_exp_multiplier
 
+    def exp_multiplier_in_ctx(self, ctx: Context) -> float:
+        base = self.total_exp_multiplier
+        if ctx.guild.id in multiplier_guilds:
+            base += 0.5
+        return base
+
     @property
     def coin_multiplier(self) -> float:
         return 1 + self.prestige * 0.25
+
+    @property
+    def bank_space_growth_multiplier(self) -> float:
+        return 1 + self.prestige * 0.5
 
     @property
     def prestige(self) -> int:

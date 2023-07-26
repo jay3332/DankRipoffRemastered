@@ -195,7 +195,7 @@ class Casino(Cog):
         await asyncio.sleep(random.uniform(2, 4))
 
         async with ctx.db.acquire() as conn:
-            await record.add_random_exp(10, 15, chance=0.5, connection=conn)
+            await record.add_random_exp(10, 15, chance=0.5, ctx=ctx, connection=conn)
             await record.add_random_bank_space(10, 15, chance=0.5, connection=conn)
 
         their_dice = random.choices(range(1, 6), k=2)
