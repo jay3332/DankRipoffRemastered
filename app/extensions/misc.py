@@ -30,7 +30,8 @@ class Miscellaneous(Cog):
         'Pong!?',
     )
 
-    SUPPORT_SERVER = 'https://discord.gg/bpnedYgFVd'
+    SUPPORT_SERVER = 'https://discord.gg/BjzrQZjFwk'  # caif
+    # SUPPORT_SERVER = 'https://discord.gg/bpnedYgFVd'  # unnamed bot testing
 
     @command(alias="pong")
     @simple_cooldown(2, 2)
