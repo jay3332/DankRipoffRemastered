@@ -56,6 +56,9 @@ class _Database:
     def execute(self, query: str, *args: Any, timeout: float = None) -> Awaitable[str]:
         return self._internal_pool.execute(query, *args, timeout=timeout)
 
+    def executemany(self, query: str, args: Iterable[Any], *, timeout: float = None) -> Awaitable[str]:
+        return self._internal_pool.executemany(query, args, timeout=timeout)
+
     def fetch(self, query: str, *args: Any, timeout: float = None) -> Awaitable[list[asyncpg.Record]]:
         return self._internal_pool.fetch(query, *args, timeout=timeout)
 
