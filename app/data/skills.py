@@ -337,16 +337,14 @@ class Skills:
         await ctx.send(embed=embed, reference=ctx.message)
         await asyncio.sleep(5)
 
-        message = None
         for i in range(1, 6):
             action = random.choice((PUNCH, KICK, LOW_PUNCH, HIGH_KICK))
             view = DefenseTrainingView(ctx, action)
 
-            if new := await ctx.maybe_edit(
-                message,
+            await ctx.send(
                 f'[{i}/5] Dummy opponent is about to deal a **{action}** - what will you do?', reference=ctx.message, view=view,
-            ):
-                message = new
+            )
+
             await view.wait()
 
             if view.choice is None:
