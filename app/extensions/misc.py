@@ -4,6 +4,8 @@ import random
 from typing import Any, TYPE_CHECKING
 
 import discord
+from discord import app_commands
+from discord.app_commands import describe
 from discord.utils import format_dt, oauth_url
 
 from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, simple_cooldown
@@ -33,7 +35,7 @@ class Miscellaneous(Cog):
     SUPPORT_SERVER = 'https://discord.gg/BjzrQZjFwk'  # caif
     # SUPPORT_SERVER = 'https://discord.gg/bpnedYgFVd'  # unnamed bot testing
 
-    @command(alias="pong")
+    @command(alias="pong", hybrid=True)
     @simple_cooldown(2, 2)
     async def ping(self, ctx: Context) -> tuple[str, Any]:
         """Pong! Sends the bot's API latency."""
@@ -49,7 +51,7 @@ class Miscellaneous(Cog):
         time_ms = timer.time * 1000
         return f'{word} ({time_ms:.2f} ms)', EDIT
 
-    @command()
+    @command(hybrid=True)
     @simple_cooldown(1, 3)
     async def uptime(self, ctx: Context) -> tuple[str, Any]:
         """Shows the bot's uptime."""
@@ -57,7 +59,7 @@ class Miscellaneous(Cog):
         startup = ctx.bot.startup_timestamp
         return f'I have been online since {format_dt(startup)} ({format_dt(startup, "R")}).', REPLY
 
-    @command(alias='link')
+    @command(alias='link', hybrid=True)
     @simple_cooldown(2, 2)
     async def invite(self, ctx: Context) -> tuple[str, discord.ui.View, Any]:
         """Gives you a link to invite the bot to your server."""

@@ -102,11 +102,19 @@ class Bot(commands.Bot):
         self.loop.create_task(self._dispatch_first_ready())
         await self._load_extensions()
 
+    async def get_context(
+        self,
+        origin: discord.Message | discord.Interaction,
+        *,
+        cls: type[Context] = Context,
+    ) -> Context:
+        return await super().get_context(origin, cls=cls)
+
     async def process_commands(self, message: discord.Message, /) -> None:
         if message.author.bot:
             return
 
-        ctx = await self.get_context(message, cls=Context)
+        ctx = await self.get_context(message)
         await self.invoke(ctx)
 
     async def on_first_ready(self) -> None:

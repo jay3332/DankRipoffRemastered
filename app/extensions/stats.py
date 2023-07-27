@@ -4,6 +4,7 @@ from textwrap import dedent
 from typing import Any, Literal, TYPE_CHECKING
 
 import discord
+from discord import app_commands
 
 from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
 from app.data.items import Items
@@ -12,11 +13,10 @@ from app.extensions.transactions import query_item_type
 from app.util.common import cutoff, image_url_from_emoji, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
-from app.util.types import CommandResponse
 from config import Colors, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
-    pass
+    from app.util.types import CommandResponse, TypedInteraction
 
 
 class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
@@ -52,7 +52,7 @@ class Stats(Cog):
     # noinspection PyTypeChecker
     @command(aliases={"bal", "coins", "stats", "b", "wallet"})
     @simple_cooldown(2, 5)
-    async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> tuple[discord.Embed, Any, Any | None]:
+    async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> CommandResponse:
         """View your wallet and bank balance, or optionally, someone elses."""
         user = user or ctx.author
         data = await ctx.db.get_user_record(user.id)
@@ -70,6 +70,11 @@ class Stats(Cog):
         embed.set_thumbnail(url=user.avatar)
 
         return embed, REPLY, NO_EXTRA if ctx.author != user else None
+
+    @app_commands.command()
+    async def balance(self, itx: TypedInteraction, member: discord.Member = None):
+        context = await self.bot.get_context(itx)
+        await context.invoke(self.balance, user=member)
 
     @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'})
     @simple_cooldown(2, 5)

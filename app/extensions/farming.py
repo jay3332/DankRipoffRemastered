@@ -269,6 +269,7 @@ class Farming(Cog):
             return 'Purchase cancelled.', BAD_ARGUMENT
 
         await record.add(wallet=-price)
+        await record.add_random_exp(10, 15, chance=0.65)
         await manager.add_land(*coordinate)
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
@@ -304,6 +305,7 @@ class Farming(Cog):
             return 'Transaction cancelled.', BAD_ARGUMENT
 
         await record.add(wallet=price)
+        await record.add_random_exp(10, 15, chance=0.65)
         await manager.remove_land(*coordinate)
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
@@ -426,6 +428,7 @@ class Farming(Cog):
             return 'Alright, I guess not', BAD_ARGUMENT
 
         await inventory.add_item(crop, -len(coordinates))
+        await record.add_random_exp(8, 12, chance=0.65)
         await manager.plant_crop(coordinates, crop)
 
         ctx.bot.loop.create_task(ctx.thumbs())
@@ -467,6 +470,7 @@ class Farming(Cog):
         if not harvested:
             return 'Could not harvest anything.', REPLY
 
+        await record.add_random_exp(10, 15)
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
         embed.set_author(name='Successful Harvest', icon_url=ctx.author.avatar.url)
 
@@ -521,6 +525,7 @@ class Farming(Cog):
         if await manager.add_crop_exp(*coordinates, gain):
             message += f' Your crop is now **Level {manager.cached[coordinates].level}**!'
 
+        await record.add_random_exp(8, 12, chance=0.8)
         embed = discord.Embed(color=Colors.success, description=message, timestamp=ctx.now)
         embed.set_author(name='Successful Watering', icon_url=ctx.author.avatar.url)
 
