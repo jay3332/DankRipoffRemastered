@@ -41,6 +41,7 @@ from app.util.converters import (
     query_recipe,
 )
 from app.util.pagination import FieldBasedFormatter, Paginator
+from app.util.structures import LockWithReason
 from app.util.views import ConfirmationView, UserView
 from config import Colors, Emojis
 
@@ -840,7 +841,6 @@ class Transactions(Cog):
 
     @command(aliases={'pres', 'pr', 'prest', 'rebirth'})
     @simple_cooldown(1, 10)
-    @lock_transactions
     async def prestige(self, ctx: Context) -> CommandResponse:
         """Prestige and start over with a brand-new wallet, bank, and inventory in exchange for long-term multipliers."""
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -888,9 +888,7 @@ class Transactions(Cog):
         if meets_level and meets_bank and meets_unique_items:
             embed.set_footer(text='You meet all requirements to prestige!')
             view = PrestigeView(ctx, record=record, next_prestige=next_prestige)
-            yield embed, view, REPLY
-            await view.wait()
-            return
+            return embed, view, REPLY
 
         view = discord.ui.View(timeout=1)  # timeout=0 gives weird problems
         view.add_item(
@@ -900,7 +898,7 @@ class Transactions(Cog):
                 disabled=True,
             ),
         )
-        yield embed, view, REPLY
+        return embed, view, REPLY
 
 
 class PrestigeView(UserView):
@@ -914,6 +912,19 @@ class PrestigeView(UserView):
 
     @discord.ui.button(label='Prestige!', style=discord.ButtonStyle.primary)
     async def prestige(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:
+        lock = self.ctx.bot.transaction_locks.setdefault(self.ctx.author.id, LockWithReason())
+        if lock.locked():
+            reason = f' ({lock.reason})' if lock.reason else ''
+            return await interaction.response.send_message(
+                f'You are already performing a transaction{reason}. '
+                'Please finish it or wait until it is finished before prestiging.',
+                ephemeral=True,
+            )
+
+        async with lock:
+            await self._prestige(interaction, _button)
+
+    async def _prestige(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:
         crate = Items.mythic_crate if self.next_prestige % 5 == 0 else Items.legendary_crate
         receive = (
             f'- {Items.banknote.get_sentence_chunk(self.next_prestige)},\n'
@@ -933,6 +944,7 @@ class PrestigeView(UserView):
             f'{Transactions.PRESTIGE_WHAT_DO_I_KEEP}\n'
             f'## What will I get in exchange for prestiging?\n{receive}'
         )
+
         view = ConfirmationView(user=self.ctx.author, true="Yes, let's prestige!", false='Maybe next time', timeout=120)
         if not await self.ctx.confirm(message, interaction=interaction, view=view):
             self.stop()
