@@ -31,7 +31,7 @@ class _Database:
 
     def __init__(self, *, loop: asyncio.AbstractEventLoop = None) -> None:
         self.loop: asyncio.AbstractEventLoop = loop or asyncio.get_event_loop()
-        self.loop.create_task(self._connect())
+        self.__connect_task = self.loop.create_task(self._connect())
 
     async def _connect(self) -> None:
         self._internal_pool = await asyncpg.create_pool(
@@ -86,6 +86,8 @@ class Database(_Database):
         bot.loop.create_task(self.register_all_records())
 
     async def register_all_records(self) -> None:
+        await self.__connect_task
+
         query = 'SELECT * FROM users'
         for data in await self.fetch(query):
             user_id = data['user_id']
