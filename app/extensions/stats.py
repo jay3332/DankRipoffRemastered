@@ -71,7 +71,7 @@ class Stats(Cog):
 
         return embed, REPLY, NO_EXTRA if ctx.author != user else None
 
-    @app_commands.command()
+    @app_commands.command(name='balance', description=balance.description)
     async def balance_app_command(self, itx: TypedInteraction, member: discord.Member = None):
         context = await self.bot.get_context(itx)
         await context.invoke(self.balance, user=member)

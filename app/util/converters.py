@@ -213,7 +213,7 @@ def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemA
                 )
             except NotEnough:
                 raise BadArgument(
-                    f'Insufficient funds - you do not have enough coins to buy {item.get_sentence_chunk(quantity)}.'
+                    f'Insufficient funds - you do not have enough coins to buy that much of that item.'
                     if method == BUY
                     else 'You do not have that many of that item.'
                 )
