@@ -159,7 +159,7 @@ class Miscellaneous(Cog):
 
         lines = [line for line, _ in sorted(lines, key=lambda x: x[1])]
         formatter = LineBasedFormatter(embed, lines)
-        return Paginator(ctx, formatter)
+        return Paginator(ctx, formatter), REPLY
 
     # noinspection PyShadowingNames
     @cooldowns.command('remind', aliases={'reminder', 'notify', 'remindme', 'rm', 'rem'})
