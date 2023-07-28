@@ -149,7 +149,7 @@ class Miscellaneous(Cog):
                 continue
 
             timestamp = ctx.now + datetime.timedelta(seconds=retry_after)
-            lines.append(f'- **{cmd.qualified_name}** ({format_dt(timestamp, "R")})')
+            lines.append((f'- **{cmd.qualified_name}** ({format_dt(timestamp, "R")})', retry_after))
 
         if not lines:
             return 'No pending cooldowns.', REPLY
@@ -157,6 +157,7 @@ class Miscellaneous(Cog):
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f'Pending cooldowns for {ctx.author.name}', icon_url=ctx.author.avatar)
 
+        lines = [line for line, _ in sorted(lines, key=lambda x: x[1])]
         formatter = LineBasedFormatter(embed, lines)
         return Paginator(ctx, formatter)
 
