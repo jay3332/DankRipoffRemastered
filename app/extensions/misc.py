@@ -1,23 +1,44 @@
 from __future__ import annotations
 
+import datetime
 import random
 from typing import Any, TYPE_CHECKING
 
 import discord
-from discord import app_commands
-from discord.app_commands import describe
+from discord.ext import commands
 from discord.utils import format_dt, oauth_url
 
-from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, simple_cooldown
+from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, group, simple_cooldown
+from app.core.timers import Timer
 from app.data.settings import Setting, Settings
-from app.util.common import walk_collection
+from app.util.common import converter, walk_collection
 from app.util.converters import better_bool, query_setting
-from app.util.pagination import FieldBasedFormatter, Paginator
-from app.util.structures import Timer
+from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginator
+from app.util.structures import Timer as PingTimer
+from app.util.types import CommandResponse
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    pass
+    from app.core import Command
+
+
+@converter
+async def CommandConverter(ctx: Context, argument: str) -> Command:
+    """Converts a command name into a Command object."""
+    if cmd := ctx.bot.get_command(argument):
+        return cmd
+    raise commands.BadArgument(f'Command "{argument}" not found.')
+
+
+async def _get_retry_after(ctx: Context, cmd: Command) -> float:
+    if getattr(cmd.callback, '__database_cooldown__', None):
+        record = await ctx.db.get_user_record(ctx.author.id)
+        cooldowns = await record.cooldown_manager.wait()
+        return cooldowns.get_cooldown(cmd)
+
+    if bucket := cmd._buckets.get_bucket(ctx):
+        return bucket.get_retry_after()
+    return 0.0
 
 
 class Miscellaneous(Cog):
@@ -42,7 +63,7 @@ class Miscellaneous(Cog):
 
         word = random.choice(self.PONG_MESSAGES)
 
-        with Timer() as timer:
+        with PingTimer() as timer:
             if not ctx.is_interaction:
                 await ctx.send(word, reference=ctx.message)
             else:
@@ -116,6 +137,62 @@ class Miscellaneous(Cog):
             return f'{setting.name} is currently **{readable}**.', REPLY
 
         await setting.set(ctx, value)
+
+    @group(aliases={'cd', 'cds', 'cooldown'})
+    @simple_cooldown(2, 3)
+    async def cooldowns(self, ctx: Context) -> CommandResponse:
+        """View all pending cooldowns."""
+        lines = []
+        for cmd in ctx.bot.commands:
+            retry_after = await _get_retry_after(ctx, cmd)
+            if not retry_after:
+                continue
+
+            timestamp = ctx.now + datetime.timedelta(seconds=retry_after)
+            lines.append(f'- **{cmd.qualified_name}** ({format_dt(timestamp, "R")})')
+
+        if not lines:
+            return 'No pending cooldowns.', REPLY
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'Pending cooldowns for {ctx.author.name}', icon_url=ctx.author.avatar)
+
+        formatter = LineBasedFormatter(embed, lines)
+        return Paginator(ctx, formatter)
+
+    # noinspection PyShadowingNames
+    @cooldowns.command('remind', aliases={'reminder', 'notify', 'remindme', 'rm', 'rem'})
+    @simple_cooldown(2, 5)
+    async def cooldowns_remind(self, ctx: Context, *, command: CommandConverter) -> CommandResponse:
+        """Reminds you when a command is available to be used again."""
+        retry_after = await _get_retry_after(ctx, command)
+        if not retry_after:
+            return 'That command is not on cooldown.', REPLY
+
+        timestamp = ctx.now + datetime.timedelta(seconds=retry_after)
+        formatted = format_dt(timestamp, "R")
+        if retry_after < 30:
+            return f'You can use that command {formatted}, be patient', REPLY
+
+        await ctx.bot.timers.create(
+            timestamp,
+            'cooldown_reminder',
+            channel_id=ctx.channel.id,
+            user_id=ctx.author.id,
+            command=command.qualified_name,
+        )
+        return (
+            f'Alright, I will remind you in this channel when you can use `{command.qualified_name}` again ({formatted}).',
+            REPLY,
+        )
+
+    @Cog.listener()
+    async def on_cooldown_reminder_timer_complete(self, timer: Timer) -> None:
+        channel = self.bot.get_partial_messageable(timer.metadata['channel_id'])
+        try:
+            await channel.send(f'You can use `{timer.metadata["command"]}` again now, {timer.metadata["user_id"]}!')
+        except discord.HTTPException:
+            pass
 
 
 setup = Miscellaneous.simple_setup

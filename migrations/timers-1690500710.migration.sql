@@ -1,0 +1,7 @@
+CREATE TABLE timers (
+    id BIGSERIAL UNIQUE,
+    event TEXT NOT NULL,
+    expires TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    metadata JSONB
+);

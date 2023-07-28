@@ -33,6 +33,9 @@ class _Database:
         self.loop: asyncio.AbstractEventLoop = loop or asyncio.get_event_loop()
         self.__connect_task = self.loop.create_task(self._connect())
 
+    async def wait(self) -> None:
+        await self.__connect_task
+
     async def _connect(self) -> None:
         self._internal_pool = await asyncpg.create_pool(
             host=DatabaseConfig.host,

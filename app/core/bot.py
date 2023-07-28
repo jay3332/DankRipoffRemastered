@@ -13,6 +13,7 @@ from discord.ext import commands
 from app.core.help import HelpCommand
 from app.core.flags import FlagMeta
 from app.core.models import Command, Context, GroupCommand
+from app.core.timers import TimerManager
 from app.database import Database
 from app.util.ansi import AnsiStringBuilder, AnsiColor
 from app.util.common import humanize_duration, pluralize
@@ -36,6 +37,7 @@ class Bot(commands.Bot):
     db: Database
     session: ClientSession
     startup_timestamp: datetime
+    timers: TimerManager
     transaction_locks: dict[int, LockWithReason]
 
     INTENTS: Final[ClassVar[discord.Intents]] = discord.Intents(
@@ -95,6 +97,7 @@ class Bot(commands.Bot):
     async def setup_hook(self) -> None:
         """Prepares the bot for startup."""
         self.db = Database(self, loop=self.loop)
+        self.timers = TimerManager(self)
         self.transaction_locks = {}
         self.session = ClientSession()
         self.bypass_checks = False

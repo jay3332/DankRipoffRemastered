@@ -98,7 +98,7 @@ class Context(TypedContext):
         try:
             await message.edit(content=content, **kwargs)
         except (AttributeError, discord.NotFound):
-            if (not message) or message.channel == self.channel:
+            if not message or message.channel == self.channel:
                 return await self.send(content, **kwargs)
 
             return await message.channel.send(content, **kwargs)
