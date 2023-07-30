@@ -500,7 +500,7 @@ class HybridCommand(Command, commands.HybridCommand):
                 callback=wrapper,
                 **kwargs,
             )
-            if isinstance(self.parent, HybridGroupCommand):
+            if isinstance(self.parent, HybridGroupCommand) and self.parent.app_command is not None:
                 self.parent.app_command.add_command(command)
             return command
 
