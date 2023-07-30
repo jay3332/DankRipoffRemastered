@@ -264,7 +264,7 @@ class Stats(Cog):
         rarity: Literal['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'] = None,
         category: str = None,
     ):
-        await ctx.invoke(self.book, rarity=(rarity or 'all').lower(), category=query_item_type(category))
+        await ctx.invoke(self.book, rarity=(rarity or 'all').lower(), category=category and query_item_type(category))
 
     @group(aliases={"notifs", "notification", "notif", "nt"}, hybrid=True, fallback='list')
     @simple_cooldown(1, 6)

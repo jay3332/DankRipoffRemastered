@@ -494,7 +494,8 @@ class HybridCommand(Command, commands.HybridCommand):
                     return
                 return await func(slf, ctx, *args, **kwds)
 
-            return discord.app_commands.command(name=self.name, description=self.short_doc, **kwargs)(wrapper)
+            caller = self.parent.app_command.command if self.parent else discord.app_commands.command  # type: ignore
+            return caller(name=self.name, description=self.short_doc, **kwargs)(wrapper)
 
         return decorator
 
