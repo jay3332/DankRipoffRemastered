@@ -14,6 +14,8 @@ from app.util.pagination import Paginator
 from app.util.structures import LockWithReason
 
 if TYPE_CHECKING:
+    from discord.app_commands import Command as AppCommand
+
     from app.core.models import Context, Cog
     from app.util.types import TypedInteraction
 
@@ -242,7 +244,7 @@ def command(
     brief: str = MISSING,
     help: str = MISSING,
     easy_callback: bool = True,
-    hybrid: bool = False,
+    hybrid: bool | AppCommand = False,
     **other_kwargs: Any,
 ) -> Callable[..., Command]:
     kwargs = _resolve_command_kwargs(
@@ -250,6 +252,8 @@ def command(
         name=name, alias=alias, aliases=aliases, brief=brief, help=help, usage=usage,
     )
     result = commands.command(**kwargs, **other_kwargs)
+    if isinstance(hybrid, AppCommand):
+        result.app_command = hybrid
 
     if easy_callback:
         return lambda func: result(easy_command_callback(func))

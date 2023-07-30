@@ -51,7 +51,7 @@ class Stats(Cog):
     emoji = '\U0001f4ca'
 
     # noinspection PyTypeChecker
-    @command(aliases={"bal", "coins", "stats", "b", "wallet"}, hybrid=True, with_app_command=False)
+    @command(aliases={"bal", "coins", "stats", "b", "wallet"}, hybrid=True)
     @simple_cooldown(2, 5)
     async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> CommandResponse:
         """View your wallet and bank balance, or optionally, someone elses."""
@@ -74,10 +74,12 @@ class Stats(Cog):
 
     @app_commands.command(name='balance', description=balance.short_doc)
     async def balance_app_command(self, itx: TypedInteraction, member: discord.Member = None):
-        context = await self.bot.get_context(itx)
-        if not await self.balance.can_run(context):
+        ctx = await self.bot.get_context(itx)
+        ctx.command = self.balance
+
+        if not await self.balance.can_run(ctx):
             return
-        await context.invoke(self.balance, user=member)
+        await ctx.invoke(self.balance, user=member)
 
     @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'})
     @simple_cooldown(2, 5)
