@@ -483,10 +483,13 @@ class HybridCommand(Command, commands.HybridCommand):
             @functools.wraps(func)
             async def wrapper(slf: Cog, itx: TypedInteraction, *args: Any, **kwds: Any) -> Any:
                 # TODO: call full hooks?
-                ctx = await slf.bot.get_context(itx)
-                ctx.command = self
+                # FIXME: this is a bit hacky
 
-                await ctx.send(f'{ctx.command} {ctx.command.cog}')
+                # this is especially hacky
+                ctx = await slf.bot.get_context(itx)
+                ctx.command = command = self.copy()
+                command.cog = slf
+
                 if not await self.can_run(ctx):
                     return
                 return await func(slf, ctx, *args, **kwds)
