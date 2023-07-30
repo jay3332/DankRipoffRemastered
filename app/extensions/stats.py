@@ -51,7 +51,7 @@ class Stats(Cog):
     emoji = '\U0001f4ca'
 
     # noinspection PyTypeChecker
-    @command(aliases={"bal", "coins", "stats", "b", "wallet"}, hybrid=True)
+    @command(aliases={"bal", "coins", "stats", "b", "wallet"}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
     async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> CommandResponse:
         """View your wallet and bank balance, or optionally, someone elses."""
