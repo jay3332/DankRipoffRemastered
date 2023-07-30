@@ -497,6 +497,7 @@ class HybridCommand(Command, commands.HybridCommand):
             command = discord.app_commands.Command(
                 name=self.name,
                 description=self.short_doc,
+                parent=self.parent.app_command if isinstance(self.parent, HybridGroupCommand) else None,
                 callback=wrapper,
                 **kwargs,
             )

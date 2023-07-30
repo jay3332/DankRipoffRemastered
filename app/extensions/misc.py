@@ -194,15 +194,19 @@ class Miscellaneous(Cog):
     @cooldowns_remind.define_app_command()
     @app_commands.rename(cmd='command')
     @app_commands.describe(cmd='The command to remind you about.')
-    async def cooldowns_remind_app_command(self, ctx: Context, cmd: str) -> CommandResponse:
-        return await self.cooldowns_remind(ctx, command=ctx.bot.get_command(cmd))
+    async def cooldowns_remind_app_command(self, ctx: Context, cmd: str):
+        if cmd := ctx.bot.get_command(cmd):
+            return await self.cooldowns_remind(ctx, command=cmd)
+
+        await ctx.reply(f'Unknown command {cmd!r}.', ephemeral=True)
 
     @cooldowns_remind_app_command.autocomplete('cmd')
     async def command_autocomplete(self, _: TypedInteraction, current: str) -> list[Choice[str]]:
+        current = current.lower()
         return [
             Choice(name=cmd.qualified_name, value=cmd.qualified_name)
             for cmd in self.bot.walk_commands()
-            if cmd.qualified_name.startswith(current.lower())
+            if cmd.qualified_name.startswith(current) or cmd.name.startswith(current)
         ]
 
     @Cog.listener()
