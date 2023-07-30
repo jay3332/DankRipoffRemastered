@@ -212,7 +212,6 @@ def _resolve_command_kwargs(
     if name is not MISSING:
         kwargs['name'] = name
 
-    print(alias, aliases)
     if alias is not MISSING and aliases is not MISSING:
         raise TypeError('cannot have alias and aliases kwarg filled')
 
