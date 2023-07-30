@@ -8,7 +8,7 @@ from discord import app_commands
 from discord.utils import format_dt
 
 from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
-from app.data.items import Items
+from app.data.items import ItemType, Items
 from app.database import UserRecord
 from app.extensions.transactions import query_item_type
 from app.util.common import cutoff, image_url_from_emoji, progress_bar
@@ -73,13 +73,14 @@ class Stats(Cog):
         return embed, REPLY, NO_EXTRA if ctx.author != user else None
 
     @balance.define_app_command()
-    async def balance_app_command(self, ctx: Context, member: discord.Member = None) -> None:
-        await ctx.invoke(self.balance, user=member)
+    @app_commands.describe(user='The user to view the balance of.')
+    async def balance_app_command(self, ctx: Context, user: discord.Member = None) -> None:
+        await ctx.invoke(self.balance, user=user)
 
-    @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'})
+    @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
     async def level(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> tuple[discord.Embed, Any, Any]:
-        """View your current level and experience."""
+        """View your current level and experience, or optionally, someone elses."""
         user = user or ctx.author
         data = await ctx.db.get_user_record(user.id)
 
@@ -94,7 +95,12 @@ class Stats(Cog):
 
         return embed, REPLY, NO_EXTRA
 
-    @command(aliases={'mul', 'ml', 'mti', 'multi', 'multipliers'})
+    @level.define_app_command()
+    @app_commands.describe(user='The user to view the level of.')
+    async def level_app_command(self, ctx: Context, user: discord.Member = None) -> None:
+        await ctx.invoke(self.level, user=user)
+
+    @command(aliases={'mul', 'ml', 'mti', 'multi', 'multipliers'}, hybrid=True)
     @simple_cooldown(2, 5)
     async def multiplier(self, ctx: Context) -> CommandResponse:
         """View a detailed breakdown of all multipliers."""
@@ -148,7 +154,7 @@ class Stats(Cog):
 
         return embed, REPLY
 
-    @command(aliases={"rich", "lb", "top", "richest", "wealthiest"})
+    @command(aliases={"rich", "lb", "top", "richest", "wealthiest"}, hybrid=True)
     @simple_cooldown(1, 15)
     async def leaderboard(self, ctx: Context):
         """View the richest people in terms of coins in your server.
@@ -177,7 +183,7 @@ class Stats(Cog):
 
         return Paginator(ctx, LeaderboardFormatter(records, per_page=10), timeout=120), REPLY
 
-    @command(aliases={"inv", "backpack", "items"})
+    @command(aliases={"inv", "backpack", "items"}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 6)
     async def inventory(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None):
         """View your inventory, or optionally, someone elses."""
@@ -206,7 +212,12 @@ class Stats(Cog):
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY, NO_EXTRA if ctx.author != user else None
 
-    @command(aliases={"itembook", "uniqueitems", "discovered", "ib"})
+    @inventory.define_app_command()
+    @app_commands.describe(user='The user to view the inventory of.')
+    async def inventory_app_command(self, ctx: Context, user: discord.Member = None):
+        await ctx.invoke(self.inventory, user=user)
+
+    @command(aliases={"itembook", "uniqueitems", "discovered", "ib"}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 6)
     async def book(
         self,
@@ -240,7 +251,20 @@ class Stats(Cog):
 
         return Paginator(ctx, LineBasedFormatter(embed, lines, field_name='\u200b'), timeout=120), REPLY
 
-    @group(aliases={"notifs", "notification", "notif", "nt"})
+    @book.define_app_command()
+    @app_commands.describe(
+        rarity='Show only items of this rarity.',
+        category='Show only items from this category.',
+    )
+    async def book_app_command(
+        self,
+        ctx: Context,
+        rarity: Literal['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'] = None,
+        category: ItemType = None,
+    ):
+        await ctx.invoke(self.book, rarity=(rarity or 'all').lower(), category=category)
+
+    @group(aliases={"notifs", "notification", "notif", "nt"}, hybrid=True, fallback='list')
     @simple_cooldown(1, 6)
     async def notifications(self, ctx: Context) -> tuple[str | Paginator, Any]:
         """View your notifications."""
@@ -267,7 +291,8 @@ class Stats(Cog):
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY
 
-    @notifications.command(name='view', aliases={"v", "read", "info"})
+    @notifications.command(name='view', aliases={"v", "read", "info"}, hybrid=True)
+    @app_commands.describe(index='The index of the notification to view.')
     @simple_cooldown(2, 3)
     async def notifs_view(self, ctx: Context, index: int) -> tuple[discord.Embed | str, Any]:
         """View information on a specific notification."""
@@ -287,7 +312,7 @@ class Stats(Cog):
 
         return embed, REPLY
 
-    @notifications.command(name='clear', aliases={"c", "wipe"})
+    @notifications.command(name='clear', aliases={"c", "wipe"}, hybrid=True)
     @simple_cooldown(1, 10)
     async def notifs_clear(self, ctx: Context) -> tuple[str, Any]:
         """Clear all of your notifications."""

@@ -5,6 +5,8 @@ import random
 from typing import Any, TYPE_CHECKING
 
 import discord
+from discord import app_commands
+from discord.app_commands import Choice
 from discord.ext import commands
 from discord.utils import format_dt, oauth_url
 
@@ -15,7 +17,7 @@ from app.util.common import converter, walk_collection
 from app.util.converters import better_bool, query_setting
 from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginator
 from app.util.structures import Timer as PingTimer
-from app.util.types import CommandResponse
+from app.util.types import CommandResponse, TypedInteraction
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -138,7 +140,7 @@ class Miscellaneous(Cog):
 
         await setting.set(ctx, value)
 
-    @group(aliases={'cd', 'cds', 'cooldown'})
+    @group(aliases={'cd', 'cds', 'cooldown'}, hybrid=True, fallback='list')
     @simple_cooldown(2, 3)
     async def cooldowns(self, ctx: Context) -> CommandResponse:
         """View all pending cooldowns."""
@@ -162,7 +164,9 @@ class Miscellaneous(Cog):
         return Paginator(ctx, formatter), REPLY
 
     # noinspection PyShadowingNames
-    @cooldowns.command('remind', aliases={'reminder', 'notify', 'remindme', 'rm', 'rem'})
+    @cooldowns.command(
+        'remind', aliases={'reminder', 'notify', 'remindme', 'rm', 'rem'}, hybrid=True, with_app_command=False,
+    )
     @simple_cooldown(2, 5)
     async def cooldowns_remind(self, ctx: Context, *, command: CommandConverter) -> CommandResponse:
         """Reminds you when a command is available to be used again."""
@@ -186,6 +190,20 @@ class Miscellaneous(Cog):
             f'Alright, I will remind you in this channel when you can use `{command.qualified_name}` again ({formatted}).',
             REPLY,
         )
+
+    @cooldowns_remind.define_app_command()
+    @app_commands.rename(cmd='command')
+    @app_commands.describe(cmd='The command to remind you about.')
+    async def cooldowns_remind_app_command(self, ctx: Context, cmd: str) -> CommandResponse:
+        return await self.cooldowns_remind(ctx, command=ctx.bot.get_command(cmd))
+
+    @cooldowns_remind_app_command.autocomplete('cmd')
+    async def command_autocomplete(self, _: TypedInteraction, current: str) -> list[Choice[str]]:
+        return [
+            Choice(name=cmd.qualified_name, value=cmd.qualified_name)
+            for cmd in self.bot.walk_commands()
+            if cmd.qualified_name.startswith(current.lower())
+        ]
 
     @Cog.listener()
     async def on_cooldown_reminder_timer_complete(self, timer: Timer) -> None:

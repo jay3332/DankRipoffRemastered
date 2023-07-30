@@ -502,7 +502,7 @@ class HybridCommand(Command, commands.HybridCommand):
 @discord.utils.copy_doc(commands.Group)
 class GroupCommand(commands.Group, Command):
     @discord.utils.copy_doc(commands.Group.command)
-    def command(self, *args: Any, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], Command]:
+    def command(self, *args: Any, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], Command | HybridCommand]:
         def decorator(func: AsyncCallable[..., Any]) -> Command:
             from app.core.helpers import command
 
@@ -514,7 +514,7 @@ class GroupCommand(commands.Group, Command):
         return decorator
 
     @discord.utils.copy_doc(commands.Group.group)
-    def group(self, *args: Any, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], GroupCommand]:
+    def group(self, *args: Any, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], GroupCommand | HybridGroupCommand]:
         def decorator(func: AsyncCallable[..., Any]) -> GroupCommand:
             from app.core.helpers import group
 
