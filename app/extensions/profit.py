@@ -1474,9 +1474,9 @@ class Profit(Cog):
             return
 
     @rob.define_app_command()
-    @app_commands.describe(member='The member to rob.')
-    async def rob_app_command(self, ctx: Context, member: discord.Member) -> None:
-        await ctx.invoke(self.rob, member=member)
+    @app_commands.describe(member='The victim of your robbery.')
+    async def rob_app_command(self, ctx: Context, victim: discord.Member) -> None:
+        await ctx.invoke(self.rob, user=victim)
 
 
 class ChopView(UserView):
