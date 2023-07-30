@@ -308,6 +308,15 @@ class Items:
             - **20%** more susceptible to being shot.
         '''))
 
+    @alcohol.to_remove
+    async def remove_alcohol(self, ctx: Context, item: Item) -> None:
+        record = await ctx.db.get_user_record(ctx.author.id)
+        if record.alcohol_expiry is None:
+            await ctx.send('You are not drunk!')
+            return
+        await record.update(last_alcohol_usage=None)
+        await ctx.send(f'{item.emoji} Removed the effects of alcohol; you are no longer drunk.')
+
     padlock = Item(
         type=ItemType.tool,
         key='padlock',
