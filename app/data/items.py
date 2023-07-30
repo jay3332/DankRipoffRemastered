@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import random
 from collections import defaultdict
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from textwrap import dedent
 from typing import Any, Awaitable, Callable, Generator, Generic, NamedTuple, TYPE_CHECKING, TypeAlias, TypeVar
 
 from discord.ext.commands import BadArgument
+from discord.utils import format_dt
 
 from app.util.common import pluralize
 from config import Emojis
@@ -71,6 +73,7 @@ class Item(Generic[T]):
     name: str
     emoji: str
     description: str
+    brief: str = None
     price: int = None
     sell: int = None
     buyable: bool = False
@@ -86,6 +89,9 @@ class Item(Generic[T]):
     removal_callback: RemovalCallback | None = None
 
     def __post_init__(self) -> None:
+        if not self.brief:
+            self.brief = self.description.split('\n')[0]
+
         if not self.singular:
             self.singular = 'an' if self.name.lower().startswith(tuple('aeiou')) else 'a'
 
@@ -200,6 +206,107 @@ class Items:
         price=4200,
         buyable=True,
     )
+
+    pistol = Item(
+        type=ItemType.tool,
+        key='pistol',
+        name='Pistol',
+        emoji='<:pistol:1134641571963338873>',
+        description=(
+            'A quite deadly weapon that can be used to shoot and kill others. We do not condone violence of any sort '
+            '(especially with deadly weapons) in real life, but in this virtual economy system it is perfectly fine. '
+            'Shoot others with the `shoot` command and steal their full wallet in the process. You can be protected '
+            'against being shot by using a **lifesaver**. There is also a large chance that you can be caught by the '
+            'police, pay a large fine, and even get yourself killed.'
+        ),
+        price=10_000,
+        buyable=True,
+    )
+
+    alcohol = Item(
+        type=ItemType.tool,
+        key='alcohol',
+        name='Alcohol',
+        emoji='<:alcohol:1134641932178559027>',
+        brief='Intoxicate yourself with alcohol for two hours!',
+        description=(
+            'Intoxicate yourself with alcohol! Drinking alcohol will make you drunk for two hours.\n\nWhile drunk, you will:\n'
+            '- have a +50% coin multiplier,\n'
+            '- have a +50% gambling multiplier,\n'
+            '- have a +15% chance to successfully rob others,\n'
+            '- have a +15% chance to successfully shoot others, **but:**\n'
+            '- not be able to work,\n'
+            '- are 20% more susceptible to being robbed, and\n'
+            '- are 20% more susceptible to being shot.\n\n'
+            'Additionally, when drinking alcohol, there is:\n'
+            '- a small chance you will be caught by the police and pay a fine,\n'
+            '- a small chance you will kill yourself of alcohol poisoning, and\n'
+            '- a 6-hour cooldown from when you last drank alcohol for when you can drink again.'
+        ),
+        price=6_000,
+        buyable=True,
+    )
+
+    ALCOHOL_USAGE_COOLDOWN = datetime.timedelta(hours=6)
+    ALCOHOL_FINE_MESSAGES = (
+        'You drink your alcohol in public alcohol-free zone and you are caught by the police. They force you to pay a fine of {}.',
+        'You get a bit too woozy and break a few laws, you end up accumulating {} in fines.',
+    )
+    ALCOHOL_DEATH_MESSAGES = (
+        'You drink a bit too much alcohol and die due to alcohol poisoning. Good going!',
+    )
+
+    @alcohol.to_use
+    async def use_alcohol(self, ctx: Context, item: Item) -> None:
+        record = await ctx.db.get_user_record(ctx.author.id)
+        # enforce 6 hour cooldown
+        if record.last_alcohol_usage and ctx.now - record.last_alcohol_usage <= self.ALCOHOL_USAGE_COOLDOWN:
+            retry_at = record.last_alcohol_usage + self.ALCOHOL_USAGE_COOLDOWN
+            raise ItemUsageError(
+                "Calm down you drunkard, you're drinking too fast! "
+                f"You can drink alcohol again {format_dt(retry_at, 'R')}."
+            )
+
+        message = await ctx.send(f'{item.emoji} Drinking the alcohol...')
+        await asyncio.sleep(2)
+
+        # pay a fine
+        if random.random() < 0.08:
+            fine = max(500, int(record.wallet * random.uniform(0.4, 1.0)))
+            message = random.choice(self.ALCOHOL_FINE_MESSAGES).format(f'{Emojis.coin} **{fine}**')
+
+            if record.wallet < 500:
+                message += ' Since you\'re poor, they kill you instead and take your wallet.'
+                async with ctx.db.acquire() as conn:
+                    await record.make_dead(reason='not being able to afford fines', connection=conn)
+                    await record.update(wallet=0)
+
+                await ctx.send(f'\U0001f480 {message}')
+                return
+
+            await record.add(wallet=-fine)
+            await ctx.send(f'\U0001f6a8 {message}')
+            return
+
+        # make dead
+        if random.random() < 0.01:
+            await record.make_dead(reason='alcohol poisoning')
+            await ctx.send(f'\U0001f480 {random.choice(self.ALCOHOL_DEATH_MESSAGES)}')
+            return
+
+        await record.update(last_alcohol_usage=ctx.now)
+        await ctx.maybe_edit(message, dedent(f'''
+            {item.emoji} You drink the alcohol and for the next two hours you are granted with:
+            - a **+50%** coin multiplier,
+            - a **+50%** gambling multiplier,
+            - a **+15%** chance to successfully rob others, and
+            - a **+15%** chance to successfully shoot others.
+            
+            However, for these two hours, you will also be:
+            - unable to work,
+            - **20%** more susceptible to being robbed, and
+            - **20%** more susceptible to being shot.
+        '''))
 
     padlock = Item(
         type=ItemType.tool,

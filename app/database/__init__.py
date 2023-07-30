@@ -629,6 +629,7 @@ class UserRecord:
     """Stores data about a user."""
 
     LEVELING_CURVE = dict(base=100, factor=1.22)
+    ALCOHOL_ACTIVE_DURATION = datetime.timedelta(hours=2)
 
     def __init__(self, user_id: int, *, db: Database) -> None:
         self.db: Database = db
@@ -814,7 +815,7 @@ class UserRecord:
 
     @property
     def coin_multiplier(self) -> float:
-        return 1 + self.prestige * 0.25
+        return 1 + self.prestige * 0.25 + (self.alcohol_expiry is not None) * 0.5
 
     @property
     def bank_space_growth_multiplier(self) -> float:
@@ -827,6 +828,20 @@ class UserRecord:
     @property
     def padlock_active(self) -> bool:
         return self.data['padlock_active']
+
+    @property
+    def last_alcohol_usage(self) -> datetime.datetime | None:
+        return self.data.get('last_alcohol_usage')
+
+    @property
+    def alcohol_expiry(self) -> datetime.datetime | None:
+        if self.last_alcohol_usage is None:
+            return None
+
+        elapsed = discord.utils.utcnow() - self.last_alcohol_usage
+        if elapsed > self.ALCOHOL_ACTIVE_DURATION:
+            return None
+        return self.last_alcohol_usage + self.ALCOHOL_ACTIVE_DURATION
 
     @property
     def unread_notifications(self) -> int:

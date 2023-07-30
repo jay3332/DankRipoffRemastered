@@ -270,7 +270,11 @@ class Profit(Cog):
     @user_max_concurrency(1)
     @lock_transactions
     async def invest(self, ctx: Context, *, amount: Investment()):
-        """Invest your coins and potentially get more money. There is a chance that you could fail and lose your investment, however."""
+        """Invest your coins and potentially get more money. There is a chance that you could fail and lose your investment, however.
+
+        Although this command carries gamble-like properties, it is not considered a gambling command, so alcohol is
+        not applied to this command.
+        """
         record = await ctx.db.get_user_record(ctx.author.id)
         await record.add_random_exp(4, 7, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.45)
@@ -287,14 +291,14 @@ class Profit(Cog):
 
         for _ in range(5):
             if random.random() > 0.15:
-                multiplier += random.uniform(.14, .24)
+                multiplier += random.uniform(.13, .19)
 
                 embed = make_embed()
                 embed.description = f'{Emojis.loading} Investing...'
 
                 embed.add_field(name="Earnings", value=dedent(f"""
                     {multiplier:,.1%} of initial value
-                    \u2937 {Emojis.coin} +{round(amount * multiplier):,}
+                    {Emojis.Expansion.standalone} {Emojis.coin} +{round(amount * multiplier):,}
                 """), inline=False)
 
                 embed.add_field(name="Total Return", value=f"{Emojis.coin} {amount * (1 + multiplier):,.0f}")
@@ -317,7 +321,7 @@ class Profit(Cog):
 
         embed.add_field(name="Earnings", value=dedent(f"""
             {multiplier:,.1%} of initial value
-            \u2937 {Emojis.coin} +{amount * multiplier:,.0f}
+            {Emojis.Expansion.standalone} {Emojis.coin} +{amount * multiplier:,.0f}
         """), inline=False)
 
         embed.add_field(name="Total Return", value=f"{Emojis.coin} {profit:,}")
@@ -1254,7 +1258,16 @@ class Profit(Cog):
         skills = await record.skill_manager.wait()
         their_skills = await their_record.skill_manager.wait()
 
-        success_chance = max(50 + skills.points_in('robbery') - their_skills.points_in('defense') * 1.5, 2) / 100
+        has_alcohol = record.alcohol_expiry is not None
+        they_have_alcohol = their_record.alcohol_expiry is not None
+        success_chance = (
+            50
+            + skills.points_in('robbery')
+            - their_skills.points_in('defense') * 1.5
+            + 15 * has_alcohol
+            - 20 * they_have_alcohol
+        )
+        success_chance = max(min(success_chance, 100), 2) / 100
 
         if not await ctx.confirm(
             f'Are you sure you want to rob **{user.name}**? (Success chance: {success_chance:.0%})',

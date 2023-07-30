@@ -9,12 +9,17 @@ from textwrap import dedent
 from typing import Any, ClassVar, Final, NamedTuple, TYPE_CHECKING
 
 import discord
+from discord.utils import format_dt
 
 from app.core import Cog, Context, EDIT, REPLY, command, group, lock_transactions, simple_cooldown, user_max_concurrency
+from app.data.items import Items
 from app.util.common import pluralize
 from app.util.converters import CasinoBet
 from app.util.views import UserView
 from config import Colors, Emojis
+
+if TYPE_CHECKING:
+    from app.database import UserRecord
 
 
 class ScratchCell(Enum):
@@ -183,6 +188,16 @@ class Casino(Cog):
         first, second = roll
         return f"{Emojis.dice[first]} {Emojis.dice[second]}"
 
+    @staticmethod
+    def adjust_multiplier(record: UserRecord) -> tuple[float, str]:
+        if expiry := record.alcohol_expiry:
+            return (
+                0.5,
+                f'\n{Emojis.Expansion.first} applied +50% multiplier from {Items.alcohol.emoji} Alcohol)'
+                f'\n{Emojis.Expansion.last} Expires in {format_dt(expiry, "R")}'
+            )
+        return 0, ''
+
     @command(aliases={'diceroll', 'r', 'bet', 'gamble'})
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
@@ -209,14 +224,17 @@ class Casino(Cog):
         embed.add_field(name=f'My Roll ({my_sum})', value=self._format_roll(my_dice), inline=True)
 
         if their_sum > my_sum:
-            base_multiplier = random.uniform(0.55, 0.95)
-            profit = await record.add_coins(round(bet * base_multiplier))
+            multiplier = random.uniform(0.55, 0.95)
+            adjustment, adjusted_text = self.adjust_multiplier(record)
+            multiplier += adjustment
+
+            profit = await record.add_coins(round(bet * multiplier))
 
             embed.colour = Colors.success
             embed.set_author(name='Winner!', icon_url=ctx.author.avatar.url)
 
             embed.add_field(name=f'You won {Emojis.coin} **{profit:,}**!', inline=False, value=dedent(f"""
-                Multiplier: **{base_multiplier:.1%}**
+                Multiplier: **{multiplier:.1%}**{adjusted_text}
                 You now have {Emojis.coin} **{record.wallet:,}**.
             """))
 

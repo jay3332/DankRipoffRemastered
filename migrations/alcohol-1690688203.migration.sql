@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN last_alcohol_usage TIMESTAMP WITH TIME ZONE;

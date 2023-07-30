@@ -20,7 +20,6 @@ from app.core import (
     simple_cooldown,
     user_max_concurrency,
 )
-from app.core.flags import Flags, flag
 from app.data.items import Item, ItemRarity, ItemType, Items
 from app.data.recipes import Recipe, Recipes
 from app.util.common import cutoff, get_by_key, image_url_from_emoji, progress_bar, query_collection, walk_collection
@@ -325,7 +324,7 @@ def shop_paginator(
         owned = inventory.cached.quantity_of(i)
         owned = f'(You own {owned:,})' if owned else ''
 
-        description = cutoff(i.description, max_length=100)
+        description = cutoff(i.brief, max_length=100)
 
         end = loc and loc + offset
         name = i.name
@@ -488,7 +487,6 @@ class Transactions(Cog):
             return paginator, REPLY
 
         item: Item
-
         owned = inventory.cached.quantity_of(item)
 
         embed.title = f'{item.display_name} ({owned} owned)'

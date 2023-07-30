@@ -5,6 +5,7 @@ from typing import Any, Literal, TYPE_CHECKING
 
 import discord
 from discord import app_commands
+from discord.utils import format_dt
 
 from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
 from app.data.items import Items
@@ -126,6 +127,8 @@ class Stats(Cog):
         details = []
         if data.prestige:
             details.append(f'- Prestige {data.prestige}: +**{data.prestige * 25}%** (global)')
+        if expiry := data.alcohol_expiry:
+            details.append(f'- Alcohol: +**50%** (expires {format_dt(expiry, "R")}, global)')
 
         embed.add_field(
             name=f"Total Coin Multiplier: **{data.coin_multiplier - 1:.1%}**",
