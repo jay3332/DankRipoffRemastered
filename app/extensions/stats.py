@@ -51,7 +51,7 @@ class Stats(Cog):
     emoji = '\U0001f4ca'
 
     # noinspection PyTypeChecker
-    @command(aliases={"bal", "coins", "stats", "b", "wallet"})
+    @command(aliases={"bal", "coins", "stats", "b", "wallet"}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
     async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> CommandResponse:
         """View your wallet and bank balance, or optionally, someone elses."""
@@ -72,9 +72,11 @@ class Stats(Cog):
 
         return embed, REPLY, NO_EXTRA if ctx.author != user else None
 
-    @app_commands.command(name='balance', description=balance.description)
+    @app_commands.command(name='balance', description=balance.short_doc)
     async def balance_app_command(self, itx: TypedInteraction, member: discord.Member = None):
         context = await self.bot.get_context(itx)
+        if not await self.balance.can_run(context):
+            return
         await context.invoke(self.balance, user=member)
 
     @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'})
@@ -128,7 +130,7 @@ class Stats(Cog):
         if data.prestige:
             details.append(f'- Prestige {data.prestige}: +**{data.prestige * 25}%** (global)')
         if expiry := data.alcohol_expiry:
-            details.append(f'- Alcohol: +**50%** (expires {format_dt(expiry, "R")}, global)')
+            details.append(f'- Alcohol: +**25%** (expires {format_dt(expiry, "R")}, global)')
 
         embed.add_field(
             name=f"Total Coin Multiplier: **{data.coin_multiplier - 1:.1%}**",

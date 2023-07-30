@@ -212,12 +212,14 @@ class Items:
         key='pistol',
         name='Pistol',
         emoji='<:pistol:1134641571963338873>',
+        brief='A quite deadly weapon that can be used to shoot and kill others.',
         description=(
             'A quite deadly weapon that can be used to shoot and kill others. We do not condone violence of any sort '
-            '(especially with deadly weapons) in real life, but in this virtual economy system it is perfectly fine. '
-            'Shoot others with the `shoot` command and steal their full wallet in the process. You can be protected '
-            'against being shot by using a **lifesaver**. There is also a large chance that you can be caught by the '
-            'police, pay a large fine, and even get yourself killed.'
+            '(especially with deadly weapons) in real life, but in this virtual economy system it is perfectly fine.\n\n'
+            'Shoot others with the `shoot` command and steal their full wallet in the process. Owning a pistol also '
+            'boosts profits from the `crime` command by **50%**.\n\n'
+            'You can be protected against being shot by using a **lifesaver**. There is also a large chance that you can '
+            'be caught by the police, pay a large fine, and even get yourself killed.'
         ),
         price=10_000,
         buyable=True,
@@ -231,7 +233,7 @@ class Items:
         brief='Intoxicate yourself with alcohol for two hours!',
         description=(
             'Intoxicate yourself with alcohol! Drinking alcohol will make you drunk for two hours.\n\nWhile drunk, you will:\n'
-            '- have a +50% coin multiplier,\n'
+            '- have a +25% coin multiplier,\n'
             '- have a +50% gambling multiplier,\n'
             '- have a +15% chance to successfully rob others,\n'
             '- have a +15% chance to successfully shoot others, **but:**\n'
@@ -243,7 +245,7 @@ class Items:
             '- a small chance you will kill yourself of alcohol poisoning, and\n'
             '- a 6-hour cooldown from when you last drank alcohol for when you can drink again.'
         ),
-        price=6_000,
+        price=8_000,
         buyable=True,
     )
 
@@ -271,7 +273,7 @@ class Items:
         await asyncio.sleep(2)
 
         # pay a fine
-        if random.random() < 0.08:
+        if random.random() < 0.1:
             fine = max(500, int(record.wallet * random.uniform(0.4, 1.0)))
             message = random.choice(self.ALCOHOL_FINE_MESSAGES).format(f'{Emojis.coin} **{fine}**')
 
@@ -296,7 +298,7 @@ class Items:
 
         await record.update(last_alcohol_usage=ctx.now)
         await ctx.maybe_edit(message, dedent(f'''
-            {item.emoji} You drink the alcohol and for the next two hours you are granted with:
+            You drink the {item.emoji} **Alcohol** and for the next two hours you are granted with:
             - a **+50%** coin multiplier,
             - a **+50%** gambling multiplier,
             - a **+15%** chance to successfully rob others, and

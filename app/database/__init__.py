@@ -815,7 +815,7 @@ class UserRecord:
 
     @property
     def coin_multiplier(self) -> float:
-        return 1 + self.prestige * 0.25 + (self.alcohol_expiry is not None) * 0.5
+        return 1 + self.prestige * 0.25 + (self.alcohol_expiry is not None) * 0.25
 
     @property
     def bank_space_growth_multiplier(self) -> float:
