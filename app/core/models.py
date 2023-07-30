@@ -478,22 +478,20 @@ class Command(commands.Command):
 
 @discord.utils.copy_doc(commands.HybridCommand)
 class HybridCommand(Command, commands.HybridCommand):
-    def define_app_command(self, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], None]:
-        def decorator(func: AsyncCallable[..., Any]) -> None:
-
+    def define_app_command(self, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], AppCommand]:
+        def decorator(func: AsyncCallable[..., Any]) -> AppCommand:
             @functools.wraps(func)
             async def wrapper(slf: Cog, itx: TypedInteraction, *args: Any, **kwds: Any) -> Any:
                 # TODO: call full hooks?
                 ctx = await slf.bot.get_context(itx)
                 ctx.command = self
+                print(ctx.command, ctx.command.cog)
 
                 if not await self.can_run(ctx):
                     return
                 return await func(slf, ctx, *args, **kwds)
 
-            self.app_command = discord.app_commands.command(
-                name=self.name, description=self.short_doc, **kwargs,
-            )(wrapper)
+            return discord.app_commands.command(name=self.name, description=self.short_doc, **kwargs)(wrapper)
 
         return decorator
 
