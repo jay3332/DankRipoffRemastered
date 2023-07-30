@@ -6,6 +6,7 @@ from functools import wraps
 from typing import Any, Callable, Final, Iterable, TYPE_CHECKING
 
 import discord
+from discord.app_commands import Command as AppCommand
 from discord.ext import commands
 
 from app.core.models import Command, GroupCommand, HybridCommand, HybridGroupCommand
@@ -14,8 +15,6 @@ from app.util.pagination import Paginator
 from app.util.structures import LockWithReason
 
 if TYPE_CHECKING:
-    from discord.app_commands import Command as AppCommand
-
     from app.core.models import Context, Cog
     from app.util.types import TypedInteraction
 
