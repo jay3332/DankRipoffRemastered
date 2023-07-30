@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from datetime import timedelta
 from functools import wraps
-from typing import Any, Callable, Final, Iterable, TYPE_CHECKING
+from typing import Any, Callable, Final, Iterable, Literal, TYPE_CHECKING, overload
 
 import discord
 from discord.app_commands import Command as AppCommand
@@ -231,6 +231,40 @@ def _resolve_command_kwargs(
         kwargs['help'] = help
 
     return kwargs
+
+
+# noinspection PyShadowingBuiltins
+@overload
+def command(
+    name: str = MISSING,
+    *,
+    alias: str = MISSING,
+    aliases: Iterable[str] = MISSING,
+    usage: str = MISSING,
+    brief: str = MISSING,
+    help: str = MISSING,
+    easy_callback: bool = True,
+    hybrid: Literal[True] | AppCommand = False,
+    **other_kwargs: Any,
+) -> Callable[..., HybridCommand]:
+    ...
+
+
+# noinspection PyShadowingBuiltins
+@overload
+def command(
+    name: str = MISSING,
+    *,
+    alias: str = MISSING,
+    aliases: Iterable[str] = MISSING,
+    usage: str = MISSING,
+    brief: str = MISSING,
+    help: str = MISSING,
+    easy_callback: bool = True,
+    hybrid: Literal[False] = False,
+    **other_kwargs: Any,
+) -> Callable[..., Command]:
+    ...
 
 
 # noinspection PyShadowingBuiltins

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import datetime
+import functools
 from collections import OrderedDict
 from functools import wraps
 from typing import Any, Awaitable, Callable, NamedTuple, Literal, TYPE_CHECKING, Union, Self
 
 import discord
+from discord.app_commands import Command as AppCommand, Group as AppGroup
 from discord.ext import commands
 from discord.utils import MISSING, maybe_coroutine as maybe_coro
 
@@ -476,7 +478,21 @@ class Command(commands.Command):
 
 @discord.utils.copy_doc(commands.HybridCommand)
 class HybridCommand(Command, commands.HybridCommand):
-    pass
+    def define_app_command(self, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], AppCommand]:
+        def decorator(func: AsyncCallable[..., Any]) -> AppCommand:
+            @functools.wraps(func)
+            async def wrapper(slf: Cog, itx: TypedInteraction, *args: Any, **kwds: Any) -> Any:
+                # TODO: call full hooks?
+                ctx = await slf.bot.get_context(itx)
+                ctx.command = self
+
+                if not await self.can_run(ctx):
+                    return
+                return await func(slf, ctx, *args, **kwds)
+
+            return discord.app_commands.command(name=self.name, description=self.short_doc, **kwargs)(wrapper)
+
+        return decorator
 
 
 @discord.utils.copy_doc(commands.Group)

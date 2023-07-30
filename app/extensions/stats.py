@@ -72,13 +72,8 @@ class Stats(Cog):
 
         return embed, REPLY, NO_EXTRA if ctx.author != user else None
 
-    @app_commands.command(name='balance', description=balance.short_doc)
-    async def balance_app_command(self, itx: TypedInteraction, member: discord.Member = None):
-        ctx = await self.bot.get_context(itx)
-        ctx.command = self.balance
-
-        if not await self.balance.can_run(ctx):
-            return
+    @balance.define_app_command()
+    async def balance_app_command(self, ctx: Context, member: discord.Member = None) -> None:
         await ctx.invoke(self.balance, user=member)
 
     @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'})
