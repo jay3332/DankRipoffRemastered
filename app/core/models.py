@@ -485,8 +485,8 @@ class HybridCommand(Command, commands.HybridCommand):
                 # TODO: call full hooks?
                 ctx = await slf.bot.get_context(itx)
                 ctx.command = self
-                print(ctx.command, ctx.command.cog)
 
+                await ctx.send(f'{ctx.command} {ctx.command.cog}')
                 if not await self.can_run(ctx):
                     return
                 return await func(slf, ctx, *args, **kwds)
