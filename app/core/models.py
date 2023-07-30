@@ -494,13 +494,19 @@ class HybridCommand(Command, commands.HybridCommand):
                     return
                 return await func(slf, ctx, *args, **kwds)
 
-            return discord.app_commands.Command(
+            parent = None
+            if isinstance(self.parent, HybridGroupCommand):
+                parent = self.parent.app_command
+
+            command = discord.app_commands.Command(
                 name=self.name,
                 description=self.short_doc,
                 callback=wrapper,
-                parent=self.parent.app_command if isinstance(self.parent, HybridGroupCommand) else None,
+                parent=parent,
                 **kwargs,
             )
+            parent and parent.add_command(command)
+            return command
 
         return decorator
 
