@@ -193,8 +193,8 @@ class Casino(Cog):
         if expiry := record.alcohol_expiry:
             return (
                 0.5,
-                f'\n{Emojis.Expansion.first} applied +50% multiplier from {Items.alcohol.emoji} Alcohol)'
-                f'\n{Emojis.Expansion.last} Expires in {format_dt(expiry, "R")}'
+                f'\n{Emojis.Expansion.first} applied +50% multiplier from {Items.alcohol.emoji} Alcohol'
+                f'\n{Emojis.Expansion.last} expires in {format_dt(expiry, "R")}'
             )
         return 0, ''
 
