@@ -312,7 +312,7 @@ class Items:
     async def remove_alcohol(self, ctx: Context, item: Item) -> None:
         record = await ctx.db.get_user_record(ctx.author.id)
         if record.alcohol_expiry is None:
-            await ctx.send('You are not drunk!')
+            await ctx.send('You are not drunk (i.e. you don\'t have alcohol active).')
             return
         await record.update(last_alcohol_usage=None)
         await ctx.send(f'{item.emoji} Removed the effects of alcohol; you are no longer drunk.')
