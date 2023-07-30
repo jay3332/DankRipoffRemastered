@@ -486,16 +486,21 @@ class HybridCommand(Command, commands.HybridCommand):
                 # FIXME: this is a bit hacky
 
                 # this is especially hacky
+                self.cog = slf
                 ctx = await slf.bot.get_context(itx)
-                ctx.command = command = self.copy()
-                command.cog = slf
+                ctx.command = self
 
                 if not await self.can_run(ctx):
                     return
                 return await func(slf, ctx, *args, **kwds)
 
-            caller = self.parent.app_command.command if self.parent else discord.app_commands.command  # type: ignore
-            return caller(name=self.name, description=self.short_doc, **kwargs)(wrapper)
+            return discord.app_commands.Command(
+                name=self.name,
+                description=self.short_doc,
+                callback=wrapper,
+                parent=self.parent.app_command if isinstance(self.parent, HybridGroupCommand) else None,
+                **kwargs,
+            )
 
         return decorator
 
