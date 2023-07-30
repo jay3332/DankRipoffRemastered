@@ -1474,7 +1474,7 @@ class Profit(Cog):
             return
 
     @rob.define_app_command()
-    @app_commands.describe(member='The victim of your robbery.')
+    @app_commands.describe(victim='The victim of your robbery.')
     async def rob_app_command(self, ctx: Context, victim: discord.Member) -> None:
         await ctx.invoke(self.rob, user=victim)
 
