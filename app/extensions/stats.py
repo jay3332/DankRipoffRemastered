@@ -5,6 +5,7 @@ from typing import Any, Literal, TYPE_CHECKING
 
 import discord
 from discord import app_commands
+from discord.app_commands import Choice
 from discord.utils import format_dt
 
 from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
@@ -17,7 +18,7 @@ from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatt
 from config import Colors, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
-    from app.util.types import CommandResponse, TypedInteraction
+    from app.util.types import CommandResponse
 
 
 class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
@@ -256,13 +257,14 @@ class Stats(Cog):
         rarity='Show only items of this rarity.',
         category='Show only items from this category.',
     )
+    @app_commands.choices(category=[Choice(name=cat.name.title(), value=cat.name) for cat in list(ItemType)])
     async def book_app_command(
         self,
         ctx: Context,
         rarity: Literal['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'] = None,
-        category: ItemType = None,
+        category: str = None,
     ):
-        await ctx.invoke(self.book, rarity=(rarity or 'all').lower(), category=category)
+        await ctx.invoke(self.book, rarity=(rarity or 'all').lower(), category=query_item_type(category))
 
     @group(aliases={"notifs", "notification", "notif", "nt"}, hybrid=True, fallback='list')
     @simple_cooldown(1, 6)
