@@ -220,7 +220,10 @@ class Profit(Cog):
     @simple_cooldown(1, 15)
     @user_max_concurrency(1)
     async def beg(self, ctx: Context):
-        """Beg for coins. There is a chance that you can get nothing, and a small chance that you can obtain some items"""
+        """Beg for coins.
+
+        There is a chance that you can get nothing, and a small chance that you can obtain some items.
+        """
         yield f"{Emojis.loading} {random.choice(self.BEG_INITIAL_MESSAGES)}", REPLY
         person = random.choice(self.BEG_PEOPLE)
 
@@ -271,7 +274,9 @@ class Profit(Cog):
     @user_max_concurrency(1)
     @lock_transactions
     async def invest(self, ctx: Context, *, amount: Investment()):
-        """Invest your coins and potentially get more money. There is a chance that you could fail and lose your investment, however.
+        """Invest your coins and potentially get more money.
+
+        There is a chance that you could fail and lose your investment.
 
         Although this command carries gamble-like properties, it is not considered a gambling command, so alcohol is
         not applied to this command.
@@ -1224,7 +1229,10 @@ class Profit(Cog):
     @lock_transactions
     async def rob(self, ctx: Context, *, user: CaseInsensitiveMemberConverter):
         # sourcery no-metrics skip: merge-nested-ifs
-        """Attempt to rob someone of their coins! There is a chance that you might fail and pay a fine, or even die."""
+        """Attempt to rob someone of their coins!
+
+        There is a chance that you might fail and pay a fine, or even die.
+        """
         if user == ctx.author:
             yield 'What are you trying to do? Rob yourself? Sounds kinda dumb to me.', BAD_ARGUMENT
             return

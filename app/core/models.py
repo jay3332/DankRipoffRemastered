@@ -489,6 +489,7 @@ class _AppCommandOverride(discord.app_commands.Command):
 
 def define_app_command_impl(
     source: HybridCommand | HybridGroupCommand,
+    cls: type[discord.app_commands.Command | discord.app_commands.Group],
     **kwargs: Any,
 ) -> Callable[[AsyncCallable[..., Any]], None]:
     def decorator(func: AsyncCallable[..., Any]) -> None:
@@ -506,7 +507,7 @@ def define_app_command_impl(
                 return
             return await func(slf, ctx, *args, **kwds)
 
-        source.app_command = _AppCommandOverride(
+        source.app_command = cls(
             name=source.name,
             description=source.short_doc,
             parent=source.parent.app_command if isinstance(source.parent, HybridGroupCommand) else None,
@@ -519,7 +520,8 @@ def define_app_command_impl(
 
 @discord.utils.copy_doc(commands.HybridCommand)
 class HybridCommand(Command, commands.HybridCommand):
-    define_app_command = define_app_command_impl
+    def define_app_command(self, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], None]:
+        return define_app_command_impl(self, _AppCommandOverride, **kwargs)
 
 
 @discord.utils.copy_doc(commands.Group)
@@ -553,7 +555,8 @@ class GroupCommand(commands.Group, Command):
 
 @discord.utils.copy_doc(commands.HybridGroup)
 class HybridGroupCommand(GroupCommand, commands.HybridGroup):
-    define_app_command = define_app_command_impl
+    def define_app_command(self, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], None]:
+        return define_app_command_impl(self, discord.app_commands.Group, **kwargs)
 
     def copy(self) -> Self:
         copy = super().copy()

@@ -15,6 +15,7 @@ from app.data.skills import Skill as SkillObject, Skills, TrainingFailure
 from app.util.common import humanize_duration, walk_collection
 from app.util.converters import query_skill
 from app.util.pagination import FieldBasedFormatter, Paginator
+from app.util.types import TypedInteraction
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -27,7 +28,7 @@ class Skill(Cog):
     emoji = '\U0001f52e'
 
     # noinspection PyTypeChecker
-    @group(aliases={'skill', 'sk'}, hybrid=True, fallback='list', with_app_command=False)
+    @group(aliases={'skill', 'sk'}, hybrid=True)
     @simple_cooldown(2, 2)
     async def skills(self, ctx: Context, *, skill: query_skill = None) -> tuple[Paginator, Any] | None:
         """View a dashboard of all of your skills, or information on a specific skill."""
@@ -77,8 +78,13 @@ class Skill(Cog):
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=3)), REPLY
 
-    @skills.define_app_command()
-    async def skills_list(self, ctx: Context) -> None:
+    @skills.app_command.command(name='list', description='View a list of all available skills')
+    async def skills_list(self, interaction: TypedInteraction) -> None:
+        ctx = await self.bot.get_context(interaction)
+        ctx.command = self.skills
+
+        if not await self.skills.can_run(ctx):
+            return
         await ctx.invoke(self.skills)
 
     @staticmethod
@@ -167,7 +173,7 @@ class Skill(Cog):
 
         return embed, REPLY
 
-    @skills.command('issue', hidden=True)
+    @skills.command('issue', hidden=True, hybrid=True, with_app_command=False)
     async def skill_issue(self, _: Context) -> tuple[str, Any]:
         """skill issue"""
         return 'https://tenor.com/view/skillissue-skill-issue-gif-22125481', REPLY
