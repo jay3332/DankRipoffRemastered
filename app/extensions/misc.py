@@ -196,11 +196,11 @@ class Miscellaneous(Cog):
     @app_commands.describe(cmd='The command to remind you about.')
     async def cooldowns_remind_app_command(self, ctx: Context, cmd: str):
         if cmd := ctx.bot.get_command(cmd):
-            return await self.cooldowns_remind(ctx, command=cmd)
+            return await ctx.invoke(self.cooldowns_remind, command=cmd)  # type: ignore
 
         await ctx.reply(f'Unknown command {cmd!r}.', ephemeral=True)
 
-    @cooldowns_remind_app_command.autocomplete('cmd')
+    @cooldowns_remind.autocomplete('cmd')
     async def command_autocomplete(self, _: TypedInteraction, current: str) -> list[Choice[str]]:
         current = current.lower()
         return [

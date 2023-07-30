@@ -7,6 +7,7 @@ from textwrap import dedent
 from typing import Any, TYPE_CHECKING
 
 import discord
+from discord import app_commands
 
 from app.core import BAD_ARGUMENT, Cog, Context, REPLY, command, group, lock_transactions, simple_cooldown, \
     user_max_concurrency
@@ -26,12 +27,12 @@ class Skill(Cog):
     emoji = '\U0001f52e'
 
     # noinspection PyTypeChecker
-    @group(aliases={'skills', 'sk'})
+    @group(aliases={'skill', 'sk'}, hybrid=True, fallback='list', with_app_command=False)
     @simple_cooldown(2, 2)
-    async def skill(self, ctx: Context, *, skill: query_skill = None) -> tuple[Paginator, Any] | None:
+    async def skills(self, ctx: Context, *, skill: query_skill = None) -> tuple[Paginator, Any] | None:
         """View a dashboard of all of your skills, or information on a specific skill."""
         if skill is not None:
-            await ctx.invoke(self.skill_view, skill=skill)
+            await ctx.invoke(self.skills_view, skill=skill)
             return
 
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -76,6 +77,10 @@ class Skill(Cog):
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=3)), REPLY
 
+    @skills.define_app_command()
+    async def skills_list(self, ctx: Context) -> None:
+        await ctx.invoke(self.skills)
+
     @staticmethod
     def get_maximum_skill_points(record: UserRecord, skill_record: SkillInfo) -> int:
         acc = None
@@ -88,9 +93,10 @@ class Skill(Cog):
 
         return skill_record.into_skill().max_points
 
-    @skill.command('view', aliases={'i', 'info'})
+    @skills.command('view', aliases={'i', 'info'}, hybrid=True)
+    @app_commands.describe(skill='The skill to view information on.')
     @simple_cooldown(2, 2)
-    async def skill_view(self, ctx: Context, *, skill: query_skill) -> tuple[discord.Embed, Any]:
+    async def skills_view(self, ctx: Context, *, skill: query_skill) -> tuple[discord.Embed, Any]:
         """View information on a specific skill."""
         record = await ctx.db.get_user_record(ctx.author.id)
         skills = await record.skill_manager.wait()
@@ -124,11 +130,12 @@ class Skill(Cog):
 
         return embed, REPLY
 
-    @skill.command('buy', aliases={'purchase', 'b', 'unlock'})
+    @skills.command('buy', aliases={'purchase', 'b', 'unlock'}, hybrid=True)
+    @app_commands.describe(skill='The skill to buy.')
     @simple_cooldown(1, 6)
     @user_max_concurrency(1)
     @lock_transactions
-    async def skill_buy(self, ctx: Context, *, skill: query_skill) -> tuple[discord.Embed | str, Any]:
+    async def skills_buy(self, ctx: Context, *, skill: query_skill) -> tuple[discord.Embed | str, Any]:
         """Purchase a skill."""
         record = await ctx.db.get_user_record(ctx.author.id)
         skills = await record.skill_manager.wait()
@@ -160,12 +167,13 @@ class Skill(Cog):
 
         return embed, REPLY
 
-    @skill.command('issue', hidden=True)
+    @skills.command('issue', hidden=True)
     async def skill_issue(self, _: Context) -> tuple[str, Any]:
         """skill issue"""
         return 'https://tenor.com/view/skillissue-skill-issue-gif-22125481', REPLY
 
-    @command('train', aliases={'t', 'tr'})
+    @command('train', aliases={'t', 'tr'}, hybrid=True)
+    @app_commands.describe(skill='The skill to train.')
     @user_max_concurrency(1)
     async def train(self, ctx: Context, *, skill: query_skill) -> Any:
         """Train a skill. You must have unlocked the skill first."""
@@ -223,6 +231,17 @@ class Skill(Cog):
         embed.add_field(name='Updated Benefit', value=skill.benefit(skill_record.points))
 
         yield embed, REPLY
+
+    @skills_view.autocomplete('skill')
+    @skills_buy.autocomplete('skill')
+    @train.autocomplete('skill')
+    async def autocomplete_skill(self, _, current: str):
+        current = current.lower()
+        return [
+            app_commands.Choice(name=skill.name, value=skill.key)
+            for skill in walk_collection(Skills, SkillObject)
+            if current in skill.name.lower()
+        ]
 
 
 setup = Skill.simple_setup

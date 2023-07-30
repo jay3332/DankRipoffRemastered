@@ -295,6 +295,40 @@ def command(
 
 
 # noinspection PyShadowingBuiltins
+@overload
+def group(
+    name: str = MISSING,
+    *,
+    alias: str = MISSING,
+    aliases: Iterable[str] = MISSING,
+    usage: str = MISSING,
+    brief: str = MISSING,
+    help: str = MISSING,
+    easy_callback: bool = True,
+    hybrid: Literal[True] = False,
+    **other_kwargs: Any,
+) -> Callable[..., HybridGroupCommand]:
+    ...
+
+
+# noinspection PyShadowingBuiltins
+@overload
+def group(
+    name: str = MISSING,
+    *,
+    alias: str = MISSING,
+    aliases: Iterable[str] = MISSING,
+    usage: str = MISSING,
+    brief: str = MISSING,
+    help: str = MISSING,
+    easy_callback: bool = True,
+    hybrid: Literal[False] = False,
+    **other_kwargs: Any,
+) -> Callable[..., GroupCommand]:
+    ...
+
+
+# noinspection PyShadowingBuiltins
 def group(
     name: str = MISSING,
     *,

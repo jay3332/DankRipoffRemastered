@@ -425,7 +425,7 @@ class Transactions(Cog):
     emoji = '\U0001f91d'
 
     # noinspection PyTypeChecker
-    @command(aliases={"w", "with", "wd"})
+    @command(aliases={"w", "with", "wd"}, hybrid=True)
     @simple_cooldown(1, 8)
     @lock_transactions
     async def withdraw(self, ctx: Context, *, amount: BankTransaction(WITHDRAW)) -> Any:
@@ -447,7 +447,7 @@ class Transactions(Cog):
         return embed, REPLY
 
     # noinspection PyTypeChecker
-    @command(aliases={"d", "dep"})
+    @command(aliases={"d", "dep"}, hybrid=True)
     @simple_cooldown(1, 8)
     @lock_transactions
     async def deposit(self, ctx: Context, *, amount: BankTransaction(DEPOSIT)) -> Any:

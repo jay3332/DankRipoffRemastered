@@ -7,7 +7,7 @@ from functools import wraps
 from typing import Any, Awaitable, Callable, NamedTuple, Literal, TYPE_CHECKING, Union, Self
 
 import discord
-from discord.app_commands import Command as AppCommand, Group as AppGroup
+from discord.app_commands import Command as AppCommand
 from discord.ext import commands
 from discord.utils import MISSING, maybe_coroutine as maybe_coro
 
@@ -476,36 +476,50 @@ class Command(commands.Command):
         return super().signature
 
 
+class _AppCommandOverride(discord.app_commands.Command):
+    def copy(self) -> Self:
+        bindings = {
+            self.binding: self.binding,
+        }
+        return self._copy_with(
+            parent=self.parent, binding=self.binding, bindings=bindings,
+            set_on_binding=False,
+        )
+
+
+def define_app_command_impl(
+    source: HybridCommand | HybridGroupCommand,
+    **kwargs: Any,
+) -> Callable[[AsyncCallable[..., Any]], None]:
+    def decorator(func: AsyncCallable[..., Any]) -> None:
+        @functools.wraps(func)
+        async def wrapper(slf: Cog, itx: TypedInteraction, *args: Any, **kwds: Any) -> Any:
+            # TODO: call full hooks?
+            # FIXME: this is a bit hacky
+
+            # this is especially hacky
+            source.cog = slf
+            ctx = await slf.bot.get_context(itx)
+            ctx.command = source
+
+            if not await source.can_run(ctx):
+                return
+            return await func(slf, ctx, *args, **kwds)
+
+        source.app_command = _AppCommandOverride(
+            name=source.name,
+            description=source.short_doc,
+            parent=source.parent.app_command if isinstance(source.parent, HybridGroupCommand) else None,
+            callback=wrapper,
+            **kwargs,
+        )
+
+    return decorator
+
+
 @discord.utils.copy_doc(commands.HybridCommand)
 class HybridCommand(Command, commands.HybridCommand):
-    def define_app_command(self, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], AppCommand]:
-        def decorator(func: AsyncCallable[..., Any]) -> AppCommand:
-            @functools.wraps(func)
-            async def wrapper(slf: Cog, itx: TypedInteraction, *args: Any, **kwds: Any) -> Any:
-                # TODO: call full hooks?
-                # FIXME: this is a bit hacky
-
-                # this is especially hacky
-                self.cog = slf
-                ctx = await slf.bot.get_context(itx)
-                ctx.command = self
-
-                if not await self.can_run(ctx):
-                    return
-                return await func(slf, ctx, *args, **kwds)
-
-            command = discord.app_commands.Command(
-                name=self.name,
-                description=self.short_doc,
-                parent=self.parent.app_command if isinstance(self.parent, HybridGroupCommand) else None,
-                callback=wrapper,
-                **kwargs,
-            )
-            if isinstance(self.parent, HybridGroupCommand) and self.parent.app_command is not None:
-                self.parent.app_command.add_command(command)
-            return command
-
-        return decorator
+    define_app_command = define_app_command_impl
 
 
 @discord.utils.copy_doc(commands.Group)
@@ -523,7 +537,9 @@ class GroupCommand(commands.Group, Command):
         return decorator
 
     @discord.utils.copy_doc(commands.Group.group)
-    def group(self, *args: Any, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], GroupCommand | HybridGroupCommand]:
+    def group(self, *args: Any, **kwargs: Any) -> Callable[
+        [AsyncCallable[..., Any]], GroupCommand | HybridGroupCommand
+    ]:
         def decorator(func: AsyncCallable[..., Any]) -> GroupCommand:
             from app.core.helpers import group
 
@@ -537,4 +553,17 @@ class GroupCommand(commands.Group, Command):
 
 @discord.utils.copy_doc(commands.HybridGroup)
 class HybridGroupCommand(GroupCommand, commands.HybridGroup):
-    pass
+    define_app_command = define_app_command_impl
+
+    def copy(self) -> Self:
+        copy = super().copy()
+        # Ensure app commands are properly copied over
+        if self.app_command is not None:
+            children = copy.app_command._children
+            for key, command in self.app_command._children.items():
+                if key in children:
+                    continue
+                # FIXME: should this deepcopy?
+                children[key] = command
+
+        return copy

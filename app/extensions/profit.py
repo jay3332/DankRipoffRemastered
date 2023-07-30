@@ -10,6 +10,7 @@ from textwrap import dedent
 from typing import Any, Generic, Literal, NamedTuple, TypeVar, TYPE_CHECKING
 
 import discord
+from discord import app_commands
 
 from app.core import (
     BAD_ARGUMENT,
@@ -215,7 +216,7 @@ class Profit(Cog):
         return s[0].upper() + s[1:]
 
     # noinspection PyTypeChecker
-    @command(aliases={"plead"})
+    @command(aliases={"plead"}, hybrid=True)
     @simple_cooldown(1, 15)
     @user_max_concurrency(1)
     async def beg(self, ctx: Context):
@@ -265,7 +266,7 @@ class Profit(Cog):
         yield '', embed, EDIT
         return
 
-    @command(aliases={"investment", "iv", "in"})
+    @command(aliases={"investment", "iv", "in"}, hybrid=True)
     @simple_cooldown(1, 20)
     @user_max_concurrency(1)
     @lock_transactions
@@ -478,7 +479,7 @@ class Profit(Cog):
         ),
     }
 
-    @command(aliases={'se', 'sch', 'scout'})
+    @command(aliases={'se', 'sch', 'scout'}, hybrid=True)
     @simple_cooldown(1, 20)
     @user_max_concurrency(1)
     async def search(self, ctx: Context):
@@ -645,7 +646,7 @@ class Profit(Cog):
         ),
     }
 
-    @command(aliases={'ci', 'cri', 'felony', 'criminal'})
+    @command(aliases={'ci', 'cri', 'felony', 'criminal'}, hybrid=True)
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
     async def crime(self, ctx: Context):
@@ -749,7 +750,7 @@ class Profit(Cog):
         "my fishing pole is about to break",
     )
 
-    @command(aliases={'f', 'cast', 'fishing', 'fishingpole'})
+    @command(aliases={'f', 'cast', 'fishing', 'fishingpole'}, hybrid=True)
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
     async def fish(self, ctx: Context):
@@ -844,7 +845,7 @@ class Profit(Cog):
         "this must be something special",
     )
 
-    @command(aliases={'shovel', 'di'})
+    @command(aliases={'shovel', 'di'}, hybrid=True)
     @simple_cooldown(1, 30)
     @user_max_concurrency(1)
     async def dig(self, ctx: Context):
@@ -930,7 +931,7 @@ class Profit(Cog):
         "that looks like a cool ore",
     )
 
-    @command(aliases={'pickaxe', 'm'})  # TODO: so much boilerplate within these commands, maybe make a common function for these?
+    @command(aliases={'pickaxe', 'm'}, hybrid=True)  # TODO: so much boilerplate within these commands, maybe make a common function for these?
     @simple_cooldown(1, 30)
     @user_max_concurrency(1)
     async def mine(self, ctx: Context):
@@ -1013,7 +1014,7 @@ class Profit(Cog):
         Items.blackwood: 0.0085,
     }
 
-    @command(aliases={'c', 'ch', 'axe'})
+    @command(aliases={'c', 'ch', 'axe'}, hybrid=True)
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
     async def chop(self, ctx: Context):
@@ -1097,7 +1098,7 @@ class Profit(Cog):
         'hard': (360, 500),
     }
 
-    @command(aliases={'triv', 'tv'})
+    @command(aliases={'triv', 'tv'}, hybrid=True)
     @simple_cooldown(1, 20)
     @user_max_concurrency(1)
     async def trivia(self, ctx: Context):
@@ -1134,7 +1135,7 @@ class Profit(Cog):
 
         yield f'Wrong, the correct answer was **{question.correct_answer}**', REPLY
 
-    @command(aliases={'dv', 'submerge'})
+    @command(aliases={'dv', 'submerge'}, hybrid=True)
     @user_max_concurrency(1)
     @lock_transactions
     @simple_cooldown(1, 60)
@@ -1151,7 +1152,7 @@ class Profit(Cog):
         yield view, view.make_embed(message='You begin your dive at the surface.'), REPLY
         await view.wait()
 
-    @command(aliases={'da', 'day'})
+    @command(aliases={'da', 'day'}, hybrid=True)
     @database_cooldown(86_400)
     @user_max_concurrency(1)
     @cooldown_message('This command is named daily for a reason.')
@@ -1181,7 +1182,7 @@ class Profit(Cog):
 
         return embed, REPLY
 
-    @command(aliases={'week', 'wk'})
+    @command(aliases={'week', 'wk'}, hybrid=True)
     @database_cooldown(604_800)
     @user_max_concurrency(1)
     @cooldown_message('This command is named weekly for a reason.')
@@ -1217,7 +1218,7 @@ class Profit(Cog):
         )
         return entry
 
-    @command(aliases={'steal', 'ripoff'})
+    @command(aliases={'steal', 'ripoff'}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 90)
     @user_max_concurrency(1)
     @lock_transactions
@@ -1463,6 +1464,11 @@ class Profit(Cog):
                 content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but was spotted by police. They paid you a fine of {Emojis.coin} **{fine:,}**.',
             )
             return
+
+    @rob.define_app_command()
+    @app_commands.describe(member='The member to rob.')
+    async def rob_app_command(self, ctx: Context, member: discord.Member) -> None:
+        await ctx.invoke(self.rob, member=member)
 
 
 class ChopView(UserView):
