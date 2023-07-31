@@ -357,8 +357,9 @@ class Blackjack(UserView):
         embed = self._embed.copy()
         embed.clear_fields()
 
+        embed.description = f'**Bet:** {Emojis.coin} {self.bet:,}'
         if self.doubled_down:
-            embed.description = '**Doubled down:** Your bet has been doubled.'
+            embed.description += '\n**Doubled down:** Your bet has been doubled.'
 
         embed.add_field(name=f'{self.ctx.author}: **{self.player.total}**', value=self.player.full_display)
         if self.is_finished():
