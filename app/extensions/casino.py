@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import random
 from collections import defaultdict
 from enum import Enum
 from textwrap import dedent
-from typing import Any, ClassVar, Final, NamedTuple, TYPE_CHECKING
+from typing import Any, ClassVar, Final, Generic, Iterable, Iterator, NamedTuple, TYPE_CHECKING, TypeVar
 
 import discord
 from discord.utils import format_dt
@@ -15,11 +16,14 @@ from app.core import Cog, Context, EDIT, REPLY, command, group, lock_transaction
 from app.data.items import Items
 from app.util.common import pluralize
 from app.util.converters import CasinoBet
+from app.util.types import TypedInteraction
 from app.util.views import UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
     from app.database import UserRecord
+
+CardT = TypeVar('CardT', bound='Card')
 
 
 class ScratchCell(Enum):
@@ -176,6 +180,309 @@ class ScratchView(UserView):
                 child.emoji = child.info.emoji
 
 
+class CardSuit(Enum):
+    spades   = 0
+    hearts   = 1
+    diamonds = 2
+    clubs    = 3
+
+    def __str__(self) -> str:
+        return self.name.title()
+
+    def __repr__(self) -> str:
+        return f'<CardSuit.{self.name}>'
+
+    @property
+    def emoji(self) -> str:
+        return {
+            CardSuit.spades: '\u2660',
+            CardSuit.hearts: '\u2665',
+            CardSuit.diamonds: '\u2666',
+            CardSuit.clubs: '\u2663',
+        }[self]
+
+
+class CardRank(Enum):
+    ace   = 1
+    two   = 2
+    three = 3
+    four  = 4
+    five  = 5
+    six   = 6
+    seven = 7
+    eight = 8
+    nine  = 9
+    ten   = 10
+    jack  = 11
+    queen = 12
+    king  = 13
+
+    def __str__(self) -> str:
+        match self:
+            case CardRank.ace:
+                return 'A'
+            case CardRank.jack:
+                return 'J'
+            case CardRank.queen:
+                return 'Q'
+            case CardRank.king:
+                return 'K'
+            case _:
+                return str(self.value)
+
+    def __repr__(self) -> str:
+        return f'<CardRank.{self.name}>'
+
+    @property
+    def rank_value(self) -> int:
+        match self:
+            case CardRank.jack | CardRank.queen | CardRank.king:
+                return 10
+            case _:
+                return self.value
+
+
+class Card(NamedTuple):
+    suit: CardSuit
+    rank: CardRank
+
+    def __str__(self) -> str:
+        return f'{self.rank} of {self.suit}'
+
+    def __repr__(self) -> str:
+        return f'<Card: {self}>'
+
+    @property
+    def display(self) -> str:
+        return f'{self.suit.emoji} {self.rank}'
+
+
+class Deck(Generic[CardT]):
+    def __init__(self, count: int = 1, *, cls: type[CardT] = Card) -> None:
+        self.cards: list[CardT] = []
+        self.reset(count, cls=cls)
+
+    def reset(self, count: int = 1, *, cls: type[CardT] = Card) -> None:
+        self.cards.clear()
+        for _ in range(count):
+            self.cards.extend(self.generate(cls=cls))
+
+    def shuffle(self) -> None:
+        random.shuffle(self.cards)
+
+    @staticmethod
+    def generate(*, cls: type[CardT] = Card) -> Iterable[CardT]:
+        for suit in CardSuit:
+            for rank in CardRank:
+                yield cls(suit, rank)
+
+    def draw(self) -> CardT:
+        return self.cards.pop()
+
+    def draw_many(self, n: int) -> list[CardT]:
+        return [self.draw() for _ in range(n)]
+
+    def __len__(self) -> int:
+        return len(self.cards)
+
+    def __iter__(self) -> Iterator[CardT]:
+        return iter(self.cards)
+
+    def __repr__(self) -> str:
+        return f'<Deck of {len(self.cards)}>'
+
+
+class BlackjackCard(Card):
+    @property
+    def value(self) -> int:
+        return self.rank.rank_value
+
+    def get_favorable_value(self, current: int) -> int:
+        """In blackjack, aces can be either 1 or 11 depending on the current total."""
+        if self.rank is CardRank.ace:
+            return 1 if current + 11 > 21 else 11
+        return self.value
+
+
+class BlackjackHand(NamedTuple):
+    cards: list[BlackjackCard]
+
+    @property
+    def total(self) -> int:
+        return functools.reduce(lambda total, card: total + card.get_favorable_value(total), self.cards, 0)
+
+    @property
+    def natural(self) -> bool:
+        return self.total == 21 and len(self.cards) == 2
+
+    def __repr__(self) -> str:
+        return f'<BlackjackHand worth {self.total}: {self.cards}>'
+
+    @property
+    def full_display(self) -> str:
+        """Displays the hand with all cards visible."""
+        return ' '.join(f'`{card.display}`' for card in self.cards)
+
+    @property
+    def hidden_display(self) -> str:
+        """Displays the hand with only the first card visible."""
+        return ' '.join(f'`{card.display}`' if i == 0 else '`?`' for i, card in enumerate(self.cards))
+
+
+class Blackjack(UserView):
+    """Implements a game of Blackjack."""
+
+    def __init__(self, ctx: Context, *, bet: int, record: UserRecord) -> None:
+        super().__init__(ctx.author, timeout=60)
+
+        self.ctx = ctx
+        self.record = record
+        self.bet = bet
+        self._embed = discord.Embed(color=Colors.secondary, timestamp=ctx.now).set_author(
+            name=f'{ctx.author}: Blackjack Game', icon_url=ctx.author.avatar,
+        )
+
+        # setup blackjack
+        self.deck: Deck[BlackjackCard] = Deck(2, cls=BlackjackCard)  # blackjack is usually played with 1-8 decks
+        self.deck.shuffle()
+        # draw cards
+        self.player: BlackjackHand = BlackjackHand(self.deck.draw_many(2))
+        self.dealer: BlackjackHand = BlackjackHand(self.deck.draw_many(2))
+        self.flipped: bool = False
+        self.doubled_down: bool = False
+
+        if record.wallet < bet * 2:
+            self.double_down.disabled = True
+
+    def make_embed(self) -> discord.Embed:
+        embed = self._embed.copy()
+        embed.clear_fields()
+
+        if self.doubled_down:
+            embed.description = '**Doubled down:** Your bet has been doubled.'
+
+        embed.add_field(name=f'{self.ctx.author}: **{self.player.total}**', value=self.player.full_display)
+        if self.flipped:
+            embed.add_field(name=f'Dealer: **{self.dealer.total}**', value=self.dealer.full_display)
+        else:
+            embed.add_field(name=f'Dealer', value=self.dealer.hidden_display)
+
+        embed.set_footer(text=f'Next card: {self.deck.cards[-1].display if self.deck.cards else "None"}')
+        return embed
+
+    async def lose(self, interaction: TypedInteraction, message: str) -> None:
+        self.flipped = True
+        embed = self.make_embed()
+        embed.colour = Colors.error
+        embed.add_field(
+            name=f"**{message}**",
+            value=dedent(f'''
+                You lost {Emojis.coin} **{self.bet:,} coins**.
+                You now have {Emojis.coin} **{self.record.wallet:,}**.
+            '''),
+            inline=False,
+        )
+        self.stop()
+
+        await self.record.add(wallet=-self.bet)
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    async def win(self, interaction: TypedInteraction, message: str) -> None:
+        self.flipped = True
+        multiplier = random.uniform(0.75, 1.0)
+        adjustment, adjusted_text = Casino.adjust_multiplier(self.record)
+        multiplier += adjustment
+        profit = await self.record.add_coins(round(self.bet * multiplier))
+
+        embed = self.make_embed()
+        embed.colour = Colors.success
+        embed.add_field(
+            name=f"**{message}**",
+            value=dedent(f"""
+                You won {Emojis.coin} **{profit:,} coins**.
+                Multiplier: **{multiplier:.1%}**{adjusted_text}
+                You now have {Emojis.coin} **{self.record.wallet:,}**.
+            """),
+            inline=False,
+        )
+        self.stop()
+
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    async def tie(self, interaction: TypedInteraction, message: str) -> None:
+        self.flipped = True
+        embed = self.make_embed()
+        embed.colour = Colors.warning
+        embed.add_field(
+            name=f"**{message}**",
+            value=dedent(f"""
+                You neither won nor lost any coins.
+                You still have {Emojis.coin} **{self.record.wallet:,}**.
+            """),
+            inline=False,
+        )
+        self.stop()
+
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    async def handle_hit(self, interaction: TypedInteraction) -> None:
+        self.player.cards.append(self.deck.draw())
+        if self.player.total > 21:
+            return await self.lose(interaction, 'Bust! You went over 21!')
+
+        if self.player.natural:
+            # Draw one more card to check for standoff
+            self.dealer.cards.append(self.deck.draw())
+            if self.dealer.natural:
+                return await self.tie(interaction, 'Standoff')
+
+            return await self.win(interaction, 'Blackjack!')
+
+    @discord.ui.button(label='Hit', style=discord.ButtonStyle.success)
+    async def hit(self, interaction: TypedInteraction, _: discord.ui.Button) -> None:
+        await self.handle_hit(interaction)
+        await interaction.response.edit_message(embed=self.make_embed())
+
+    async def handle_stand(self, interaction: TypedInteraction) -> None:
+        while self.dealer.total < 17:
+            self.dealer.cards.append(self.deck.draw())
+
+        if self.dealer.total > 21:
+            return await self.win(interaction, 'Dealer bust!')
+
+        if self.dealer.natural:
+            if self.player.natural:
+                return await self.tie(interaction, 'Standoff')
+            return await self.lose(interaction, 'Dealer has blackjack!')
+
+        if self.player.total > self.dealer.total:
+            return await self.win(interaction, 'You beat the dealer!')
+        elif self.player.total == self.dealer.total:
+            return await self.tie(interaction, 'You tied with the dealer!')
+
+        return await self.lose(interaction, 'Dealer beat you!')
+
+    @discord.ui.button(label='Stand', style=discord.ButtonStyle.secondary)
+    async def stand(self, interaction: TypedInteraction, _: discord.ui.Button) -> None:
+        await self.handle_stand(interaction)
+
+    @discord.ui.button(label='Double Down', style=discord.ButtonStyle.primary)
+    async def double_down(self, interaction: TypedInteraction, button: discord.ui.Button) -> None:
+        self.bet *= 2
+        self.doubled_down = True
+        button.disabled = True
+
+        await self.handle_hit(interaction)
+        if self.is_finished():
+            return
+
+        await self.handle_stand(interaction)
+
+    @discord.ui.button(label='Surrender', style=discord.ButtonStyle.danger)
+    async def surrender(self, interaction: TypedInteraction, _: discord.ui.Button) -> None:
+        await self.lose(interaction, 'You surrendered!')
+
+
 class Casino(Cog):
     """Gamble off all of your coins at the casino!"""
 
@@ -289,6 +596,18 @@ class Casino(Cog):
             {emoji_of(ScratchCell.star)} = +200% (2x) of bet
             {emoji_of(ScratchCell.spinning_coin)} = +400% (4x) of bet
         """))
+
+    @command(aliases={'bj', '21'})
+    @simple_cooldown(1, 25)
+    @user_max_concurrency(1)
+    @lock_transactions
+    async def blackjack(self, ctx: Context, *, bet: CasinoBet(500)) -> Any:
+        """Bet your coins in a game of Blackjack."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        view = Blackjack(ctx, bet=bet, record=record)
+        yield view.make_embed(), view, REPLY
+        await view.wait()
 
 
 setup = Casino.simple_setup

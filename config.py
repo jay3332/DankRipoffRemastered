@@ -49,6 +49,7 @@ class _RandomColor:
 
 class Colors:
     primary: int = _RandomColor()  # 0x6199f2
+    secondary: int = 0x6199f2
     success: int = 0x17ff70
     warning: int = 0xfcba03
     error: int = 0xff1759

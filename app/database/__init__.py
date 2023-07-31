@@ -646,6 +646,7 @@ class UserRecord:
         return f'<UserRecord wallet={self.wallet} bank={self.bank} level_data={self.level_data}>'
 
     async def fetch(self) -> UserRecord:
+        await self.db.wait()
         query = """
                 INSERT INTO users (user_id) VALUES ($1) 
                 ON CONFLICT (user_id) DO UPDATE SET user_id = $1
