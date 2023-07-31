@@ -41,7 +41,7 @@ class _PaginatorButton(Button['PaginatorView']):
 
     async def callback(self, interaction: TypedInteraction) -> None:
         self.paginator.current_page = self.page - 1
-        await self.view._update(interaction)  # type: ignore
+        await self.view._finish(interaction)  # type: ignore
 
 
 class _PageInputButton(Button['PaginatorView']):
@@ -146,7 +146,17 @@ class PaginatorView(UserView):
             for component in self._other_components:
                 self.add_item(component)
 
-    async def _update(self, interaction: TypedInteraction) -> None:
+    async def update(self) -> Embed | File:
+        self._update_view()
+        entries = self.paginator.formatter.get_page(self.paginator.current_page)
+        # Update children
+        for child in self.children:
+            if isinstance(child, ActiveItem):
+                await child.active_update(self.paginator, entries)
+        # Update self
+        return await self.paginator.formatter.format_page(self.paginator, entries)
+
+    async def _finish(self, interaction: TypedInteraction) -> None:
         self._update_view()
         entity = await self.paginator.get_page(self.paginator.current_page)
         if isinstance(entity, Embed):
@@ -182,9 +192,7 @@ class Paginator:
         return self.formatter.max_pages
 
     async def get_page(self, page: int, /) -> Embed | File:
-        return await self.formatter.format_page(
-            self, self.formatter.get_page(page),
-        )
+        return await self.formatter.format_page(self, self.formatter.get_page(page))
 
     async def start(
         self,
@@ -221,7 +229,7 @@ class Paginator:
 
             self._underlying_view.dont_render_pagination_buttons = True
 
-        self._underlying_view._update_view()
+        await self._underlying_view.update()
         await responder(view=self._underlying_view, **send_kwargs)
 
 
@@ -292,3 +300,11 @@ class FieldBasedFormatter(Formatter[dict[str, V]]):
             embed.set_footer(text=f'Page {paginator.current_page + 1}/{paginator.max_pages}')
 
         return embed
+
+
+class ActiveItem(Generic[T]):
+    """Mixin to allow updating a component when a paginator updates."""
+
+    async def active_update(self, paginator: Paginator, entry: T | list[T]) -> None:
+        """Callback for when the paginator updates."""
+        pass

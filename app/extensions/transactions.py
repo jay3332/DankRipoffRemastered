@@ -7,6 +7,7 @@ from textwrap import dedent
 from typing import Any, TYPE_CHECKING, TypeAlias
 
 import discord
+from discord import app_commands
 
 from app.core import (
     BAD_ARGUMENT,
@@ -426,6 +427,9 @@ class Transactions(Cog):
 
     # noinspection PyTypeChecker
     @command(aliases={"w", "with", "wd"}, hybrid=True)
+    @app_commands.describe(
+        amount='The amount of coins to withdraw from your bank. Use "all" to withdraw all coins.'
+    )
     @simple_cooldown(1, 8)
     @lock_transactions
     async def withdraw(self, ctx: Context, *, amount: BankTransaction(WITHDRAW)) -> Any:
@@ -448,6 +452,9 @@ class Transactions(Cog):
 
     # noinspection PyTypeChecker
     @command(aliases={"d", "dep"}, hybrid=True)
+    @app_commands.describe(
+        amount='The amount of coins to deposit into your bank. Use "all" to deposit all coins.'
+    )
     @simple_cooldown(1, 8)
     @lock_transactions
     async def deposit(self, ctx: Context, *, amount: BankTransaction(DEPOSIT)) -> Any:
@@ -468,7 +475,7 @@ class Transactions(Cog):
 
         return embed, REPLY
 
-    @command(aliases={"store", "market", "sh", "iteminfo", "ii"})
+    @command(aliases={"store", "market", "sh", "iteminfo", "ii", "item"})
     @simple_cooldown(1, 6)
     async def shop(self, ctx: Context, *, item: query_item = None) -> CommandResponse:
         """View the item shop, or view information on a specific item.

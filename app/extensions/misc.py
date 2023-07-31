@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import datetime
 import random
-from typing import Any, TYPE_CHECKING
+from collections import defaultdict
+from typing import Any, NamedTuple, TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -10,7 +11,7 @@ from discord.app_commands import Choice
 from discord.ext import commands
 from discord.utils import format_dt, oauth_url
 
-from app.core import BAD_ARGUMENT, Cog, Context, EDIT, REPLY, command, group, simple_cooldown
+from app.core import BAD_ARGUMENT, Bot, Cog, Context, EDIT, REPLY, command, group, simple_cooldown
 from app.core.timers import Timer
 from app.data.settings import Setting, Settings
 from app.util.common import converter, walk_collection
@@ -18,9 +19,12 @@ from app.util.converters import better_bool, query_setting
 from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginator
 from app.util.structures import Timer as PingTimer
 from app.util.types import CommandResponse, TypedInteraction
+from app.util.views import UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
+    from typing import Self
+
     from app.core import Command
 
 
@@ -43,6 +47,17 @@ async def _get_retry_after(ctx: Context, cmd: Command) -> float:
     return 0.0
 
 
+class CooldownReminderMetadata(NamedTuple):
+    channel_id: int
+    jump_url: str | None
+    timer_id: int
+
+    @classmethod
+    def from_timer(cls: type[Self], timer: Timer) -> Self:
+        metadata = timer.metadata
+        return cls(channel_id=metadata['channel_id'], jump_url=metadata['jump_url'], timer_id=timer.id)
+
+
 class Miscellaneous(Cog):
     """Miscellaneous commands."""
 
@@ -57,6 +72,30 @@ class Miscellaneous(Cog):
 
     SUPPORT_SERVER = 'https://discord.gg/BjzrQZjFwk'  # caif
     # SUPPORT_SERVER = 'https://discord.gg/bpnedYgFVd'  # unnamed bot testing
+
+    def __init__(self, bot: Bot) -> None:
+        super().__init__(bot)
+        self._cooldown_reminder_exists = defaultdict[int, dict[str, CooldownReminderMetadata]](dict)
+        self.__cooldown_reminder_fetch_task = self.bot.loop.create_task(self._fetch_cooldown_reminders())
+
+    async def _fetch_cooldown_reminders(self) -> None:
+        await self.bot.db.wait()
+
+        query = """
+                SELECT
+                    id,
+                    (metadata->'user_id')::BIGINT AS user_id,
+                    (metadata->'channel_id')::BIGINT AS channel_id,
+                    metadata->>'command' AS command,
+                    metadata->>'jump_url' AS jump_url
+                FROM timers
+                WHERE
+                    event = 'cooldown_reminder'
+                """
+        for record in await self.bot.db.fetch(query):
+            self._cooldown_reminder_exists[record['user_id']][record['command']] = CooldownReminderMetadata(
+                channel_id=record['channel_id'], jump_url=record['jump_url'], timer_id=record['id'],
+            )
 
     @command(alias="pong", hybrid=True)
     @simple_cooldown(2, 2)
@@ -145,13 +184,15 @@ class Miscellaneous(Cog):
     async def cooldowns(self, ctx: Context) -> CommandResponse:
         """View all pending cooldowns."""
         lines = []
+        active_reminders = self._cooldown_reminder_exists[ctx.author.id]
         for cmd in ctx.bot.commands:
             retry_after = await _get_retry_after(ctx, cmd)
             if not retry_after:
                 continue
 
             timestamp = ctx.now + datetime.timedelta(seconds=retry_after)
-            lines.append((f'- **{cmd.qualified_name}** ({format_dt(timestamp, "R")})', retry_after))
+            indicator = '\u23f0' if cmd.qualified_name in active_reminders else ''
+            lines.append((f'- **{cmd.qualified_name}** ({format_dt(timestamp, "R")}) {indicator}', retry_after))
 
         if not lines:
             return 'No pending cooldowns.', REPLY
@@ -161,7 +202,11 @@ class Miscellaneous(Cog):
 
         lines = [line for line, _ in sorted(lines, key=lambda x: x[1])]
         formatter = LineBasedFormatter(embed, lines)
-        return Paginator(ctx, formatter), REPLY
+        message = (
+            f'A \u23f0 next to an entry indicates you have a cooldown reminder set for that command.'
+            if active_reminders else ''
+        )
+        return message, Paginator(ctx, formatter), REPLY
 
     # noinspection PyShadowingNames
     @cooldowns.command(
@@ -170,6 +215,11 @@ class Miscellaneous(Cog):
     @simple_cooldown(2, 5)
     async def cooldowns_remind(self, ctx: Context, *, command: CommandConverter) -> CommandResponse:
         """Reminds you when a command is available to be used again."""
+        existing = self._cooldown_reminder_exists[ctx.author.id]
+        if metadata := existing.get(command.qualified_name):
+            view = CooldownReminderOptions(ctx, command.qualified_name, metadata)
+            return f'You already have a cooldown reminder set for `{command.qualified_name}`.', view, REPLY
+
         retry_after = await _get_retry_after(ctx, command)
         if not retry_after:
             return 'That command is not on cooldown.', REPLY
@@ -179,13 +229,15 @@ class Miscellaneous(Cog):
         if retry_after < 30:
             return f'You can use that command {formatted}, be patient', REPLY
 
-        await ctx.bot.timers.create(
+        timer = await ctx.bot.timers.create(
             timestamp,
             'cooldown_reminder',
             channel_id=ctx.channel.id,
             user_id=ctx.author.id,
             command=command.qualified_name,
+            jump_url=ctx.message.jump_url,
         )
+        existing[command.qualified_name] = CooldownReminderMetadata.from_timer(timer)
         return (
             f'Alright, I will remind you in this channel when you can use `{command.qualified_name}` again ({formatted}).',
             REPLY,
@@ -216,6 +268,51 @@ class Miscellaneous(Cog):
             await channel.send(f'You can use `{timer.metadata["command"]}` again now, <@{timer.metadata["user_id"]}>!')
         except discord.HTTPException:
             pass
+
+
+class CooldownReminderOptions(UserView):
+    # noinspection PyShadowingNames
+    def __init__(self, ctx: Context, command: str, record: CooldownReminderMetadata) -> None:
+        super().__init__(ctx.author, timeout=60)
+        self.ctx = ctx
+        self.cog: Miscellaneous = ctx.cog  # type: ignore
+        self.command = command
+        self.record = record
+
+        if record.channel_id == ctx.channel.id:
+            self.remove_item(self.move)
+
+        self.add_item(discord.ui.Button(
+            label='Jump to context',
+            style=discord.ButtonStyle.link,
+            url=record.jump_url,
+        ))
+
+    @discord.ui.button(label='Move reminder to this channel', style=discord.ButtonStyle.primary, emoji='\U0001f4e5')
+    async def move(self, interaction: TypedInteraction, _: discord.ui.Button) -> None:
+        query = "UPDATE timers SET metadata = jsonb_set(metadata, '{channel_id}', to_jsonb($1::TEXT)) WHERE id = $2"
+        await self.ctx.db.execute(query, str(self.ctx.channel.id), self.record.timer_id)
+        # horrible boilerplate
+        self.cog._cooldown_reminder_exists[self.ctx.author.id][self.command] = self.record = (
+            self.record._replace(channel_id=self.ctx.channel.id)
+        )
+        await interaction.response.edit_message(
+            content=f'Moved reminder for `{self.command}` to {self.ctx.channel.mention}.',
+            view=None,
+        )
+
+    @discord.ui.button(label='Cancel reminder', style=discord.ButtonStyle.danger, emoji='\U0001f5d1')
+    async def cancel(self, interaction: TypedInteraction, _: discord.ui.Button) -> None:
+        await self.ctx.bot.timers.end_timer(
+            timer=await self.ctx.bot.timers.get_timer(self.record.timer_id),
+            dispatch=False,
+            cascade=True,
+        )
+        del self.cog._cooldown_reminder_exists[self.ctx.author.id][self.command]
+        await interaction.response.edit_message(content=f'Cancelled reminder for `{self.command}`.', view=None)
+
+    async def on_timeout(self) -> None:
+        await self.ctx.send('Timed out.', edit=True, view=None)
 
 
 setup = Miscellaneous.simple_setup
