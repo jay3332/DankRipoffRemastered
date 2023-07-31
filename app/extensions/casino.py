@@ -374,6 +374,8 @@ class Blackjack(UserView):
         self.flipped = True
         embed = self.make_embed()
         embed.colour = Colors.error
+        await self.record.add(wallet=-self.bet)
+
         embed.add_field(
             name=f"**{message}**",
             value=dedent(f'''
@@ -384,7 +386,6 @@ class Blackjack(UserView):
         )
         self.stop()
 
-        await self.record.add(wallet=-self.bet)
         await interaction.response.edit_message(embed=embed, view=None)
 
     async def win(self, interaction: TypedInteraction, message: str) -> None:
