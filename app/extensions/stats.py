@@ -8,6 +8,7 @@ from discord import app_commands
 from discord.app_commands import Choice
 from discord.utils import format_dt
 
+from app import Bot
 from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
 from app.data.items import ItemType, Items
 from app.database import UserRecord
@@ -18,7 +19,7 @@ from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatt
 from config import Colors, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
-    from app.util.types import CommandResponse
+    from app.util.types import CommandResponse, TypedInteraction
 
 
 class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
@@ -50,6 +51,17 @@ class Stats(Cog):
     """Useful statistical commands. These commands do not have any action behind them."""
 
     emoji = '\U0001f4ca'
+
+    def __init__(self, bot: Bot) -> None:
+        super().__init__(bot)
+
+        self._balance_context_menu = app_commands.ContextMenu(
+            name='View Balance', callback=self.balance.app_command.callback.__get__(self, self.__class__),  # type: ignore
+        )
+        bot.tree.add_command(self._balance_context_menu)
+
+    async def cog_unload(self) -> None:
+        self.bot.tree.remove_command(self._balance_context_menu.name, type=self._balance_context_menu.type)
 
     # noinspection PyTypeChecker
     @command(aliases={"bal", "coins", "stats", "b", "wallet"}, hybrid=True, with_app_command=False)
