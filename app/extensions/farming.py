@@ -7,6 +7,7 @@ from textwrap import dedent
 from typing import ClassVar, Final, TYPE_CHECKING, Type, Union
 
 import discord
+from discord import app_commands
 from discord.ext.commands import BadArgument, Greedy
 
 from app.core import (
@@ -20,9 +21,9 @@ from app.core import (
     simple_cooldown,
     user_max_concurrency,
 )
-from app.data.items import Item, Items
+from app.data.items import Item, ItemType, Items
 from app.database import CropInfo, CropManager, UserRecord
-from app.util.common import humanize_duration, image_url_from_emoji
+from app.util.common import cutoff, humanize_duration, image_url_from_emoji
 from app.util.converters import query_crop
 from app.util.types import CommandResponse, TypedInteraction
 from app.util.views import UserView
@@ -207,7 +208,7 @@ class Farming(Cog):
 
     emoji = '\U0001f468\u200d\U0001f33e'
 
-    @group(aliases={'crops', 'fa', 'crop', 'land', 'area'})
+    @group(aliases={'crops', 'fa', 'crop', 'land', 'area'}, hybrid=True, fallback='view')
     @simple_cooldown(2, 4)
     async def farm(self, ctx: Context) -> CommandResponse:
         """View your farm and it's crops.
@@ -229,8 +230,9 @@ class Farming(Cog):
     def get_land_buy_price(x: int, y: int) -> int:
         return round(25 * 1.225 ** max(x, y)) * 100
 
-    @farm.command('buy', aliases={'b', 'purchase', 'acquire'})
-    @simple_cooldown(2, 4)
+    @farm.command('buy', aliases={'b', 'purchase', 'acquire'}, hybrid=True)
+    @app_commands.describe(coordinate='The location of the area of land you want to buy, e.g. "A1" or "F6".')
+    @simple_cooldown(4, 4)
     @user_max_concurrency(1)
     @lock_transactions
     async def buy(self, ctx: Context, coordinate: parse_coordinate):
@@ -278,7 +280,8 @@ class Farming(Cog):
 
         return embed, REPLY
 
-    @farm.command(aliases={'s', 'release', 'disown'})
+    @farm.command(aliases={'s', 'release', 'disown'}, hybrid=True)
+    @app_commands.describe(coordinate='The location of the area of land you want to sell, e.g. "A1" or "F6".')
     @simple_cooldown(2, 4)
     @user_max_concurrency(1)
     @lock_transactions
@@ -314,7 +317,10 @@ class Farming(Cog):
 
         return embed, REPLY
 
-    @farm.command(aliases={'view', 'v', 'i', 'information', 'details'})
+    @farm.command(aliases={'view', 'v', 'i', 'information', 'details'}, hyrbid=True)
+    @app_commands.describe(
+        coordinate_or_crop='The crop to view information on. Can be a specific crop (e.g. "A1") or a crop name (e.g. "corn").'
+    )
     @simple_cooldown(2, 4)
     async def info(self, ctx: Context, coordinate_or_crop: Union[parse_coordinate, query_crop]):  # Must use Union here as | operator does not work for functions)
         """View information about a crop or a specific crop at a specific coordinate."""
@@ -375,6 +381,16 @@ class Farming(Cog):
             """), inline=False)
 
         return embed, REPLY
+
+    @info.autocomplete('coordinate_or_crop')
+    async def into_autocomplete(self, _: TypedInteraction, current: str):
+        return [
+            app_commands.Choice(name=cutoff(current, 100), value=current[:100]),
+            *(
+                app_commands.Choice(name=crop.name, value=crop.key) for crop in Items.all()
+                if crop.type == ItemType.crop and crop.name.lower().startswith(current.lower())
+            )
+        ]
 
     @command(aliases={'pl', 'grow'})
     @simple_cooldown(2, 4)
@@ -438,7 +454,8 @@ class Farming(Cog):
         coordinate = coordinates[0]
         return f'Planted {crop.get_sentence_chunk(1)} at coordinate **{CropInfo.into_coordinates(*coordinate)}**.', REPLY
 
-    @command(aliases={'har', 'ha', 'hv', 'gather', 'collect'})
+    @command(aliases={'har', 'ha', 'hv', 'gather', 'collect'}, hybrid=True)
+    @app_commands.describe(crops='The crops to harvest. If not specified, all crops will be harvested.')
     @simple_cooldown(1, 15)
     @user_max_concurrency(1)
     async def harvest(self, ctx: Context, *crops: Union[parse_coordinate, query_crop]):  # Must use Union here as | operator does not work for functions

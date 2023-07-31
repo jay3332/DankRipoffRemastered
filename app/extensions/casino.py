@@ -10,6 +10,7 @@ from textwrap import dedent
 from typing import Any, ClassVar, Final, Generic, Iterable, Iterator, NamedTuple, TYPE_CHECKING, TypeVar
 
 import discord
+from discord import app_commands
 from discord.utils import format_dt
 
 from app.core import Cog, Context, EDIT, REPLY, command, group, lock_transactions, simple_cooldown, user_max_concurrency
@@ -507,7 +508,10 @@ class Casino(Cog):
             )
         return 0, ''
 
-    @command(aliases={'diceroll', 'r', 'bet', 'gamble'})
+    @command(aliases={'diceroll', 'r', 'bet', 'gamble'}, hybrid=True)
+    @app_commands.describe(
+        bet='The amount of coins to bet. Must be between 200 and 500,000. Use "max" to bet as many coins as possible.',
+    )
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
     @lock_transactions
@@ -568,6 +572,9 @@ class Casino(Cog):
         yield '', embed, EDIT
 
     @group(aliases={'scratchticket', 'scratch-ticket', 'scratchoff', 'scr'})
+    @app_commands.describe(
+        bet='The amount of coins to bet. Must be between 500 and 500,000. Use "max" to bet as many coins as possible.',
+    )
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
     @lock_transactions
@@ -600,6 +607,9 @@ class Casino(Cog):
         """))
 
     @command(aliases={'bj', '21'})
+    @app_commands.describe(
+        bet='The amount of coins to bet. Must be between 500 and 500,000. Use "max" to bet as many coins as possible.',
+    )
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
     @lock_transactions
