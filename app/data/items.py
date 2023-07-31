@@ -375,7 +375,7 @@ class Items:
         extra = ''
         if additional:
             extra = (
-                f'\n{Emojis.Expansion.standalone} +{additional:,} bank space because you are '
+                f'\n{Emojis.Expansion.standalone} {Emojis.coin} +**{additional:,}** bank space because you are '
                 f'{Emojis.get_prestige_emoji(record.prestige)} **Prestige {record.prestige}**.'
             )
 
