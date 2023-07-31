@@ -52,7 +52,7 @@ class ScratchButton(discord.ui.Button['ScratchView']):
 
         super().__init__(style=discord.ButtonStyle.secondary, row=row, label='\u200b')
 
-    async def callback(self, interaction: discord.Interaction) -> None:
+    async def callback(self, interaction: TypedInteraction) -> None:
         self.view.scratches -= 1
 
         match self.cell, self.info:
@@ -348,7 +348,6 @@ class Blackjack(UserView):
         # draw cards
         self.player: BlackjackHand = BlackjackHand(self.deck.draw_many(2))
         self.dealer: BlackjackHand = BlackjackHand(self.deck.draw_many(2))
-        self.flipped: bool = False
         self.doubled_down: bool = False
 
         if record.wallet < bet * 2:
@@ -362,16 +361,16 @@ class Blackjack(UserView):
             embed.description = '**Doubled down:** Your bet has been doubled.'
 
         embed.add_field(name=f'{self.ctx.author}: **{self.player.total}**', value=self.player.full_display)
-        if self.flipped:
+        if self.is_finished():
             embed.add_field(name=f'Dealer: **{self.dealer.total}**', value=self.dealer.full_display)
+            embed.set_footer(text=f'Next card: {self.deck.cards[-1].display if self.deck.cards else "None"}')
         else:
             embed.add_field(name=f'Dealer', value=self.dealer.hidden_display)
 
-        embed.set_footer(text=f'Next card: {self.deck.cards[-1].display if self.deck.cards else "None"}')
         return embed
 
-    async def lose(self, interaction: TypedInteraction, message: str) -> None:
-        self.flipped = True
+    async def handle_lose(self, message: str) -> discord.Embed:
+        self.stop()
         embed = self.make_embed()
         embed.colour = Colors.error
         await self.record.add(wallet=-self.bet)
@@ -384,14 +383,16 @@ class Blackjack(UserView):
             '''),
             inline=False,
         )
-        self.stop()
+        return embed
 
+    async def lose(self, interaction: TypedInteraction, message: str) -> None:
+        embed = await self.handle_lose(message)
         await interaction.response.edit_message(embed=embed, view=None)
 
-    async def win(self, interaction: TypedInteraction, message: str) -> None:
-        self.flipped = True
-        multiplier = random.uniform(0.75, 1.0)
-        adjustment, adjusted_text = Casino.adjust_multiplier(self.record)
+    async def handle_win(self, message: str) -> discord.Embed:
+        self.stop()
+        multiplier = random.uniform(0.7, 1.0)
+        adjustment, adjusted_text = Casino.adjust_multiplier(self.record, modification=0.5)
         multiplier += adjustment
         profit = await self.record.add_coins(round(self.bet * multiplier))
 
@@ -406,12 +407,14 @@ class Blackjack(UserView):
             """),
             inline=False,
         )
-        self.stop()
+        return embed
 
+    async def win(self, interaction: TypedInteraction, message: str) -> None:
+        embed = await self.handle_win(message)
         await interaction.response.edit_message(embed=embed, view=None)
 
-    async def tie(self, interaction: TypedInteraction, message: str) -> None:
-        self.flipped = True
+    async def handle_tie(self, message: str) -> discord.Embed:
+        self.stop()
         embed = self.make_embed()
         embed.colour = Colors.warning
         embed.add_field(
@@ -422,8 +425,10 @@ class Blackjack(UserView):
             """),
             inline=False,
         )
-        self.stop()
+        return embed
 
+    async def tie(self, interaction: TypedInteraction, message: str) -> None:
+        embed = await self.handle_tie(message)
         await interaction.response.edit_message(embed=embed, view=None)
 
     async def handle_hit(self, interaction: TypedInteraction) -> None:
@@ -431,17 +436,15 @@ class Blackjack(UserView):
         if self.player.total > 21:
             return await self.lose(interaction, 'Bust! You went over 21!')
 
-        if self.player.natural:
-            # Draw one more card to check for standoff
-            self.dealer.cards.append(self.deck.draw())
-            if self.dealer.natural:
-                return await self.tie(interaction, 'Standoff')
-
-            return await self.win(interaction, 'Blackjack!')
+        # Automatically stand if the player has 21
+        if self.player.total == 21:
+            await self.handle_stand(interaction)
 
     @discord.ui.button(label='Hit', style=discord.ButtonStyle.success)
     async def hit(self, interaction: TypedInteraction, _: discord.ui.Button) -> None:
         await self.handle_hit(interaction)
+        if self.is_finished():
+            return
         await interaction.response.edit_message(embed=self.make_embed())
 
     async def handle_stand(self, interaction: TypedInteraction) -> None:
@@ -450,11 +453,6 @@ class Blackjack(UserView):
 
         if self.dealer.total > 21:
             return await self.win(interaction, 'Dealer bust!')
-
-        if self.dealer.natural:
-            if self.player.natural:
-                return await self.tie(interaction, 'Standoff')
-            return await self.lose(interaction, 'Dealer has blackjack!')
 
         if self.player.total > self.dealer.total:
             return await self.win(interaction, 'You beat the dealer!')
@@ -497,12 +495,14 @@ class Casino(Cog):
         return f"{Emojis.dice[first]} {Emojis.dice[second]}"
 
     @staticmethod
-    def adjust_multiplier(record: UserRecord) -> tuple[float, str]:
+    def adjust_multiplier(record: UserRecord, *, modification: float = 1.0) -> tuple[float, str]:
+        expansion = Emojis.Expansion
         if expiry := record.alcohol_expiry:
+            multiplier = 0.5 * modification
             return (
-                0.5,
-                f'\n{Emojis.Expansion.first} applied +50% multiplier from {Items.alcohol.emoji} Alcohol'
-                f'\n{Emojis.Expansion.last} expires in {format_dt(expiry, "R")}'
+                multiplier,
+                f'\n{expansion.first} applied +{multiplier:.0%} multiplier from {Items.alcohol.emoji} Alcohol'
+                f'\n{expansion.last} expires in {format_dt(expiry, "R")}'
             )
         return 0, ''
 
@@ -606,9 +606,20 @@ class Casino(Cog):
         """Bet your coins in a game of Blackjack."""
         record = await ctx.db.get_user_record(ctx.author.id)
 
-        view = Blackjack(ctx, bet=bet, record=record)
-        yield view.make_embed(), view, REPLY
-        await view.wait()
+        game = Blackjack(ctx, bet=bet, record=record)
+        # Check for blackjack
+        if game.player.natural:
+            if game.dealer.natural:
+                yield await game.handle_tie('Standoff'), REPLY
+            else:
+                yield await game.handle_win('Blackjack!'), REPLY
+            return
+        elif game.dealer.natural:
+            yield await game.handle_lose('Dealer got blackjack!'), REPLY
+            return
+
+        yield game.make_embed(), game, REPLY
+        await game.wait()
 
 
 setup = Casino.simple_setup
