@@ -504,7 +504,7 @@ class Casino(Cog):
             return (
                 multiplier,
                 f'\n{expansion.first} applied +{multiplier:.0%} multiplier from {Items.alcohol.emoji} Alcohol'
-                f'\n{expansion.last} expires in {format_dt(expiry, "R")}'
+                f'\n{expansion.last} expires {format_dt(expiry, "R")}'
             )
         return 0, ''
 

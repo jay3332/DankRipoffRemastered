@@ -264,7 +264,7 @@ class RecipeView(UserView):
                 await self.ctx.reply(f'Error: {e.__class__.__name__}')
 
     @discord.ui.button(label='Stop', style=discord.ButtonStyle.danger, row=1)
-    async def stop_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+    async def stop_button(self, interaction: TypedInteraction, button: discord.ui.Button) -> None:
         for child in self.children:
             child.disabled = True
 
