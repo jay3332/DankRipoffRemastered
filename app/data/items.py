@@ -84,6 +84,7 @@ class Item(Generic[T]):
     plural: str = None
     rarity: ItemRarity = ItemRarity.common
     metadata: T = None
+    energy: int | None = None
 
     usage_callback: UsageCallback | None = None
     removal_callback: RemovalCallback | None = None
@@ -365,12 +366,21 @@ class Items:
         message = await ctx.message.reply(pluralize(f'{item.emoji} Using {quantity} banknote(s)...'))
 
         await asyncio.sleep(random.uniform(2, 4))
+        record = await ctx.db.get_user_record(ctx.author.id)
 
         profit = random.randint(1000 * quantity, 3000 * quantity)
-        await ctx.db.get_user_record(ctx.author.id, fetch=False).add(max_bank=profit)
+        additional = int(profit * record.prestige * 0.1)
+        await record.add(max_bank=profit + additional)
+
+        extra = ''
+        if additional:
+            extra = (
+                f'\n{Emojis.Expansion.standalone} +{additional:,} bank space because you are '
+                f'{Emojis.get_prestige_emoji(record.prestige)} **Prestige {record.prestige}**.'
+            )
 
         await message.edit(content=pluralize(
-            f'{item.emoji} Your {quantity} banknote(s) expanded your bank space by {Emojis.coin} **{profit:,}**.'
+            f'{item.emoji} Your {quantity} banknote(s) expanded your bank space by {Emojis.coin} **{profit:,}**.{extra}'
         ))
 
     cheese = Item(
@@ -1291,6 +1301,7 @@ class Items:
         description='A normal loaf of wheat bread.',
         sell=500,
         rarity=ItemRarity.uncommon,
+        energy=5,
     )
 
     sheet_of_paper = Item(

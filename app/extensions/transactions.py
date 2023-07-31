@@ -936,7 +936,8 @@ class PrestigeView(UserView):
             f'- {crate.get_sentence_chunk()},\n'
             f'- {self.next_prestige * 50}% faster bank space gain,\n'
             f'- {self.next_prestige * 25}% XP multiplier,\n'
-            f'- {self.next_prestige * 25}% coin multiplier, and\n'
+            f'- {self.next_prestige * 25}% coin multiplier,\n'
+            f'- {self.next_prestige * 10}% extra space from banknotes, and\n'
             f'- {self.emoji} **Prestige {self.next_prestige}** badge'
         )
         message = (
