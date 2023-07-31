@@ -606,7 +606,7 @@ class Casino(Cog):
             {emoji_of(ScratchCell.spinning_coin)} = +400% (4x) of bet
         """))
 
-    @command(aliases={'bj', '21'})
+    @command(aliases={'bj', '21'}, hybrid=True)
     @app_commands.describe(
         bet='The amount of coins to bet. Must be between 500 and 500,000. Use "max" to bet as many coins as possible.',
     )

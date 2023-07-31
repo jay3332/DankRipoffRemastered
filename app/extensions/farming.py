@@ -317,10 +317,7 @@ class Farming(Cog):
 
         return embed, REPLY
 
-    @farm.command(aliases={'view', 'v', 'i', 'information', 'details'}, hyrbid=True)
-    @app_commands.describe(
-        coordinate_or_crop='The crop to view information on. Can be a specific crop (e.g. "A1") or a crop name (e.g. "corn").'
-    )
+    @farm.command(aliases={'view', 'v', 'i', 'information', 'details'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 4)
     async def info(self, ctx: Context, coordinate_or_crop: Union[parse_coordinate, query_crop]):  # Must use Union here as | operator does not work for functions)
         """View information about a crop or a specific crop at a specific coordinate."""
@@ -381,6 +378,17 @@ class Farming(Cog):
             """), inline=False)
 
         return embed, REPLY
+
+    @info.define_app_command()
+    @app_commands.describe(
+        coordinate_or_crop='The crop to view information on. Can be a specific crop (e.g. "A1") or a crop name (e.g. "corn").'
+    )
+    async def info_app_command(self, ctx: Context, coordinate_or_crop: str) -> None:
+        try:
+            coordinate_or_crop = parse_coordinate(coordinate_or_crop)
+        except BadArgument:
+            coordinate_or_crop = query_crop(coordinate_or_crop)
+        await ctx.invoke(self.info, coordinate_or_crop=coordinate_or_crop)  # type: ignore
 
     @info.autocomplete('coordinate_or_crop')
     async def into_autocomplete(self, _: TypedInteraction, current: str):
@@ -454,8 +462,7 @@ class Farming(Cog):
         coordinate = coordinates[0]
         return f'Planted {crop.get_sentence_chunk(1)} at coordinate **{CropInfo.into_coordinates(*coordinate)}**.', REPLY
 
-    @command(aliases={'har', 'ha', 'hv', 'gather', 'collect'}, hybrid=True)
-    @app_commands.describe(crops='The crops to harvest. If not specified, all crops will be harvested.')
+    @command(aliases={'har', 'ha', 'hv', 'gather', 'collect'}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 15)
     @user_max_concurrency(1)
     async def harvest(self, ctx: Context, *crops: Union[parse_coordinate, query_crop]):  # Must use Union here as | operator does not work for functions
@@ -506,6 +513,10 @@ class Farming(Cog):
             embed.add_field(name='Leveled up crops:', value=message)
 
         return embed, REPLY
+
+    @harvest.define_app_command()
+    async def harvest_app_command(self, ctx: Context):
+        await ctx.invoke(self.harvest)
 
     @command(aliases={'wat', 'flourish'})
     @simple_cooldown(2, 4)
