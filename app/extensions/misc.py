@@ -263,9 +263,12 @@ class Miscellaneous(Cog):
 
     @Cog.listener()
     async def on_cooldown_reminder_timer_complete(self, timer: Timer) -> None:
+        self._cooldown_reminder_exists[user_id := timer.metadata['user_id']].pop(
+            qualname := timer.metadata['command'], None,
+        )
         channel = self.bot.get_partial_messageable(timer.metadata['channel_id'])
         try:
-            await channel.send(f'You can use `{timer.metadata["command"]}` again now, <@{timer.metadata["user_id"]}>!')
+            await channel.send(f'You can use `{qualname}` again now, <@{user_id}>!')
         except discord.HTTPException:
             pass
 
