@@ -61,12 +61,15 @@ async def _into_interaction_response(interaction: TypedInteraction, kwargs: dict
         del kwargs['embed']
 
     if kwargs.pop('edit', False):
-        if interaction.response.is_done():
-            await interaction.edit_original_response(**kwargs)
+        try:
+            if interaction.response.is_done():
+                await interaction.edit_original_response(**kwargs)
+            else:
+                await interaction.response.edit_message(**kwargs)
+        except discord.NotFound:
+            pass
         else:
-            await interaction.response.edit_message(**kwargs)
-
-        return
+            return
 
     if interaction.response.is_done():
         await interaction.followup.send(**kwargs)
