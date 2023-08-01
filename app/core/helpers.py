@@ -168,9 +168,10 @@ def easy_command_callback(func: callable) -> callable:
     return wrapper
 
 
-def _get_lock(ctx: Context) -> LockWithReason:
+def _get_lock(ctx: Context, *, update_jump_url: bool = False) -> LockWithReason:
     lock = ctx.bot.transaction_locks.setdefault(ctx.author.id, LockWithReason())
-    lock.jump_url = ctx.message.jump_url
+    if update_jump_url:
+        lock.jump_url = ctx.message.jump_url
     return lock
 
 
@@ -194,14 +195,14 @@ def lock_transactions(func: callable) -> callable:
     if inspect.isasyncgenfunction(func):
         @wraps(func)
         async def wrapper(cog: Cog, ctx: Context, /, *args, **kwargs) -> Any:
-            async with _get_lock(ctx):
+            async with _get_lock(ctx, update_jump_url=True):
                 async for item in func(cog, ctx, *args, **kwargs):
                     yield item
 
     else:
         @wraps(func)
         async def wrapper(cog: Cog, ctx: Context, /, *args, **kwargs) -> Any:
-            async with _get_lock(ctx):
+            async with _get_lock(ctx, update_jump_url=True):
                 return await func(cog, ctx, *args, **kwargs)
 
     return commands.check(check)(wrapper)
