@@ -1157,6 +1157,26 @@ class Profit(Cog):
         yield view, view.make_embed(message='You begin your dive at the surface.'), REPLY
         await view.wait()
 
+    @command(aliases={'claim', 'redeem', 'hr', 'hour'}, hybrid=True)
+    @database_cooldown(3_600)
+    @user_max_concurrency(1)
+    @cooldown_message('This command is named hourly for a reason.')
+    async def hourly(self, ctx: Context) -> tuple[discord.Embed, Any]:
+        """Claim your hourly crate."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = record.inventory_manager
+        item = Items.common_crate  # This should dynamically change based on prestige or premium-ness
+
+        async with ctx.db.acquire() as conn:
+            await inventory.add_item(item, 1, connection=conn)
+            await record.add_random_exp(15, 25, ctx=ctx, connection=conn)
+            await record.add_random_bank_space(20, 35, chance=0.8, connection=conn)
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author}: Claim Hourly', icon_url=ctx.author.avatar.url)
+        embed.description = f'You claimed your hourly {item.get_display_name(bold=True)}!'
+        return embed, REPLY
+
     @command(aliases={'da', 'day'}, hybrid=True)
     @database_cooldown(86_400)
     @user_max_concurrency(1)
