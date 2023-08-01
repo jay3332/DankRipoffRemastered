@@ -25,7 +25,7 @@ from config import Colors, Emojis
 if TYPE_CHECKING:
     from typing import Self
 
-    from app.core import Command
+    from app.core import Command, HybridContext
 
 
 @converter
@@ -229,26 +229,26 @@ class Miscellaneous(Cog):
         if retry_after < 30:
             return f'You can use that command {formatted}, be patient', REPLY
 
+        message = await ctx.reply(
+            f'Alright {ctx.author.mention}, I will remind you in this channel when you can use '
+            f'`{command.qualified_name}` again ({formatted}).',
+        )
         timer = await ctx.bot.timers.create(
             timestamp,
             'cooldown_reminder',
             channel_id=ctx.channel.id,
             user_id=ctx.author.id,
             command=command.qualified_name,
-            jump_url=ctx.message.jump_url,
+            jump_url=message.jump_url,
         )
         existing[command.qualified_name] = CooldownReminderMetadata.from_timer(timer)
-        return (
-            f'Alright, I will remind you in this channel when you can use `{command.qualified_name}` again ({formatted}).',
-            REPLY,
-        )
 
     @cooldowns_remind.define_app_command()
     @app_commands.rename(cmd='command')
     @app_commands.describe(cmd='The command to remind you about.')
-    async def cooldowns_remind_app_command(self, ctx: Context, cmd: str):
+    async def cooldowns_remind_app_command(self, ctx: HybridContext, cmd: str):
         if cmd := ctx.bot.get_command(cmd):
-            return await ctx.invoke(self.cooldowns_remind, command=cmd)  # type: ignore
+            return await ctx.full_invoke(command=cmd)  # type: ignore
 
         await ctx.reply(f'Unknown command {cmd!r}.', ephemeral=True)
 

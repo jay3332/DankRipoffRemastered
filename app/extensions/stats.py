@@ -9,17 +9,19 @@ from discord.app_commands import Choice
 from discord.utils import format_dt
 
 from app import Bot
-from app.core import BAD_ARGUMENT, Cog, Context, NO_EXTRA, REPLY, command, group, simple_cooldown
+from app.core import BAD_ARGUMENT, Cog, Context, HybridContext, NO_EXTRA, REPLY, command, group, simple_cooldown
 from app.data.items import ItemType, Items
 from app.database import UserRecord
 from app.extensions.transactions import query_item_type
 from app.util.common import cutoff, image_url_from_emoji, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
+from app.util.views import ModalButton
 from config import Colors, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
-    from app.util.types import CommandResponse, TypedInteraction
+    from app.extensions.transactions import Transactions
+    from app.util.types import CommandResponse
 
 
 class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
@@ -83,12 +85,23 @@ class Stats(Cog):
         """))
         embed.set_thumbnail(url=user.avatar)
 
-        return embed, REPLY, NO_EXTRA if ctx.author != user else None
+        transactions: Transactions = ctx.bot.get_cog('Transactions')
+        view = discord.ui.View(timeout=60)
+        view.add_item(ModalButton(
+            modal=transactions.withdraw_modal, label='Withdraw Coins', style=discord.ButtonStyle.primary,
+            disabled=not data.bank,
+        ))
+        view.add_item(ModalButton(
+            modal=transactions.deposit_modal, label='Deposit Coins', style=discord.ButtonStyle.primary,
+            disabled=not data.wallet,
+        ))
+
+        return embed, view, REPLY, NO_EXTRA if ctx.author != user else None
 
     @balance.define_app_command()
     @app_commands.describe(user='The user to view the balance of.')
-    async def balance_app_command(self, ctx: Context, user: discord.Member = None) -> None:
-        await ctx.invoke(self.balance, user=user)
+    async def balance_app_command(self, ctx: HybridContext, user: discord.Member = None) -> None:
+        await ctx.full_invoke(user=user)
 
     @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
@@ -110,8 +123,8 @@ class Stats(Cog):
 
     @level.define_app_command()
     @app_commands.describe(user='The user to view the level of.')
-    async def level_app_command(self, ctx: Context, user: discord.Member = None) -> None:
-        await ctx.invoke(self.level, user=user)
+    async def level_app_command(self, ctx: HybridContext, user: discord.Member = None) -> None:
+        await ctx.full_invoke(user=user)
 
     @command(aliases={'mul', 'ml', 'mti', 'multi', 'multipliers'}, hybrid=True)
     @simple_cooldown(2, 5)
@@ -227,8 +240,8 @@ class Stats(Cog):
 
     @inventory.define_app_command()
     @app_commands.describe(user='The user to view the inventory of.')
-    async def inventory_app_command(self, ctx: Context, user: discord.Member = None):
-        await ctx.invoke(self.inventory, user=user)
+    async def inventory_app_command(self, ctx: HybridContext, user: discord.Member = None):
+        await ctx.full_invoke(user=user)
 
     @command(aliases={"itembook", "uniqueitems", "discovered", "ib"}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 6)
@@ -272,11 +285,11 @@ class Stats(Cog):
     @app_commands.choices(category=[Choice(name=cat.name.title(), value=cat.name) for cat in list(ItemType)])
     async def book_app_command(
         self,
-        ctx: Context,
+        ctx: HybridContext,
         rarity: Literal['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'] = None,
         category: str = None,
     ):
-        await ctx.invoke(self.book, rarity=(rarity or 'all').lower(), category=category and query_item_type(category))
+        await ctx.full_invoke(rarity=(rarity or 'all').lower(), category=category and query_item_type(category))
 
     @group(aliases={"notifs", "notification", "notif", "nt"}, hybrid=True, fallback='list')
     @simple_cooldown(1, 6)

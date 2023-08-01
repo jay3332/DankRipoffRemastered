@@ -4,16 +4,19 @@ import asyncio
 import re
 from functools import partial
 from textwrap import dedent
-from typing import Any, TYPE_CHECKING, TypeAlias
+from typing import Any, Callable, Literal, TYPE_CHECKING, TypeAlias
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from app.core import (
     BAD_ARGUMENT,
     Cog,
+    Command,
     Context,
     EDIT,
+    HybridCommand,
     NO_EXTRA,
     REPLY,
     command,
@@ -42,7 +45,7 @@ from app.util.converters import (
 )
 from app.util.pagination import FieldBasedFormatter, Paginator
 from app.util.structures import LockWithReason
-from app.util.views import ConfirmationView, UserView
+from app.util.views import CommandInvocableModal, ConfirmationView, ModalButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -59,7 +62,7 @@ class DropView(discord.ui.View):
 
         self._lock: asyncio.Lock = asyncio.Lock()
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(self, interaction: TypedInteraction) -> bool:
         if interaction.user == self.ctx.author:
             await interaction.response.send_message("You cannot claim your own drop, it's too late now!", ephemeral=True)
 
@@ -68,7 +71,7 @@ class DropView(discord.ui.View):
         return True
 
     @discord.ui.button(label='Claim!', style=discord.ButtonStyle.success)
-    async def claim(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+    async def claim(self, interaction: TypedInteraction, button: discord.ui.Button) -> None:
         if self.winner:
             await interaction.response.send_message('This drop has already been claimed!', ephemeral=True)
 
@@ -105,7 +108,7 @@ class RecipeSelect(discord.ui.Select['RecipeView']):
             row=0,
         )
 
-    async def callback(self, interaction: discord.Interaction) -> None:
+    async def callback(self, interaction: TypedInteraction) -> None:
         try:
             recipe = get_by_key(Recipes, self.values[0])
         except (KeyError, IndexError):
@@ -117,7 +120,7 @@ class RecipeSelect(discord.ui.Select['RecipeView']):
 
 
 class RecipeView(UserView):
-    REPLACE_REGEX: re.Pattern[str] = re.compile(r'[^\s]')
+    REPLACE_REGEX: re.Pattern[str] = re.compile(r'\S')
 
     def __init__(self, ctx: Context, record: UserRecord, default: Recipe | None = None) -> None:
         self.ctx: Context = ctx
@@ -126,7 +129,7 @@ class RecipeView(UserView):
         self.current: Recipe = default or next(walk_collection(Recipes, Recipe))
         self.input_lock: asyncio.Lock = asyncio.Lock()
 
-        super().__init__(ctx.author)
+        super().__init__(ctx.author, timeout=60)
         self.add_item(RecipeSelect(default=default))
 
         self.update()
@@ -177,7 +180,7 @@ class RecipeView(UserView):
         else:
             self.craft_max.label = 'Craft Max'
 
-    async def _craft(self, amount: int = 1, *, interaction: discord.Interaction = None) -> Any:
+    async def _craft(self, amount: int = 1, *, interaction: TypedInteraction = None) -> Any:
         respond_error = partial(interaction.response.send_message, ephemeral=True) if interaction else self.ctx.reply
         respond = interaction.response.send_message if interaction else self.ctx.reply
 
@@ -236,15 +239,15 @@ class RecipeView(UserView):
         return min(item_max, self.record.wallet // self.current.price)
 
     @discord.ui.button(label='Craft One', style=discord.ButtonStyle.primary, row=1)
-    async def craft_one(self, interaction: discord.Interaction, _) -> None:
+    async def craft_one(self, interaction: TypedInteraction, _) -> None:
         await self._craft(1, interaction=interaction)
 
     @discord.ui.button(label='Craft Max', style=discord.ButtonStyle.primary, row=1)
-    async def craft_max(self, interaction: discord.Interaction, _) -> None:
+    async def craft_max(self, interaction: TypedInteraction, _) -> None:
         await self._craft(self._get_max(), interaction=interaction)
 
     @discord.ui.button(label='Craft Custom', style=discord.ButtonStyle.primary, row=1)
-    async def craft_custom(self, interaction: discord.Interaction, _) -> Any:
+    async def craft_custom(self, interaction: TypedInteraction, _) -> Any:
         async with self.input_lock:
             await interaction.response.send_message(
                 'How many of this item/recipe do you want to craft? Send a valid quantity in chat, e.g. "3" or "half".',
@@ -420,10 +423,42 @@ class ShopCategorySelect(discord.ui.Select):
         await paginator.start(edit=True, interaction=interaction)
 
 
+class BankTransactionModal(CommandInvocableModal):
+    amount = discord.ui.TextInput(
+        label='How many coins do you want to {}?',
+        placeholder='Enter a number or shorthand like "500", "10k", or "all"...',
+        required=True,
+        min_length=1,
+        max_length=20,
+    )
+
+    def __init__(self, cmd: Command | HybridCommand, *, title: str, transaction: Literal[0, 1]) -> None:
+        super().__init__(title=title, command=cmd)
+        self.amount.label = self.amount.label.format('withdraw' if transaction == WITHDRAW else 'deposit')
+        self.converter = BankTransaction(transaction)()
+
+    async def on_submit(self, interaction: TypedInteraction, /) -> None:
+        ctx = await self.get_context(interaction)
+        try:
+            value = await self.converter.convert(ctx, self.amount.value)
+        except commands.CommandError as exc:
+            await ctx.command.dispatch_error(ctx, exc)
+        else:
+            await self.invoke(ctx, amount=value)
+
+
 class Transactions(Cog):
     """Commands that handle transactions between the bank or other users."""
 
     emoji = '\U0001f91d'
+
+    @discord.utils.cached_property
+    def withdraw_modal(self) -> Callable[[TypedInteraction], BankTransactionModal]:
+        return lambda _: BankTransactionModal(self.withdraw, title='Withdraw Coins', transaction=WITHDRAW)
+
+    @discord.utils.cached_property
+    def deposit_modal(self) -> Callable[[TypedInteraction], BankTransactionModal]:
+        return lambda _: BankTransactionModal(self.deposit, title='Deposit Coins', transaction=DEPOSIT)
 
     # noinspection PyTypeChecker
     @command(aliases={"w", "with", "wd"}, hybrid=True)
@@ -448,7 +483,14 @@ class Transactions(Cog):
             Bank: {Emojis.coin} **{data.bank:,}**
         """))
 
-        return embed, REPLY
+        view = discord.ui.View(timeout=60)
+        view.add_item(ModalButton(
+            modal=self.withdraw_modal, label='Withdraw More Coins', style=discord.ButtonStyle.primary,
+            disabled=not data.bank,
+        ))
+        view.add_item(ModalButton(modal=self.deposit_modal, label='Deposit Coins', style=discord.ButtonStyle.primary))
+
+        return embed, view, REPLY
 
     # noinspection PyTypeChecker
     @command(aliases={"d", "dep"}, hybrid=True)
@@ -473,7 +515,16 @@ class Transactions(Cog):
             Bank: {Emojis.coin} **{data.bank:,}**
         """))
 
-        return embed, REPLY
+        view = discord.ui.View(timeout=60)
+        view.add_item(ModalButton(
+            modal=self.deposit_modal, label='Deposit More Coins', style=discord.ButtonStyle.primary,
+            disabled=not data.wallet,
+        ))
+        view.add_item(ModalButton(
+            modal=self.withdraw_modal, label='Withdraw Coins', style=discord.ButtonStyle.primary,
+        ))
+
+        return embed, view, REPLY
 
     @command(aliases={"store", "market", "sh", "iteminfo", "ii", "item"})
     @simple_cooldown(1, 6)

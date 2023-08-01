@@ -14,6 +14,7 @@ from app.core import (
     BAD_ARGUMENT,
     Cog,
     Context,
+    HybridContext,
     REPLY,
     command,
     group,
@@ -26,7 +27,7 @@ from app.database import CropInfo, CropManager, UserRecord
 from app.util.common import cutoff, humanize_duration, image_url_from_emoji
 from app.util.converters import query_crop
 from app.util.types import CommandResponse, TypedInteraction
-from app.util.views import UserView
+from app.util.views import StaticCommandButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -86,6 +87,14 @@ class LandView(UserView):
 
         self.message: str
         self.update()
+
+        self.add_item(StaticCommandButton(
+            label='Harvest All',
+            style=discord.ButtonStyle.green,
+            emoji='\U0001f33e',
+            row=2,
+            command=ctx.bot.get_command('harvest'),  # ensure bound
+        ))
 
     @property
     def crop_manager(self) -> CropManager:
@@ -383,12 +392,12 @@ class Farming(Cog):
     @app_commands.describe(
         coordinate_or_crop='The crop to view information on. Can be a specific crop (e.g. "A1") or a crop name (e.g. "corn").'
     )
-    async def info_app_command(self, ctx: Context, coordinate_or_crop: str) -> None:
+    async def info_app_command(self, ctx: HybridContext, coordinate_or_crop: str) -> None:
         try:
             coordinate_or_crop = parse_coordinate(coordinate_or_crop)
         except BadArgument:
             coordinate_or_crop = query_crop(coordinate_or_crop)
-        await ctx.invoke(self.info, coordinate_or_crop=coordinate_or_crop)  # type: ignore
+        await ctx.full_invoke(coordinate_or_crop=coordinate_or_crop)  # type: ignore
 
     @info.autocomplete('coordinate_or_crop')
     async def into_autocomplete(self, _: TypedInteraction, current: str):
@@ -515,8 +524,8 @@ class Farming(Cog):
         return embed, REPLY
 
     @harvest.define_app_command()
-    async def harvest_app_command(self, ctx: Context):
-        await ctx.invoke(self.harvest)
+    async def harvest_app_command(self, ctx: HybridContext):
+        await ctx.full_invoke()
 
     @command(aliases={'wat', 'flourish'})
     @simple_cooldown(2, 4)

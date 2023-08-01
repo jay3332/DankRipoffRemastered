@@ -12,12 +12,14 @@ from discord.ext import commands
 
 from app.core.help import HelpCommand
 from app.core.flags import FlagMeta
+from app.core.helpers import ActiveTransactionLock
 from app.core.models import Command, Context, GroupCommand
 from app.core.timers import TimerManager
 from app.database import Database
 from app.util.ansi import AnsiStringBuilder, AnsiColor
 from app.util.common import humanize_duration, pluralize
 from app.util.structures import LockWithReason
+from app.util.views import StaticCommandButton
 from config import Colors, allowed_mentions, default_prefix, description, name, owner, token, version
 
 if TYPE_CHECKING:
@@ -141,6 +143,10 @@ class Bot(commands.Bot):
 
         await self.process_commands(message)
 
+    @discord.utils.cached_property
+    def _cooldowns_remind_command(self) -> Any:
+        return self.get_command('cooldowns remind')
+
     async def on_command_error(self, ctx: Context, error: Exception) -> Any:
         # sourcery no-metrics
         error = getattr(error, 'original', error)
@@ -158,8 +164,14 @@ class Bot(commands.Bot):
         respond = functools.partial(ctx.send, reference=ctx.message, delete_after=30, ephemeral=True)
 
         if isinstance(error, commands.BadArgument):
+            view = None
+            if isinstance(error, ActiveTransactionLock) and error.lock.jump_url is not None:
+                view = discord.ui.View().add_item(
+                    discord.ui.Button(label='Jump to Transaction', url=error.lock.jump_url),
+                )
+
             ctx.command.reset_cooldown(ctx)
-            return await respond(error)
+            return await respond(error, view=view)
 
         if isinstance(error, commands.MaxConcurrencyReached):
             # noinspection PyUnresolvedReferences
@@ -182,7 +194,19 @@ class Bot(commands.Bot):
             embed.add_field(name='Try again after', value=humanize_duration(error.retry_after))
             embed.add_field(name='Default cooldown', value=default)
 
-            return await respond(embed=embed)
+            view = None
+            if error.retry_after > 30:
+                view = discord.ui.View(timeout=60).add_item(
+                    StaticCommandButton(
+                        command=self._cooldowns_remind_command,
+                        command_kwargs={'command': command},
+                        label='Remind me when I can use this command again',
+                        emoji='\u23f0',
+                        style=discord.ButtonStyle.primary,
+                    )
+                )
+
+            return await respond(embed=embed, view=view)
 
         if isinstance(error, (commands.ConversionError, commands.MissingRequiredArgument, commands.BadLiteralArgument)):
             ctx.command.reset_cooldown(ctx)
@@ -212,8 +236,8 @@ class Bot(commands.Bot):
         signature = signature.raw
 
         if match := re.search(
-                fr"[<\[](--)?{re.escape(param.name)}((=.*)?| [<\[]\w+(\.{{3}})?[>\]])(\.{{3}})?[>\]](\.{{3}})?",
-                signature,
+            fr"[<\[](--)?{re.escape(param.name)}((=.*)?| [<\[]\w+(\.{{3}})?[>\]])(\.{{3}})?[>\]](\.{{3}})?",
+            signature,
         ):
             lower, upper = match.span()
         elif isinstance(param.annotation, FlagMeta):

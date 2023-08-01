@@ -169,7 +169,13 @@ def easy_command_callback(func: callable) -> callable:
 
 
 def _get_lock(ctx: Context) -> LockWithReason:
-    return ctx.bot.transaction_locks.setdefault(ctx.author.id, LockWithReason())
+    return ctx.bot.transaction_locks.setdefault(ctx.author.id, LockWithReason(jump_url=ctx.message.jump_url))
+
+
+class ActiveTransactionLock(commands.BadArgument):
+    def __init__(self, lock: LockWithReason) -> None:
+        super().__init__(lock.reason or 'Please finish your pending transaction(s) first.')
+        self.lock = lock
 
 
 def lock_transactions(func: callable) -> callable:
@@ -177,7 +183,7 @@ def lock_transactions(func: callable) -> callable:
         lock = _get_lock(ctx)
 
         if lock.locked():
-            raise commands.BadArgument(lock.reason or 'Please finish your pending transaction(s) first.')
+            raise ActiveTransactionLock(lock)
 
         return True
 

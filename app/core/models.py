@@ -7,7 +7,6 @@ from functools import wraps
 from typing import Any, Awaitable, Callable, NamedTuple, Literal, TYPE_CHECKING, Union, Self
 
 import discord
-from discord.app_commands import Command as AppCommand
 from discord.ext import commands
 from discord.utils import MISSING, maybe_coroutine as maybe_coro
 
@@ -487,6 +486,10 @@ class _AppCommandOverride(discord.app_commands.Command):
         )
 
 
+class HybridContext(Context):
+    full_invoke: AsyncCallable[..., Any]
+
+
 def define_app_command_impl(
     source: HybridCommand | HybridGroupCommand,
     cls: type[discord.app_commands.Command | discord.app_commands.Group],
@@ -503,8 +506,12 @@ def define_app_command_impl(
             ctx = await slf.bot.get_context(itx)
             ctx.command = source
 
-            if not await source.can_run(ctx):
-                return
+            async def invoker(*iargs: Any, **ikwargs: Any) -> Any:
+                ctx.args = [ctx.cog, ctx, *iargs]
+                ctx.kwargs = ikwargs
+                return await ctx.bot.invoke(ctx)
+
+            ctx.full_invoke = invoker
             return await func(slf, ctx, *args, **kwds)
 
         source.app_command = cls(

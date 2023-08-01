@@ -17,7 +17,7 @@ from app.core import (
     Cog,
     Context,
     EDIT,
-    REPLY,
+    HybridContext, REPLY,
     command,
     database_cooldown,
     lock_transactions,
@@ -30,7 +30,7 @@ from app.data.skills import RobberyTrainingButton
 from app.util.common import humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
-from app.util.views import AnyUser, UserView
+from app.util.views import AnyUser, StaticCommandButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -230,6 +230,11 @@ class Profit(Cog):
         embed = discord.Embed(timestamp=ctx.now)
         embed.set_author(name=f"Beg: {ctx.author}", icon_url=ctx.author.avatar)
 
+        view = discord.ui.View(timeout=120)
+        view.add_item(StaticCommandButton(label='/search', command=self.search))
+        view.add_item(StaticCommandButton(label='/crime', command=self.crime))
+        view.add_item(StaticCommandButton(label='/dive', command=self.dive))
+
         await asyncio.sleep(random.uniform(2, 4))
 
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -240,7 +245,7 @@ class Profit(Cog):
             embed.colour = Colors.error
             embed.description = self._capitalize_first(random.choice(self.BEG_FAIL_MESSAGES).format(f'**{person}**'))
 
-            yield '', embed, EDIT
+            yield '', embed, view, EDIT
             return
 
         multiplier = 1
@@ -266,7 +271,7 @@ class Profit(Cog):
             random.choice(self.BEG_SUCCESS_MESSAGES).format(person, message)
         )
 
-        yield '', embed, EDIT
+        yield '', embed, view, EDIT
         return
 
     @command(aliases={"investment", "iv", "in"}, hybrid=True)
@@ -505,6 +510,11 @@ class Profit(Cog):
         embed.set_author(name=f'Search: {ctx.author}', icon_url=ctx.author.avatar.url)
         embed.set_footer(text=f'Search area: {name}')
 
+        cont = discord.ui.View(timeout=120)
+        cont.add_item(StaticCommandButton(label='/beg', command=self.beg))
+        cont.add_item(StaticCommandButton(label='/crime', command=self.crime))
+        cont.add_item(StaticCommandButton(label='/dive', command=self.dive))
+
         if random.random() > choice.success_chance:
             embed.colour = Colors.error
 
@@ -514,13 +524,13 @@ class Profit(Cog):
 
                 embed.add_field(name='You died!', value=cause)
 
-                yield embed, REPLY
+                yield embed, cont, REPLY
                 return
 
             message = random.choice(choice.failure_responses)
             embed.add_field(name='You found nothing!', value=message)
 
-            yield embed, REPLY
+            yield embed, cont, REPLY
             return
 
         async with ctx.db.acquire() as conn:
@@ -536,7 +546,7 @@ class Profit(Cog):
         embed.colour = Colors.success
         embed.add_field(name='Profit!', value=random.choice(choice.success_responses).format(message))
 
-        yield embed, REPLY
+        yield embed, cont, REPLY
 
     CRIMES = {
         'shoplift': CrimeData(
@@ -673,6 +683,11 @@ class Profit(Cog):
         embed.set_footer(text=f'Crime committed: {name}')
         embed.set_thumbnail(url=choice.image)
 
+        cont = discord.ui.View(timeout=120)
+        cont.add_item(StaticCommandButton(label='/beg', command=self.beg))
+        cont.add_item(StaticCommandButton(label='/search', command=self.search))
+        cont.add_item(StaticCommandButton(label='/dive', command=self.dive))
+
         if random.random() > choice.success_chance:
             embed.colour = Colors.error
 
@@ -682,13 +697,13 @@ class Profit(Cog):
 
                 embed.add_field(name='You died!', value=cause)
 
-                yield embed, REPLY
+                yield embed, cont, REPLY
                 return
 
             message = random.choice(choice.failure_responses)
             embed.add_field(name='You got nothing!', value=message)
 
-            yield embed, REPLY
+            yield embed, cont, REPLY
             return
 
         async with ctx.db.acquire() as conn:
@@ -702,7 +717,7 @@ class Profit(Cog):
         embed.colour = Colors.success
         embed.add_field(name='Profit!', value=random.choice(choice.success_responses).format(humanize_list(message)))
 
-        yield embed, REPLY
+        yield embed, cont, REPLY
 
     FISH_CHANCES = {
         None: 1,
@@ -1495,8 +1510,8 @@ class Profit(Cog):
 
     @rob.define_app_command()
     @app_commands.describe(victim='The victim of your robbery.')
-    async def rob_app_command(self, ctx: Context, victim: discord.Member) -> None:
-        await ctx.invoke(self.rob, user=victim)
+    async def rob_app_command(self, ctx: HybridContext, victim: discord.Member) -> None:
+        await ctx.full_invoke(user=victim)
 
 
 class ChopView(UserView):

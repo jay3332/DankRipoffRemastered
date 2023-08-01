@@ -52,9 +52,10 @@ class LockReasonMonitor:
 
 
 class LockWithReason(asyncio.Lock):
-    def __init__(self, reason: str | None = None) -> None:
+    def __init__(self, reason: str | None = None, *, jump_url: str | None = None) -> None:
         super().__init__()
         self.reason: str | None = reason
+        self.jump_url: str | None = jump_url
 
     def set_reason(self, reason: str) -> None:
         self.reason = reason
@@ -63,17 +64,24 @@ class LockWithReason(asyncio.Lock):
         return LockReasonMonitor(self, reason)
 
 
+_ATTR_MISSING = object()
+
+
 class TemporaryAttribute(Generic[T, V]):
-    __slots__ = ('obj', 'attr', 'value')
+    __slots__ = ('obj', 'attr', 'value', 'original')
 
     def __init__(self, obj: T, attr: str, value: V) -> None:
         self.obj: T = obj
         self.attr: str = attr
         self.value: V = value
+        self.original: V = getattr(obj, attr, _ATTR_MISSING)
 
     def __enter__(self) -> T:
         setattr(self.obj, self.attr, self.value)
         return self.obj
 
     def __exit__(self, _type, _val, _tb) -> None:
-        delattr(self.obj, self.attr)
+        if self.original is _ATTR_MISSING:
+            return delattr(self.obj, self.attr)
+
+        setattr(self.obj, self.attr, self.original)

@@ -11,4 +11,4 @@ from .helpers import (
     simple_cooldown,
     user_max_concurrency,
 )
-from .models import Cog, Command, Context, GroupCommand
+from .models import Cog, Command, Context, GroupCommand, HybridContext, HybridCommand, HybridGroupCommand
