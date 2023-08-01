@@ -169,7 +169,9 @@ def easy_command_callback(func: callable) -> callable:
 
 
 def _get_lock(ctx: Context) -> LockWithReason:
-    return ctx.bot.transaction_locks.setdefault(ctx.author.id, LockWithReason(jump_url=ctx.message.jump_url))
+    lock = ctx.bot.transaction_locks.setdefault(ctx.author.id, LockWithReason())
+    lock.jump_url = ctx.message.jump_url
+    return lock
 
 
 class ActiveTransactionLock(commands.BadArgument):
