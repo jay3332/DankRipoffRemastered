@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from bisect import bisect_left
+from datetime import timedelta
+from io import BytesIO
 from textwrap import dedent
 from typing import Any, Literal, TYPE_CHECKING
 
@@ -7,6 +10,7 @@ import discord
 from discord import app_commands
 from discord.app_commands import Choice
 from discord.utils import format_dt
+from PIL import Image
 
 from app import Bot
 from app.core import BAD_ARGUMENT, Cog, Context, HybridContext, NO_EXTRA, REPLY, command, group, simple_cooldown
@@ -15,6 +19,7 @@ from app.database import UserRecord
 from app.extensions.transactions import query_item_type
 from app.util.common import cutoff, image_url_from_emoji, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter
+from app.util.graphs import send_graph_to
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
 from app.util.views import ModalButton
 from config import Colors, Emojis, multiplier_guilds
@@ -350,6 +355,40 @@ class Stats(Cog):
         notifications.cached.clear()
 
         return 'Cleared all of your notifications.', REPLY
+
+    @command(aliases={'chart', 'coinhistory', 'coingraph', 'cg'}, hybrid=True)
+    @simple_cooldown(1, 10)
+    async def graph(self, ctx: Context) -> CommandResponse | None:
+        """View a graph of your total coins over time."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+
+        threshold = ctx.now - timedelta(seconds=300)
+        position = bisect_left(record.history, threshold, key=lambda entry: entry[0])
+        history = record.history[position:]
+        if not history:
+            return 'No data to graph.'
+
+        history.append((ctx.now, record.total_coins))
+        dates, values = zip(*history)
+
+        with Image.new("RGB", (30, 30), (0, 0, 0)) as background:
+            buffer = BytesIO()
+            background.save(buffer, format="PNG")
+            buffer.seek(0)
+
+        color = discord.Color.from_rgb(255, 255, 255)
+        await send_graph_to(
+            ctx,
+            buffer,
+            dates,
+            values,
+            content=(
+                'Total coins over the past 5 minutes:\n*Note, this is an experimental command. '
+                'All data is merely cached and never stored permanently.*'
+            ),
+            y_axis='Total Coins',
+            color=color,
+        )
 
 
 setup = Stats.simple_setup

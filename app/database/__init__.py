@@ -635,6 +635,7 @@ class UserRecord:
         self.db: Database = db
         self.user_id: int = user_id
         self.data: dict[str, Any] = {}
+        self.history: list[tuple[datetime.datetime, int]] = []  # Experimental
 
         self.__inventory_manager: InventoryManager | None = None
         self.__notifications_manager: NotificationsManager | None = None
@@ -654,6 +655,7 @@ class UserRecord:
                 """
 
         self.data.update(await self.db.fetchrow(query, self.user_id))  # TODO: Welcome user if new
+        self.history.append((discord.utils.utcnow(), self.total_coins))
         return self
 
     async def fetch_if_necessary(self) -> UserRecord:
@@ -673,6 +675,7 @@ class UserRecord:
                 *values.values(),
             ),
         )
+        self.history.append((discord.utils.utcnow(), self.total_coins))
         return self
 
     def update(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[UserRecord]:

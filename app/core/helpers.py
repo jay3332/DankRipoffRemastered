@@ -140,14 +140,8 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
 
         # TODO: tips
 
-    interaction = getattr(ctx, 'interaction', None)
-
     if paginator:
-        clean_interaction_kwargs(kwargs)
-        return await paginator.start(interaction=interaction, **kwargs)
-
-    if interaction:
-        return await _into_interaction_response(interaction, kwargs)
+        return await paginator.start(**kwargs)
 
     return await ctx.send(**kwargs)
 

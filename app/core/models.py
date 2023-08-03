@@ -14,7 +14,7 @@ from app.core.flags import ConsumeUntilFlag, FlagMeta, Flags
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.structures import TemporaryAttribute
 from app.util.types import TypedContext
-from app.util.views import AnyUser, ConfirmationView
+from app.util.views import AnyUser, ConfirmationView, _dummy_parse_arguments
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -509,7 +509,9 @@ def define_app_command_impl(
             async def invoker(*iargs: Any, **ikwargs: Any) -> Any:
                 ctx.args = [ctx.cog, ctx, *iargs]
                 ctx.kwargs = ikwargs
-                return await ctx.bot.invoke(ctx)
+
+                with TemporaryAttribute(ctx.command, '_parse_arguments', _dummy_parse_arguments):
+                    return await ctx.bot.invoke(ctx)
 
             ctx.full_invoke = invoker
             return await func(slf, ctx, *args, **kwds)

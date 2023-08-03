@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import math
 import random
 import re
 from difflib import SequenceMatcher
-from typing import Any, Callable, Iterator, Optional, TYPE_CHECKING, Type, TypeVar
+from functools import wraps
+from typing import Any, Awaitable, Callable, Iterator, Optional, ParamSpec, TYPE_CHECKING, Type, TypeVar
 
 from discord.ext.commands import Converter
 
@@ -15,6 +17,8 @@ if TYPE_CHECKING:
 
     Q = TypeVar('Q')
     T = TypeVar('T')
+    P = ParamSpec('P')
+    R = TypeVar('R')
 
 __all__ = (
     'sentinel',
@@ -188,6 +192,15 @@ def humanize_duration(seconds, depth: int = 3):
 def insert_random_u200b(text: str, /) -> str:
     """Inserts random zero-width space characters into a string, usually to make them copy-paste proof."""
     return ''.join(c + random.randint(0, 4) * '\u200b' for c in text)
+
+
+def executor_function(func: Callable[P, R]) -> Callable[P, Awaitable[R]]:
+    """Runs the decorated function in an executor"""
+    @wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> Awaitable[R]:
+        return asyncio.to_thread(func, *args, **kwargs)
+
+    return wrapper  # type: ignore
 
 
 def progress_bar(ratio: float, *, length: int = 8, u200b: bool = True) -> str:

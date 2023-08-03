@@ -5,3 +5,7 @@ tabulate
 psutil
 requests  # Temporary due to SSL error with aiohttp
 python-dotenv
+matplotlib
+scipy
+numpy
+Pillow
