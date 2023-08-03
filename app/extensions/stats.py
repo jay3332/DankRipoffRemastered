@@ -14,11 +14,12 @@ from PIL import Image
 
 from app import Bot
 from app.core import BAD_ARGUMENT, Cog, Context, HybridContext, NO_EXTRA, REPLY, command, group, simple_cooldown
+from app.core.flags import Flags, flag, store_true
 from app.data.items import ItemType, Items
-from app.database import UserRecord
+from app.database import UserHistoryEntry, UserRecord
 from app.extensions.transactions import query_item_type
-from app.util.common import cutoff, image_url_from_emoji, progress_bar
-from app.util.converters import CaseInsensitiveMemberConverter
+from app.util.common import cutoff, humanize_duration, image_url_from_emoji, progress_bar
+from app.util.converters import CaseInsensitiveMemberConverter, IntervalConverter
 from app.util.graphs import send_graph_to
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
 from app.util.views import ModalButton
@@ -52,6 +53,17 @@ class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
         embed.set_footer(text=f'Page {paginator.current_page + 1}/{paginator.max_pages}')
 
         return embed
+
+
+class GraphFlags(Flags):
+    total = store_true(
+        aliases=('total-coins', 'tot'), short='t', description='Show total coins instead of wallet coins.',
+    )
+    duration: IntervalConverter = flag(
+        short='d',
+        aliases=('dur', 'time', 'interval', 'lookback', 'timespan', 'span'),
+        default=timedelta(minutes=15), description='How far back to look for data.',
+    )
 
 
 class Stats(Cog):
@@ -356,20 +368,37 @@ class Stats(Cog):
 
         return 'Cleared all of your notifications.', REPLY
 
-    @command(aliases={'chart', 'coinhistory', 'coingraph', 'cg'}, hybrid=True)
-    @simple_cooldown(1, 10)
-    async def graph(self, ctx: Context) -> CommandResponse | None:
-        """View a graph of your total coins over time."""
+    @command(aliases={'chart', 'coinhistory', 'coingraph', 'cg'})
+    @simple_cooldown(2, 6)
+    async def graph(self, ctx: Context, *, flags: GraphFlags) -> CommandResponse | None:
+        """View a graph of your wallet over time.
+
+        Flags:
+        - `--total`: Graph your total coins instead of your wallet.
+        - `--timespan <duration>`: How far back to look for data. Defaults to 15 minutes.
+
+        Examples:
+        - `{PREFIX}graph --total --timespan 1h`: Graph your total coins over the past hour.
+        - `{PREFIX}graph --timespan 1d`: Graph your wallet over the past day.
+        """
+        if flags.duration > timedelta(days=14):
+            return 'You may only graph up to 14 days of data.', BAD_ARGUMENT
+        if flags.duration < timedelta(minutes=2):
+            return 'You must graph at least 2 minutes of data.', BAD_ARGUMENT
+
         record = await ctx.db.get_user_record(ctx.author.id)
 
-        threshold = ctx.now - timedelta(seconds=300)
+        threshold = ctx.now - flags.duration
         position = bisect_left(record.history, threshold, key=lambda entry: entry[0])
         history = record.history[position:]
         if not history:
-            return 'No data to graph.'
+            return 'No data to graph. Try specifying a larger timespan.', REPLY
 
-        history.append((ctx.now, record.total_coins))
+        history.append((ctx.now, UserHistoryEntry(record.wallet, record.total_coins)))
         dates, values = zip(*history)
+        wallet, total = zip(*values)
+        values = total if flags.total else wallet  # This could be compressed into zip(*values)[flags.total]
+        target = 'Total Coins' if flags.total else 'Coins in Wallet'
 
         with Image.new("RGB", (30, 30), (0, 0, 0)) as background:
             buffer = BytesIO()
@@ -383,11 +412,19 @@ class Stats(Cog):
             dates,
             values,
             content=(
-                'Total coins over the past 5 minutes:\n*Note, this is an experimental command. '
-                'All data is merely cached and never stored permanently.*'
+                f'**{target}** over the past {humanize_duration(flags.duration.total_seconds())}:\n'
+                f'*Note, this is an experimental command.*'
             ),
-            y_axis='Total Coins',
+            y_axis=target,
             color=color,
+        )
+
+    @Cog.listener('on_guild_join')
+    @Cog.listener('on_guild_remove')
+    async def update_guild_count(self, _) -> None:
+        await self.bot.db.execute(
+            'INSERT INTO guild_count_graph_data (guild_count) VALUES ($1)',
+            len(self.bot.guilds),
         )
 
 

@@ -18,6 +18,8 @@ from config import DatabaseConfig, Emojis, multiplier_guilds
 from .migrations import Migrator
 
 if TYPE_CHECKING:
+    from typing import Self
+
     from app.core import Bot, Command, Context
 
 __all__ = (
@@ -55,6 +57,9 @@ class _Database:
 
     def acquire(self, *, timeout: float = None) -> asyncpg.pool.PoolAcquireContext:
         return self._internal_pool.acquire(timeout=timeout)
+
+    def release(self, conn: asyncpg.Connection, *, timeout: float = None) -> Awaitable[None]:
+        return self._internal_pool.release(conn, timeout=timeout)
 
     def execute(self, query: str, *args: Any, timeout: float = None) -> Awaitable[str]:
         return self._internal_pool.execute(query, *args, timeout=timeout)
@@ -625,6 +630,19 @@ class CropManager:
             self.cached[k] = self.cached[k]._replace(crop=None, exp=0, last_harvest=None)
 
 
+class UserHistoryEntry(NamedTuple):
+    wallet: int
+    total: int
+
+    @property
+    def bank(self) -> int:
+        return self.total - self.wallet
+
+    @classmethod
+    def from_record(cls, record: asyncpg.Record) -> Self:
+        return cls(record['wallet'], record['total'])
+
+
 class UserRecord:
     """Stores data about a user."""
 
@@ -635,7 +653,9 @@ class UserRecord:
         self.db: Database = db
         self.user_id: int = user_id
         self.data: dict[str, Any] = {}
-        self.history: list[tuple[datetime.datetime, int]] = []  # Experimental
+
+        self.history: list[tuple[datetime.datetime, UserHistoryEntry]] = []  # Experimental
+        self.__history_fetched: bool = False
 
         self.__inventory_manager: InventoryManager | None = None
         self.__notifications_manager: NotificationsManager | None = None
@@ -646,36 +666,76 @@ class UserRecord:
     def __repr__(self) -> str:
         return f'<UserRecord wallet={self.wallet} bank={self.bank} level_data={self.level_data}>'
 
+    async def update_history(self, connection: asyncpg.Connection) -> None:
+        if self.history:
+            _, previous = self.history[-1]
+            # Prevent a useless duplicate entry
+            if previous.wallet == self.wallet and previous.total == self.total_coins:
+                return
+
+        query = 'INSERT INTO user_coins_graph_data (user_id, wallet, total) VALUES ($1, $2, $3) RETURNING *;'
+        record = await connection.fetchrow(query, self.user_id, self.wallet, self.total_coins)
+        self.history.append((record['timestamp'], UserHistoryEntry.from_record(record)))
+
     async def fetch(self) -> UserRecord:
         await self.db.wait()
         query = """
                 INSERT INTO users (user_id) VALUES ($1) 
-                ON CONFLICT (user_id) DO UPDATE SET user_id = $1
+                ON CONFLICT (user_id) DO UPDATE SET user_id = $1 -- useless upsert
                 RETURNING *;
                 """
 
-        self.data.update(await self.db.fetchrow(query, self.user_id))  # TODO: Welcome user if new
-        self.history.append((discord.utils.utcnow(), self.total_coins))
+        async with self.db.acquire() as conn:
+            self.data.update(await conn.fetchrow(query, self.user_id))  # TODO: Welcome user if new
+            await self.fetch_history(connection=conn)
+
         return self
+
+    async def fetch_history(self, connection: asyncpg.Connection) -> None:
+        self.__history_fetched = True
+        self.history = [
+            (record['timestamp'], UserHistoryEntry.from_record(record))
+            for record in await connection.fetch(
+                'SELECT * FROM user_coins_graph_data WHERE user_id = $1 ORDER BY timestamp',
+                self.user_id,
+            )
+        ]
+        if not self.history:
+            await self.update_history(connection=connection)
 
     async def fetch_if_necessary(self) -> UserRecord:
         if not len(self.data):
             await self.fetch()
 
+        if not self.__history_fetched:
+            async with self.db.acquire() as conn:
+                await self.fetch_history(connection=conn)
+
         return self
 
-    async def _update(self, key: Callable[[tuple[int, str]], str], values: dict[str, Any], *, connection: asyncpg.Connection | None = None) -> UserRecord:
-        query = "/**/ UPDATE users SET {} WHERE user_id = $1 RETURNING *;"
+    async def _update(
+        self,
+        key: Callable[[tuple[int, str]], str],
+        values: dict[str, Any],
+        *,
+        connection: asyncpg.Connection | None = None,
+    ) -> UserRecord:
+        query = "/**/ UPDATE users SET {} WHERE user_id = $1 RETURNING *;"  # prevent language injection with /**/
+        actual_conn = await self.db.acquire() if connection is None else connection
 
         # noinspection PyTypeChecker
-        self.data.update(
-            await (connection or self.db).fetchrow(
-                query.format(', '.join(map(key, enumerate(values.keys(), start=2)))),
-                self.user_id,
-                *values.values(),
-            ),
-        )
-        self.history.append((discord.utils.utcnow(), self.total_coins))
+        try:
+            self.data.update(
+                await actual_conn.fetchrow(
+                    query.format(', '.join(map(key, enumerate(values.keys(), start=2)))),
+                    self.user_id,
+                    *values.values(),
+                ),
+            )
+            await self.update_history(connection=actual_conn)
+        finally:
+            if connection is None:
+                await self.db.release(actual_conn)
         return self
 
     def update(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[UserRecord]:
