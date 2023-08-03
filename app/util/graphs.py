@@ -13,6 +13,8 @@ import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 from matplotlib.patches import Polygon
 from matplotlib.ticker import StrMethodFormatter
+
+from app.core import Context
 # from scipy.interpolate import make_interp_spline
 
 from app.util.common import executor_function
@@ -123,8 +125,8 @@ def process_image(avatar_bytes: BytesIO, target: BytesIO):
         return to_send
 
 
-async def send_graph_to(destination, target, *graph_args, filename=None, content=None, embed=None, **graph_kwargs):
+async def send_graph_to(ctx: Context, target, *graph_args, filename=None, content=None, embed=None, **graph_kwargs):
     filename = filename or 'graph.png'
     graph = await create_graph(*graph_args, **graph_kwargs)
     buffer = await process_image(target, graph)
-    await destination.send(content, embed=embed, file=discord.File(buffer, filename))
+    await ctx.reply(content, embed=embed, file=discord.File(buffer, filename))
