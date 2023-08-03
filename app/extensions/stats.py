@@ -62,7 +62,7 @@ class GraphFlags(Flags):
     duration: IntervalConverter = flag(
         short='d',
         aliases=('dur', 'time', 'interval', 'lookback', 'timespan', 'span'),
-        default=timedelta(minutes=15), description='How far back to look for data.',
+        default='15m', description='How far back to look for data.',
     )
 
 
