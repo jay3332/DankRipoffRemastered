@@ -137,8 +137,8 @@ class Bot(commands.Bot):
 
         if message.content in {f'<@{self.user.id}>', f'<@!{self.user.id}>'}:
             await message.reply(
-                f"Hey, I'm {self.user.name}. My prefix here is `{default_prefix}`.\nAdditionally, "
-                f"some of my commands are available as slash commands.\n\nFor more help, run `{default_prefix}help`."
+                f"Hey, I'm {self.user.name}. My prefix here is **`{default_prefix}`**\nAdditionally, "
+                f"most of my commands are available as slash commands.\n\nFor more help, run `{default_prefix}help`."
             )
 
         await self.process_commands(message)
