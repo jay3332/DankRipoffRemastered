@@ -55,7 +55,7 @@ class Flag(Generic[T]):
                 nargs='+',
                 dest=self.dest,
                 required=self.required,
-                default=self.default,
+                default=None,
             )
             return
 
@@ -426,9 +426,11 @@ class Flags(metaclass=FlagMeta):  # type: FlagMeta[T]
                     v = await run_converters(ctx, converter, v, param)
 
             elif v is None and flag.required:
-                # we should never actually get here.
+                # we should never actually get here because of argparse.
                 raise BadArgument(f'flag {flag.name!r} is required.')
 
+            if v is None:
+                v = flag.default
             setattr(ns, k, v)
 
         return FlagNamespace(ns, cls)
