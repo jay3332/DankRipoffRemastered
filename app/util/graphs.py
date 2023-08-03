@@ -77,7 +77,7 @@ def create_graph(x, y, **kwargs):
     formatter, label = (
         (mdates.DateFormatter('%m/%d'), 'Date (month/day)')
         if date_arr[-1] - date_arr[0] > timedelta(days=2)  # format as month/day if more than 2 days
-        else (mdates.DateFormatter('%H:%M', tz='EDT'), 'Time (24h, EDT)')  # format as hour:minute if less than 2 days
+        else (mdates.DateFormatter('%H:%M'), 'Time (24h, UTC)')  # format as hour:minute if less than 2 days
     )
     for side, name in zip(("x", "y"), (label, kwargs.get("y_axis"))):
         getattr(axes, side + 'axis').label.set_color('white')
