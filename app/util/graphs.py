@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-import datetime
+# import datetime
 from datetime import timedelta
 from io import BytesIO
 from typing import TYPE_CHECKING
 
 import discord
-import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 from matplotlib.patches import Polygon
-from scipy.interpolate import make_interp_spline
+from matplotlib.ticker import StrMethodFormatter
+# from scipy.interpolate import make_interp_spline
 
 from app.util.common import executor_function
 
@@ -85,6 +86,7 @@ def create_graph(x, y, **kwargs):
         getattr(axes, f"set_{side}label")(name, fontsize=14, weight='bold')
 
     axes.get_xaxis().set_major_formatter(formatter)
+    axes.get_yaxis().set_major_formatter(StrMethodFormatter('{x:,.0f}'))
     axes.grid(True)
     axes.autoscale(True)
     value = get_buffer(fig, axes)
