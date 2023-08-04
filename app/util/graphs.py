@@ -43,6 +43,9 @@ def create_gradient_array(color, *, alpha_min=0, alpha_max=1):
     return z
 
 
+MAX_PADDING = 20_000
+
+
 @executor_function
 def create_graph(x, y, **kwargs):
     color = str(kwargs.get("color"))
@@ -63,7 +66,11 @@ def create_graph(x, y, **kwargs):
         alpha = 1.0
 
     z = create_gradient_array(color, alpha_max=alpha)
-    xmin, xmax, ymin, ymax = date_num.min(), date_num.max(), max(0, value_arr.min() * 0.8), value_arr.max() * 1.15  # type: ignore
+    xmin, xmax, ymin, ymax = (
+        date_num.min(), date_num.max(),
+        max(0, value_arr.min() * 0.8, value_arr.min() - MAX_PADDING),  # type: ignore
+        min(value_arr.max() * 1.15, value_arr.max() + MAX_PADDING),  # type: ignore
+    )
     payload = dict(aspect='auto', extent=(xmin, xmax, ymin, ymax), origin='lower', zorder=line.get_zorder())
     im = axes.imshow(z, **payload)
 
@@ -90,7 +97,7 @@ def create_graph(x, y, **kwargs):
     axes.get_xaxis().set_major_formatter(formatter)
     axes.get_yaxis().set_major_formatter(StrMethodFormatter('{x:,.0f}'))
     axes.grid(True)
-    # axes.autoscale(True)
+    axes.autoscale(True)
     value = get_buffer(fig, axes)
 
     del im
