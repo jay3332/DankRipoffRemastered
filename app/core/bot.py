@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import functools
+import math
 import os
 import re
+from collections import deque
 from typing import Any, ClassVar, Final, TYPE_CHECKING
 
 import discord
+import discord.gateway as gateway
 import jishaku
 from aiohttp import ClientSession
 from discord.ext import commands
@@ -32,6 +35,58 @@ jishaku.Flags.NO_DM_TRACEBACK = True
 ANSI_REGEX: re.Pattern[str] = re.compile(r"\x1b\[\d{2};[01]m")
 
 
+class TrackingKeepAliveHandler(gateway.KeepAliveHandler):
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.latencies = deque[float]()  # track past 5 latencies
+
+    def ack(self) -> None:
+        super().ack()
+        if math.isinf(self.latency):  # if the latency is infinite, don't add it to the list
+            return
+
+        self.latencies.append(self.latency)
+        if len(self.latencies) > 5:
+            self.latencies.popleft()
+
+    @property
+    def average_latency(self) -> float:
+        """Returns the average latency of the past 5 heartbeats.
+
+        This is not a simple mean, rather the worst and best latencies out of past 5 are removed,
+        then the mean is taken from the remaining 3.
+        """
+        # No latencies? Return inf to indicate that we don't have any data
+        if not self.latencies:
+            return float('inf')
+
+        # If there are three latencies or fewer, removing the worst and best latencies do more harm to the accuracy
+        # than good, so just return the mean of all the latencies
+        if len(self.latencies) <= 3:
+            return sum(self.latencies) / len(self.latencies)
+
+        # Remove the worst and best latencies. Since the worst case of sorted is O(n^2) and we're removing 2
+        # predictable elements, we can do this in O(n) time instead:
+        worst = float('-inf')
+        best = float('inf')
+        wpos = bpos = 0
+        for i, latency in enumerate(self.latencies):
+            if latency > worst:
+                worst = latency
+                wpos = i
+            if latency < best:
+                best = latency
+                bpos = i
+
+        # Remove the worst and best latencies
+        values = [latency for i, latency in enumerate(self.latencies) if i not in (wpos, bpos)]
+        return sum(values) / len(values)
+
+
+# we do a lil bit of monkey patching
+gateway.KeepAliveHandler = TrackingKeepAliveHandler
+
+
 class Bot(commands.Bot):
     """Dank Ripoff... Remastered."""
 
@@ -54,7 +109,7 @@ class Bot(commands.Bot):
         key = 'owner_id' if isinstance(owner, int) else 'owner_ids'
 
         super().__init__(
-            command_prefix=self.__class__.resolve_command_prefix,
+            command_prefix=self.__class__.resolve_command_prefix,  # type: ignore
             help_command=HelpCommand(),
             update_application_commands_at_startup=True,
             description=description,
@@ -67,6 +122,22 @@ class Bot(commands.Bot):
         )
 
         self._BotBase__cogs = commands.core._CaseInsensitiveDict()
+
+    @property
+    def average_latency(self) -> float:
+        """Returns the average latency of the past 5 heartbeats.
+
+        This is not a simple mean, rather the worst and best latencies out of past 5 are removed,
+        then the mean is taken from the remaining 3.
+        """
+        if not self.ws:
+            return float('nan')
+
+        if keep_alive := self.ws._keep_alive:  # type: ignore
+            keep_alive: TrackingKeepAliveHandler
+            return keep_alive.average_latency
+
+        return float('nan')
 
     def add_command(self, command: Command, /) -> None:
         if isinstance(command, Command):

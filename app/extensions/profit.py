@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import datetime
 import random
+import time
 from collections import defaultdict, deque
 from datetime import timedelta
 from html import unescape
 from textwrap import dedent
 from typing import Any, Generic, Literal, NamedTuple, TypeVar, TYPE_CHECKING
 
+import aiohttp
 import discord
 from discord import app_commands
 
@@ -142,6 +144,9 @@ class Profit(Cog):
         self._recent_robs: dict[int, RobData] = {}
         self._trivia_questions: deque[TriviaQuestion] = deque(maxlen=50)
         self._trivia_questions_fetch_lock: asyncio.Lock = asyncio.Lock()
+
+        self._last_measured_api_latency: float | None = None
+        self._last_measured_api_latency_minute: int | None = None
 
     BEG_INITIAL_MESSAGES = (
         "Alright, begging...",
@@ -1367,7 +1372,8 @@ class Profit(Cog):
                 fine_percent = fine / record.wallet
                 yield (
                     f'{Items.padlock.emoji} {user.name} had a padlock active. '
-                    f'You were instantly caught trying to get rid of the padlock and you pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                    f'You were instantly caught trying to get rid of the padlock and you pay a fine of {Emojis.coin} '
+                    f'**{fine:,}** ({fine_percent:.1%} of your wallet).',
                     EDIT,
                 )
                 await record.add(wallet=-fine)
@@ -1375,7 +1381,10 @@ class Profit(Cog):
 
                 await notify(
                     title='Someone tried to rob you, but you had a padlock active!',
-                    content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to your padlock being active. Your padlock is now deactivated.',
+                    content=(
+                        f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, '
+                        'but failed due to your padlock being active. Your padlock is now deactivated.'
+                    ),
                 )
                 return
 
@@ -1408,15 +1417,19 @@ class Profit(Cog):
 
                 fine_percent = fine / record.wallet
                 yield (
-                    f'Looks like you took too long to enter in the combination. '
-                    f'You were caught trying to break into {user.name}\'s wallet and you pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
+                    'Looks like you took too long to enter in the combination. '
+                    f'You were caught trying to break into {user.name}\'s wallet and you pay a fine of '
+                    f'{Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet).',
                     REPLY,
                 )
                 await record.add(wallet=-fine)
 
                 await notify(
                     title='Someone tried to rob you, but failed!',
-                    content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to taking too long to enter in the combination.',
+                    content=(
+                        f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, '
+                        'but failed due to taking too long to enter in the combination.'
+                    ),
                 )
                 return
 
@@ -1499,7 +1512,8 @@ class Profit(Cog):
             fine_percent = fine / record.wallet
             yield (
                 f'While so stealthily trying to rob {user.name}, you are spotted by police, '
-                f'who force you to pay a fine of {Emojis.coin} **{fine:,}** ({fine_percent:.1%} of your wallet) to {user.name}.',
+                f'who force you to pay a fine of {Emojis.coin} **{fine:,}** '
+                f'({fine_percent:.1%} of your wallet) to {user.name}.',
                 REPLY,
             )
             await record.add(wallet=-fine)
@@ -1507,7 +1521,10 @@ class Profit(Cog):
 
             await notify(
                 title='Someone tried to rob you!',
-                content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but was spotted by police. They paid you a fine of {Emojis.coin} **{fine:,}**.',
+                content=(
+                    f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but was spotted by police. '
+                    f'They paid you a fine of {Emojis.coin} **{fine:,}**.'
+                ),
             )
             return
 
@@ -1515,6 +1532,43 @@ class Profit(Cog):
     @app_commands.describe(victim='The victim of your robbery.')
     async def rob_app_command(self, ctx: HybridContext, victim: discord.Member) -> None:
         await ctx.full_invoke(user=victim)
+
+    async def get_api_latency(self, default: float = 0.1) -> float:
+        # discordstatus refreshes API latency every minute, so we can cache the value for a minute
+        perf_minute = time.perf_counter_ns() // 60_000_000_000  # determine the current minute
+        if perf_minute == self._last_measured_api_latency_minute and self._last_measured_api_latency is not None:
+            # if we've already measured the latency this minute, return the last measured value
+            return self._last_measured_api_latency
+
+        api_latency = default  # this is a graceful method, assume a default latency
+        timeout = aiohttp.ClientTimeout(total=3)
+        try:
+            # endpoint to discordstatus which can tell us how the REST API is performing today
+            async with self.bot.session.get(
+                'https://discordstatus.com/metrics-display/5k2rt9f7pmny/day.json',
+                timeout=timeout,
+            ) as resp:
+                data = await resp.json()
+                api_latency = self._last_measured_api_latency = data['metrics'][0]['summary']['mean'] / 1000
+                self._last_measured_api_latency_minute = perf_minute
+        except asyncio.TimeoutError:
+            pass
+        return api_latency
+
+    async def get_tolerable_wait_time(self, *, window: float, min: float = 1.5) -> float:
+        # within the allowed window of time to react and click:
+        # 1. bot sends request to REST
+        # 2. user receives request through gateway (assuming they use official discord client)
+        # 3. user reacts
+        # 4. user clicks button, sending interaction through REST
+        # 5. bot receives interaction through gateway
+        # in total, a response takes the time of two WS messages plus two REST messages plus reaction time
+        api_latency = await self.get_api_latency(default=0.1)  # default to 0.1s if we can't get the latency
+        predicted = (self.bot.average_latency + api_latency) * 2  # Predicted response time
+        return max(
+            predicted + window,
+            min,  # If Discord is performing well today, (as if it ever does), a lower bound can be specified
+        )
 
 
 class ChopView(UserView):

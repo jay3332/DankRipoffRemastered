@@ -19,7 +19,7 @@ class UserView(discord.ui.View):
         self.user: AnyUser = user
         super().__init__(timeout=timeout)
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(self, interaction: TypedInteraction) -> bool:
         if interaction.user != self.user:
             message = f'This component view is owned by {self.user.mention}, therefore you cannot use it.'
             await interaction.response.send_message(content=message, ephemeral=True)
