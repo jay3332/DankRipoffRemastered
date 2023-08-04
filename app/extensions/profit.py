@@ -714,6 +714,9 @@ class Profit(Cog):
                 items = random.choices(list(choice.items), list(choice.items.values()), k=random.randint(*choice.item_count))
                 message.extend(item.get_sentence_chunk(1) for item in items)
 
+                kwargs = {item.key: 1 for item in items}
+                await record.inventory_manager.add_bulk(connection=conn, **kwargs)
+
         embed.colour = Colors.success
         embed.add_field(name='Profit!', value=random.choice(choice.success_responses).format(humanize_list(message)))
 

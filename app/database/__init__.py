@@ -190,21 +190,32 @@ class InventoryManager:
         row = await (connection or self._record.db).fetchrow(query, self._record.user_id, str(item), amount)
         self.cached[item] = row['count']
 
-    async def update(self, *, connection: asyncpg.Connection | None = None, **items: int) -> None:
+    async def _base_update(
+        self, from_query: str, *, connection: asyncpg.Connection | None = None, **items: int,
+    ) -> None:
         await self.wait()
 
-        query = """
-                INSERT INTO items (user_id, item, count) VALUES ($1, $2, $3)
-                ON CONFLICT (user_id, item) DO UPDATE SET count = $3
-                """
-
         await (connection or self._record.db).executemany(
-            query,
+            from_query,
             [(self._record.user_id, k, v) for k, v in items.items()],
         )
         # update is not atomic, so we have to do this
         for k, v in items.items():
             self.cached[k] = v
+
+    async def update(self, *, connection: asyncpg.Connection | None = None, **items: int) -> None:
+        query = """
+                INSERT INTO items (user_id, item, count) VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, item) DO UPDATE SET count = $3
+                """
+        await self._base_update(query, connection=connection, **items)
+
+    async def add_bulk(self, *, connection: asyncpg.Connection | None = None, **items: int) -> None:
+        query = """
+                INSERT INTO items (user_id, item, count) VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, item) DO UPDATE SET count = items.count + $3
+                """
+        await self._base_update(query, connection=connection, **items)
 
     async def wipe(self, *, connection: asyncpg.Connection | None = None) -> None:
         await self.wait()  # this is so the cache isn't prone to data races
