@@ -662,22 +662,27 @@ class UserHistoryEntry(NamedTuple):
 class Multiplier(NamedTuple):
     multiplier: float
     title: str
+    description: str | None = None
     expires_at: datetime.datetime | None = None
     is_global: bool = True
 
     @property
     def display(self) -> str:
-        extra = ''
-        if self.is_global:
-            extra = (
-                ' (global)'
-                if self.expires_at is None
-                else f' (expires {format_dt(self.expires_at, "R")}, global)'
-            )
-        elif expires_at := self.expires_at:
-            extra = f' (expires {format_dt(expires_at, "R")})'
+        base = f'- {self.title}: +**{self.multiplier:.1%}** {"(global)" if self.is_global else ""}'
 
-        return f'- {self.title}: +**{self.multiplier:.1%}**{extra}'
+        expansion = Emojis.Expansion
+        first, last = (
+            (expansion.first, expansion.last)
+            if self.description and self.expires_at
+            else (expansion.standalone, expansion.standalone)
+        )
+        if description := self.description:
+            base += f'\n{first} *{description}*'
+
+        if expires_at := self.expires_at:
+            base += f'\n{last} Expires {format_dt(expires_at, "R")}'
+
+        return base
 
 
 class UserRecord:
@@ -905,7 +910,11 @@ class UserRecord:
         return self.data['exp_multiplier']
 
     def walk_exp_multipliers(self, ctx: Context | None = None) -> Generator[Multiplier, Any, Any]:
-        yield Multiplier(self.base_exp_multiplier, 'Base Multiplier')
+        yield Multiplier(
+            self.base_exp_multiplier,
+            'Base Multiplier',
+            description='accumulated from using items like cheese',
+        )
         yield Multiplier(self.prestige * 0.25, f'{Emojis.get_prestige_emoji(self.prestige)} Prestige {self.prestige}')
 
         if ctx is not None and ctx.guild.id in multiplier_guilds:
