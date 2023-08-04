@@ -4,7 +4,7 @@ from bisect import bisect_left
 from datetime import timedelta
 from io import BytesIO
 from textwrap import dedent
-from typing import Any, Literal, TYPE_CHECKING
+from typing import Any, Iterable, Literal, TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -16,7 +16,7 @@ from app import Bot
 from app.core import BAD_ARGUMENT, Cog, Context, HybridContext, NO_EXTRA, REPLY, command, group, simple_cooldown
 from app.core.flags import Flags, flag, store_true
 from app.data.items import ItemType, Items
-from app.database import UserHistoryEntry, UserRecord
+from app.database import Multiplier, UserHistoryEntry, UserRecord
 from app.extensions.transactions import query_item_type
 from app.util.common import cutoff, humanize_duration, image_url_from_emoji, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, IntervalConverter
@@ -143,6 +143,18 @@ class Stats(Cog):
     async def level_app_command(self, ctx: HybridContext, user: discord.Member = None) -> None:
         await ctx.full_invoke(user=user)
 
+    @staticmethod
+    def _deconstruct(multipliers: Iterable[Multiplier]) -> tuple[str, float]:
+        try:
+            details, multipliers = zip(*(
+                (multiplier.display, multiplier.multiplier)
+                for multiplier in multipliers if multiplier.multiplier
+            ))
+        except ValueError:
+            details, multipliers = (), ()
+
+        return '\n'.join(details), sum(multipliers)
+
     @command(aliases={'mul', 'ml', 'mti', 'multi', 'multipliers'}, hybrid=True)
     @simple_cooldown(2, 5)
     async def multiplier(self, ctx: Context) -> CommandResponse:
@@ -154,44 +166,26 @@ class Stats(Cog):
         embed.set_thumbnail(url=image_url_from_emoji('\U0001f4c8'))
 
         # XP Multi
-        details = []
-        total_exp_multi = data.total_exp_multiplier - 1
-        if data.base_exp_multiplier:
-            details.append(f'- Base Multiplier\\*: +**{data.base_exp_multiplier:.1%}** (global)')
-            embed.set_footer(text='* This multiplier is accumulated from using items like cheese')
-        if data.prestige:
-            details.append(f'- Prestige {data.prestige}: +**{data.prestige * 25}%** (global)')
-        if ctx.guild.id in multiplier_guilds:
-            total_exp_multi += 0.5
-            details.append(f'- {ctx.guild}: +**50%**')
-
+        details, total = self._deconstruct(data.walk_exp_multipliers(ctx))
         embed.add_field(
-            name=f"Total XP Multiplier: **{total_exp_multi:.1%}**",
-            value='\n'.join(details) or 'No XP multipliers applied.',
-            inline=False
+            name=f"Total XP Multiplier: **{total:.1%}**",
+            value=details or 'No XP multipliers applied.',
+            inline=False,
         )
 
         # Coin Multi
-        details = []
-        if data.prestige:
-            details.append(f'- Prestige {data.prestige}: +**{data.prestige * 25}%** (global)')
-        if expiry := data.alcohol_expiry:
-            details.append(f'- Alcohol: +**25%** (expires {format_dt(expiry, "R")}, global)')
-
+        details, total = self._deconstruct(data.walk_coin_multipliers(ctx))
         embed.add_field(
-            name=f"Total Coin Multiplier: **{data.coin_multiplier - 1:.1%}**",
-            value='\n'.join(details) or 'No coin multipliers applied.',
+            name=f"Total Coin Multiplier: **{total:.1%}**",
+            value=details or 'No coin multipliers applied.',
             inline=False
         )
 
         # Bank space growth multi
-        details = []
-        if data.prestige:
-            details.append(f'- Prestige {data.prestige}: +**{data.prestige * 50}%** (global)')
-
+        details, total = self._deconstruct(data.walk_bank_space_growth_multipliers())
         embed.add_field(
-            name=f"Total Bank Space Growth Multiplier: **{data.bank_space_growth_multiplier - 1:.1%}**",
-            value='\n'.join(details) or 'No bank space multipliers applied.',
+            name=f"Total Bank Space Growth Multiplier: **{total:.1%}**",
+            value=details or 'No bank space multipliers applied.',
             inline=False
         )
 

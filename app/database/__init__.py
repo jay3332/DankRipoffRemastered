@@ -5,11 +5,11 @@ import datetime
 import random
 from collections import defaultdict
 from string import ascii_letters
-from typing import Any, Awaitable, Callable, Iterable, Literal, NamedTuple, overload, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Generator, Iterable, Literal, NamedTuple, overload, TYPE_CHECKING
 
 import asyncpg
 import discord.utils
-from discord.utils import cached_property
+from discord.utils import cached_property, format_dt
 
 from app.data.items import CropMetadata, Item, Items
 from app.data.skills import Skill, Skills
@@ -659,6 +659,27 @@ class UserHistoryEntry(NamedTuple):
         return cls(record['wallet'], record['total'])
 
 
+class Multiplier(NamedTuple):
+    multiplier: float
+    title: str
+    expires_at: datetime.datetime | None = None
+    is_global: bool = True
+
+    @property
+    def display(self) -> str:
+        extra = ''
+        if self.is_global:
+            extra = (
+                ' (global)'
+                if self.expires_at is None
+                else f' (expires {format_dt(self.expires_at, "R")}, global)'
+            )
+        elif expires_at := self.expires_at:
+            extra = f' (expires {format_dt(expires_at, "R")})'
+
+        return f'- {self.title}: +**{self.multiplier:.1%}**{extra}'
+
+
 class UserRecord:
     """Stores data about a user."""
 
@@ -775,7 +796,7 @@ class UserRecord:
     ) -> bool:
         """Return whether the user has leveled up."""
         old = self.level
-        multiplier = self.exp_multiplier_in_ctx(ctx) if ctx else self.total_exp_multiplier
+        multiplier = self.exp_multiplier_in_ctx(ctx)
         exp = round(exp * multiplier)
         await self.add(exp=exp, connection=connection)
 
@@ -883,23 +904,38 @@ class UserRecord:
     def base_exp_multiplier(self) -> float:
         return self.data['exp_multiplier']
 
-    @property
-    def total_exp_multiplier(self) -> float:
-        return 1 + self.prestige * 0.25 + self.base_exp_multiplier
+    def walk_exp_multipliers(self, ctx: Context | None = None) -> Generator[Multiplier, Any, Any]:
+        yield Multiplier(self.base_exp_multiplier, 'Base Multiplier')
+        yield Multiplier(self.prestige * 0.25, f'{Emojis.get_prestige_emoji(self.prestige)} Prestige {self.prestige}')
 
-    def exp_multiplier_in_ctx(self, ctx: Context) -> float:
-        base = self.total_exp_multiplier
-        if ctx.guild.id in multiplier_guilds:
-            base += 0.5
-        return base
+        if ctx is not None and ctx.guild.id in multiplier_guilds:
+            yield Multiplier(0.5, ctx.guild.name, is_global=False)
+
+    @property
+    def global_exp_multiplier(self) -> float:
+        return self.exp_multiplier_in_ctx(None)
+
+    def exp_multiplier_in_ctx(self, ctx: Context | None = None) -> float:
+        return 1 + sum(m.multiplier for m in self.walk_exp_multipliers(ctx))
+
+    def walk_coin_multipliers(self, _ctx: Context | None = None) -> Generator[Multiplier, Any, Any]:
+        yield Multiplier(self.prestige * 0.25, f'{Emojis.get_prestige_emoji(self.prestige)} Prestige {self.prestige}')
+        yield Multiplier(
+            (self.alcohol_expiry is not None) * 0.25,
+            f'{Items.alcohol.emoji} Alcohol',
+            expires_at=self.alcohol_expiry,
+        )
 
     @property
     def coin_multiplier(self) -> float:
-        return 1 + self.prestige * 0.25 + (self.alcohol_expiry is not None) * 0.25
+        return 1 + sum(m.multiplier for m in self.walk_coin_multipliers())
+
+    def walk_bank_space_growth_multipliers(self) -> Generator[Multiplier, Any, Any]:
+        yield Multiplier(self.prestige * 0.5, f'{Emojis.get_prestige_emoji(self.prestige)} Prestige {self.prestige}')
 
     @property
     def bank_space_growth_multiplier(self) -> float:
-        return 1 + self.prestige * 0.5
+        return 1 + sum(m.multiplier for m in self.walk_bank_space_growth_multipliers())
 
     @property
     def prestige(self) -> int:
