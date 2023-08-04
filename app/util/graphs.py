@@ -90,7 +90,7 @@ def create_graph(x, y, **kwargs):
     axes.get_xaxis().set_major_formatter(formatter)
     axes.get_yaxis().set_major_formatter(StrMethodFormatter('{x:,.0f}'))
     axes.grid(True)
-    axes.autoscale(True)
+    # axes.autoscale(True)
     value = get_buffer(fig, axes)
 
     del im
