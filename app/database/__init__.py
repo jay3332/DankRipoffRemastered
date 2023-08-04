@@ -670,17 +670,11 @@ class Multiplier(NamedTuple):
     def display(self) -> str:
         base = f'- {self.title}: +**{self.multiplier:.1%}** {"(global)" if self.is_global else ""}'
 
-        expansion = Emojis.Expansion
-        first, last = (
-            (expansion.first, expansion.last)
-            if self.description and self.expires_at
-            else (expansion.standalone, expansion.standalone)
-        )
         if description := self.description:
-            base += f'\n{Emojis.space + first} *{description}*'
+            base += f'\n  - *{description}*'
 
         if expires_at := self.expires_at:
-            base += f'\n{Emojis.space + last} Expires {format_dt(expires_at, "R")}'
+            base += f'\n  - Expires {format_dt(expires_at, "R")}'
 
         return base
 
