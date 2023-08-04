@@ -677,10 +677,10 @@ class Multiplier(NamedTuple):
             else (expansion.standalone, expansion.standalone)
         )
         if description := self.description:
-            base += f'\n{first} *{description}*'
+            base += f'\n{Emojis.space + first} *{description}*'
 
         if expires_at := self.expires_at:
-            base += f'\n{last} Expires {format_dt(expires_at, "R")}'
+            base += f'\n{Emojis.space + last} Expires {format_dt(expires_at, "R")}'
 
         return base
 
