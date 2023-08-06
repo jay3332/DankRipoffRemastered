@@ -1573,7 +1573,7 @@ class Profit(Cog):
             pass
         return api_latency
 
-    async def get_tolerable_wait_time(self, *, window: float, min: float = 1.5) -> float:
+    async def get_tolerable_wait_time(self, *, window: float, min: float = 0.5) -> float:
         # within the allowed window of time to react and click:
         # 1. bot sends request to REST
         # 2. user receives request through gateway (assuming they use official discord client)
@@ -1583,8 +1583,8 @@ class Profit(Cog):
         # in total, a response takes the time of two WS messages plus two REST messages plus reaction time
         api_latency = await self.get_api_latency(default=0.1)  # default to 0.1s if we can't get the latency
         predicted = (self.bot.average_latency + api_latency) * 2  # Predicted response time
-        return max(
-            predicted + window,
+        return window + max(
+            predicted,
             min,  # If Discord is performing well today, (as if it ever does), a lower bound can be specified
         )
 
