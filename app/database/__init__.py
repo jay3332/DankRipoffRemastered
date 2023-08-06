@@ -698,18 +698,18 @@ class PetRecord:
         return self.manager._record.db
 
     async def update_with(self, query: str, *, connection: asyncpg.Connection | None = None, **kwargs: Any) -> None:
-        record = await (self.db or connection).fetchrow(query, self.user_id, *kwargs.values())
+        record = await (self.db or connection).fetchrow(query, self.user_id, self.pet.key, *kwargs.values())
         self.__dict__.update(**self._transform_record(record))
 
     async def update(self, *, connection: asyncpg.Connection | None = None, **kwargs: Any) -> None:
-        query = 'UPDATE pets SET {0} WHERE user_id = $1 RETURNING *'.format(
-            ', '.join(f'{k} = ${i}' for i, k in enumerate(kwargs, start=2))
+        query = 'UPDATE pets SET {0} WHERE user_id = $1 AND pet = $2 RETURNING *'.format(
+            ', '.join(f'{k} = ${i}' for i, k in enumerate(kwargs, start=3))
         )
         await self.update_with(query, connection=connection, **kwargs)
 
     async def add(self, *, connection: asyncpg.Connection | None = None, **kwargs: Any) -> None:
-        query = 'UPDATE pets SET {0} WHERE user_id = $1 RETURNING *'.format(
-            ', '.join(f'{k} = {k} + ${i}' for i, k in enumerate(kwargs, start=2))
+        query = 'UPDATE pets SET {0} WHERE user_id = $1 AND pet = $2 RETURNING *'.format(
+            ', '.join(f'{k} = {k} + ${i}' for i, k in enumerate(kwargs, start=3))
         )
         await self.update_with(query, connection=connection, **kwargs)
 
