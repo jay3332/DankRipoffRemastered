@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 from datetime import timedelta
 from html import unescape
 from textwrap import dedent
-from typing import Any, Generic, Literal, NamedTuple, TypeVar, TYPE_CHECKING
+from typing import Any, Generic, Iterator, Literal, NamedTuple, TypeVar, TYPE_CHECKING
 
 import aiohttp
 import discord
@@ -27,9 +27,10 @@ from app.core import (
     user_max_concurrency
 )
 from app.core.helpers import cooldown_message
-from app.data.items import Item, Items
+from app.data.items import Item, ItemType, Items, NetMetadata
+from app.data.pets import Pet, Pets
 from app.data.skills import RobberyTrainingButton
-from app.util.common import humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar
+from app.util.common import humanize_list, image_url_from_emoji, insert_random_u200b, ordinal, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
 from app.util.views import AnyUser, StaticCommandButton, UserView
@@ -187,6 +188,13 @@ class Profit(Cog):
         "me",
         "Jason Citron",
         'the popular video game "Among Us"',
+        "a tree",
+        "some guy on the street",
+        "a businessman",
+        "LeBron James",
+        "Martin Luther King",
+        "Bill Clinton",
+        'Dwayne "The Rock" Johnson',
     )
 
     BEG_FAIL_MESSAGES = (
@@ -194,6 +202,11 @@ class Profit(Cog):
         "funny, {} told you to get a job.",
         "ouch, {} simply denied your request.",
         "{} does not give to homeless people. Kinda rude wouldn't you say?",
+        "{}: go away you filthy beggar!",
+        "{}: I don't have money either...",
+        "{}: I'm broke too.",
+        '{} says "YOU WISH" and then skidaddles away',
+        'After a bit of consideration, {} decides to not give you anything.',
     )
 
     BEG_SUCCESS_MESSAGES = (
@@ -203,6 +216,11 @@ class Profit(Cog):
         "{0} scooped up {1} from the toilet and handed it to you.",
         "{0} made {1} magically appear into your possesion.",
         "{0} vomitted out {1} and gave it to you.",
+        "{0}: Poor soul. Here's {1}",
+        "{0} gave you {1} because they felt bad for you.",
+        "{0} gave you {1} because they felt like it.",
+        "{1} just fell from the sky. Just kidding, {0} gave it to you.",
+        "After a bit of consideration, {0} finally decides to give you {1}.",
     )
 
     BEG_ITEMS = {
@@ -1570,6 +1588,80 @@ class Profit(Cog):
             min,  # If Discord is performing well today, (as if it ever does), a lower bound can be specified
         )
 
+    HUNT_DEFAULT_WEIGHTS = {
+        None: 1,
+        Pets.dog: 0.8,
+        Pets.cat: 0.8,
+        Pets.bird: 0.8,
+        Pets.bee: 0.01,
+    }
+
+    @command(aliases={'catch', 'hu', 'ct'})
+    @simple_cooldown(1, 60)
+    @cooldown_message("There aren't unlimited animals to hunt!")
+    @user_max_concurrency(1)
+    async def hunt(self, ctx: Context) -> None:
+        """Hunt for animals, catch them, and raise them as pets for special powers!"""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+
+        available: Iterator[Item[NetMetadata]] = filter(lambda item: item.type is ItemType.net, inventory.cached)
+        net: Item[NetMetadata] | None = None
+        extra = 'with your bare hands'
+        tip = f'\n\U0001f4a1 **Tip:** Buy nets from the shop to hunt rarer pets!'
+        try:
+            net = max(available, key=lambda item: item.metadata.priority)
+            extra = f'with your {net.get_display_name(bold=True)}'
+            weights = net.metadata.weights
+            tip = ''
+        except ValueError:
+            weights = self.HUNT_DEFAULT_WEIGHTS
+
+        yield f'{Emojis.loading} Hunting for pets {extra}...{tip}', REPLY
+
+        pet = random.choices(list(weights), weights=list(weights.values()))[0]
+        await asyncio.sleep(random.uniform(2, 4))
+
+        if pet is None:
+            yield f"You went hunting for pets, but couldn't spot any.", EDIT
+            return
+
+        view = HuntView(ctx, record)
+        message = (
+            f'{ctx.author.mention}, you went hunting for pets and you spotted something...\n'
+            'When you see the pet below, click the button to catch it!'
+        )
+        yield message, view, EDIT
+        await asyncio.sleep(random.uniform(3, 6))
+
+        # discord.py has a bit of a problem individually setting a child
+        children = view.children  # the children getter implicitly does an implicit copy
+        view.clear_items()
+        position, bomb_position = random.sample(range(len(children)), k=2)
+        if view.is_finished():
+            return
+
+        button = None
+        for i, child in enumerate(children):
+            if i == position:
+                view.add_item(button := HuntTargetButton(pet, row=child.row))
+                continue
+            if i == bomb_position:
+                view.add_item(HuntBombButton(net, row=child.row))
+                continue
+            view.add_item(child)
+
+        sleep_time = await self.get_tolerable_wait_time(window=1.35)
+        yield message, view, EDIT
+        await asyncio.sleep(sleep_time)
+
+        if view.is_finished():
+            return
+
+        view.finish()
+        button.style = discord.ButtonStyle.primary
+        yield 'You were too slow and the pet escaped! Better luck next time.', view, EDIT
+
 
 class ChopView(UserView):
     ABUNDANCE = 0
@@ -1883,6 +1975,97 @@ class DivingView(UserView):
     async def on_timeout(self) -> None:
         self.stop()
         await self.ctx.maybe_edit(self.ctx.message, embed=self.make_embed(message='You ran out of time!'), view=self)
+
+
+class HuntMissButton(discord.ui.Button):
+    def __init__(self, *, row: int) -> None:
+        super().__init__(emoji=Emojis.space, row=row)
+
+    async def callback(self, itx: TypedInteraction) -> None:
+        self.style = discord.ButtonStyle.red
+        self.view.finish()
+
+        await itx.response.edit_message(view=self.view)
+        await itx.followup.send('You missed the pet and it ran away! Better aim next time.')
+
+
+class HuntBombButton(discord.ui.Button['HuntView']):
+    def __init__(self, net: Item[NetMetadata], *, row: int) -> None:
+        super().__init__(emoji='\U0001f4a3', row=row)
+        self.net = net
+
+    async def callback(self, itx: TypedInteraction) -> None:
+        self.style = discord.ButtonStyle.red
+        self.view.finish()
+
+        lost = f'lost your {self.net.get_display_name(bold=True)} and ' if self.net else ''
+        async with self.view.ctx.db.acquire() as conn:
+            await self.view.record.inventory_manager.add_item(self.net, -1, connection=conn)
+            await self.view.record.make_dead(reason='a bomb exploding while hunting', connection=conn)
+
+        await itx.response.edit_message(view=self.view)
+        await itx.followup.send(f'{self.emoji} You clicked the bomb and you explode. You {lost}died.')
+
+
+class HuntTargetButton(discord.ui.Button['HuntView']):
+    def __init__(self, pet: Pet, *, row: int) -> None:
+        super().__init__(emoji=pet.emoji, row=row)
+        self.pet = pet
+
+    async def callback(self, itx: TypedInteraction) -> None:
+        self.style = discord.ButtonStyle.green
+        self.view.finish()
+
+        embed = discord.Embed(color=Colors.success)
+        embed.set_author(name=f'{itx.user.name}: Caught a pet!', icon_url=itx.user.avatar)
+        embed.set_thumbnail(url=image_url_from_emoji(str(self.emoji)))
+        embed.description = f'You caught a {self.pet.rarity.name} **{self.pet.display}**!\n*{self.pet.description}*'
+
+        pets = await self.view.record.pet_manager.wait()
+        if pet_record := pets.cached.get(self.pet):
+            previous_level = pet_record.level
+            exp = random.randint(5, 15)
+            await pet_record.add(exp=exp, duplicates=1)
+            embed.description += f'\nThis is your **{ordinal(pet_record.duplicates)}** duplicate.'
+            new_level = pet_record.level
+
+            embed.add_field(
+                name='\U0001f4cb Duplicate Pet!',
+                value=(
+                    f'You already have a **{self.pet.display}**.\n'
+                    f'\u2728 {self.pet.name} XP **+{exp:,}** ({pet_record.exp:,}/{pet_record.exp_requirement:,})'
+                ),
+                inline=False
+            )
+            if new_level > previous_level:
+                embed.add_field(
+                    name=f'\U0001f52e **LEVEL UP!** {previous_level} {Emojis.arrow} {new_level}',
+                    value=f'**Updated Abilities:**\n{self.pet.full_abilities(new_level)}',
+                    inline=False,
+                )
+        else:
+            await pets.add_pet(self.pet)
+            embed.add_field(name=f'\U0001f634 Passive Abilities', value=self.pet.benefit(0), inline=False)
+            if abilities := self.pet.abilities:
+                embed.add_field(name=f'{Emojis.bolt} Active Abilities', value=abilities(0), inline=False)
+        embed.set_footer(text=f'Use {self.view.ctx.clean_prefix}pet view {self.pet.key} to see more details!')
+
+        await itx.response.edit_message(view=self.view)
+        await itx.followup.send(embed=embed)
+
+
+class HuntView(UserView):  # CHANGE TO UserView
+    def __init__(self, ctx: Context, record: UserRecord) -> None:
+        super().__init__(ctx.author, timeout=15)  # if this doesn't time out in 15 seconds, an error likely occured
+        for i in range(20):
+            self.add_item(HuntMissButton(row=i % 5))
+        self.ctx = ctx
+        self.record = record
+
+    def finish(self) -> None:
+        self.stop()
+        for button in self.children:
+            button.disabled = True
 
 
 setup = Profit.simple_setup

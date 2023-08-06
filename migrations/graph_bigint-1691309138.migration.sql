@@ -1,0 +1,3 @@
+ALTER TABLE user_coins_graph_data
+    ALTER COLUMN wallet TYPE BIGINT USING wallet::BIGINT,
+    ALTER COLUMN total TYPE BIGINT USING total::BIGINT;

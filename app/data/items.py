@@ -13,6 +13,7 @@ from typing import Any, Awaitable, Callable, Generator, Generic, NamedTuple, TYP
 from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
+from app.data.pets import Pet, Pets
 from app.util.common import pluralize
 from config import Emojis
 
@@ -36,7 +37,8 @@ class ItemType(Enum):
     ore = 6
     crop = 7
     harvest = 8
-    miscellaneous = 9
+    net = 9
+    miscellaneous = 10
 
 
 class ItemRarity(Enum):
@@ -63,6 +65,11 @@ class CropMetadata(NamedTuple):
 
 class HarvestMetadata(NamedTuple):
     get_source_crop: Callable[[], Item[CropMetadata]]
+
+
+class NetMetadata(NamedTuple):
+    weights: dict[Pet, float]
+    priority: int
 
 
 @dataclass
@@ -182,6 +189,7 @@ Crate: Callable[..., Item[CrateMetadata]] = partial(Item, type=ItemType.crate, d
 Worm = partial(Item, type=ItemType.worm)
 Ore = partial(Item, type=ItemType.ore)
 Harvest = partial(Item, type=ItemType.harvest)
+Net = partial(Item, type=ItemType.net)
 
 
 def Crop(*, metadata: CropMetadata, **kwargs) -> Item[CropMetadata]:
@@ -1044,6 +1052,25 @@ class Items:
         rarity=ItemRarity.mythic,
     )
 
+    net = Net(
+        key='net',
+        name='Net',
+        emoji='<:net:1137070560753496104>',
+        description='A net used to catch better pets using the `.hunt` command.',
+        price=10000,
+        buyable=True,
+        metadata=NetMetadata(
+            weights={
+                None: 1,
+                Pets.dog: 1,
+                Pets.cat: 1,
+                Pets.bird: 0.9,
+                Pets.bee: 0.2,
+            },
+            priority=0,
+        ),
+    )
+
     @common_crate.to_use
     @uncommon_crate.to_use
     @rare_crate.to_use
@@ -1128,9 +1155,9 @@ class Items:
         key='tomato_crop',
         name='Tomato Crop',
         emoji='<:tomato:940794702175801444>',
-        price=1000,
+        price=1200,
         metadata=CropMetadata(
-            time=300,
+            time=600,
             count=(1, 3),
             item=tomato,
         ),
@@ -1149,9 +1176,9 @@ class Items:
         key='wheat_crop',
         name='Wheat Crop',
         emoji='<:wheat:941089760317952020>',
-        price=1150,
+        price=1250,
         metadata=CropMetadata(
-            time=300,
+            time=600,
             count=(1, 2),
             item=wheat,
         ),
@@ -1169,9 +1196,9 @@ class Items:
         key='carrot_crop',
         name='Carrot Crop',
         emoji='<:carrot:941096334365175839>',
-        price=1200,
+        price=2000,
         metadata=CropMetadata(
-            time=300,
+            time=800,
             count=(1, 2),
             item=carrot,
         ),
@@ -1183,16 +1210,16 @@ class Items:
         plural='Corn',
         emoji='<:corn:941097271544643594>',
         description='An ear of corn, grown from the corn crop.',
-        sell=125,
+        sell=75,
     )
 
     corn_crop = Crop(
         key='corn_crop',
         name='Corn Crop',
         emoji='<:corn:941097271544643594>',
-        price=1500,
+        price=2200,
         metadata=CropMetadata(
-            time=300,
+            time=800,
             count=(1, 1),
             item=corn,
         ),
@@ -1204,16 +1231,16 @@ class Items:
         plural='Lettuce',
         emoji='<:lettuce:941136607594041344>',
         description='A head of lettuce, grown from the lettuce crop.',
-        sell=100,
+        sell=80,
     )
 
     lettuce_crop = Crop(
         key='lettuce_crop',
         name='Lettuce Crop',
         emoji='<:lettuce:941136607594041344>',
-        price=1800,
+        price=2400,
         metadata=CropMetadata(
-            time=280,
+            time=1200,
             count=(1, 2),
             item=lettuce,
         ),
@@ -1225,16 +1252,16 @@ class Items:
         plural='Potatoes',
         emoji='<:potato:941139578226626682>',
         description='A potato, grown from the potato crop.',
-        sell=150,
+        sell=110,
     )
 
     potato_crop = Crop(
         key='potato_crop',
         name='Potato Crop',
         emoji='<:potato:941139578226626682>',
-        price=2400,
+        price=2800,
         metadata=CropMetadata(
-            time=500,
+            time=1500,
             count=(1, 2),
             item=potato,
         ),
@@ -1246,16 +1273,16 @@ class Items:
         plural='Tobacco',
         emoji='<:tobacco:941445316765421688>',
         description='A piece of tobacco, grown from the tobacco crop.',
-        sell=170,
+        sell=125,
     )
 
     tobacco_crop = Crop(
         key='tobacco_crop',
         name='Tobacco Crop',
         emoji='<:tobacco:941445316765421688>',
-        price=3400,
+        price=3600,
         metadata=CropMetadata(
-            time=420,
+            time=1500,
             count=(1, 2),
             item=tobacco,
         ),
@@ -1266,7 +1293,7 @@ class Items:
         name='Cotton Ball',
         emoji='<:cottonball:1132871115014950964>',
         description='A ball of cotton, grown from the cotton crop.',
-        sell=185,
+        sell=150,
         metadata=HarvestMetadata(lambda: Items.cotton_crop),
     )
 
@@ -1274,9 +1301,9 @@ class Items:
         key='cotton_crop',
         name='Cotton Crop',
         emoji='<:cotton:1132867001057030184>',
-        price=4000,
+        price=4500,
         metadata=CropMetadata(
-            time=600,
+            time=1800,
             count=(1, 2),
             item=cotton_ball,
         ),

@@ -6,7 +6,19 @@ import random
 import re
 from difflib import SequenceMatcher
 from functools import wraps
-from typing import Any, Awaitable, Callable, Iterator, Optional, ParamSpec, TYPE_CHECKING, Type, TypeVar
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Iterator,
+    Mapping,
+    Optional,
+    ParamSpec,
+    TYPE_CHECKING,
+    Type,
+    TypeVar,
+    overload,
+)
 
 from discord.ext.commands import Converter
 
@@ -19,6 +31,8 @@ if TYPE_CHECKING:
     T = TypeVar('T')
     P = ParamSpec('P')
     R = TypeVar('R')
+    K = TypeVar('K')
+    V = TypeVar('V')
 
 __all__ = (
     'sentinel',
@@ -49,13 +63,28 @@ def converter(f: Callable[[Context, str], T]) -> Type[Converter | T]:
     return Wrapper
 
 
-def level_requirement_for(level: int, /, *, base: int = 1000, factor: float = 1.45) -> int:
+def ordinal(number: int) -> str:
+    """Convert a number to its ordinal representation."""
+    if number % 100 // 10 != 1:
+        if number % 10 == 1:
+            return f"{number}st"
+
+        if number % 10 == 2:
+            return f"{number}nd"
+
+        if number % 10 == 3:
+            return f"{number}rd"
+
+    return f"{number}th"
+
+
+def level_requirement_for(level: int, /, *, base: int = 1000, factor: float = 1.45, precision: int = 100) -> int:
     precise = base * factor ** level
-    return math.ceil(precise / 100) * 100
+    return math.ceil(precise / precision) * precision
 
 
-def calculate_level(exp: int, *, base: int = 1000, factor: float = 1.45) -> tuple[int, int, int]:
-    kwargs = {'base': base, 'factor': factor}
+def calculate_level(exp: int, *, base: int = 1000, factor: float = 1.45, precision: int = 100) -> tuple[int, int, int]:
+    kwargs = {'base': base, 'factor': factor, 'precision': precision}
     level = 0
 
     while exp > (requirement := level_requirement_for(level, **kwargs)):
@@ -242,3 +271,20 @@ def progress_bar(ratio: float, *, length: int = 8, u200b: bool = True) -> str:
         return result + "\u200b"
 
     return result
+
+
+@overload
+def pick(d: Mapping[str, V], /, *keys: str, **transform_keys: V) -> dict[str, V]:
+    ...
+
+
+@overload
+def pick(d: Mapping[K, V], /, *keys: K) -> dict[K, V]:
+    ...
+
+
+def pick(d: Mapping[K, V], /, *keys: K, **transform_keys: V) -> dict[K, V]:
+    """Picks keys from a dictionary and returns them in a new dictionary."""
+    if transform_keys:
+        return {transform_keys.get(k, k): v for k, v in d.items() if k in keys or k in transform_keys}
+    return {k: v for k, v in d.items() if k in keys}

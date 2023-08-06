@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import random
 from collections import defaultdict
+from dataclasses import dataclass
 from string import ascii_letters
 from typing import Any, Awaitable, Callable, Generator, Iterable, Literal, NamedTuple, overload, TYPE_CHECKING
 
@@ -12,10 +13,11 @@ import discord.utils
 from discord.utils import cached_property, format_dt
 
 from app.data.items import CropMetadata, Item, Items
+from app.data.pets import Pet, Pets
 from app.data.skills import Skill, Skills
-from app.util.common import calculate_level, get_by_key
+from app.database.migrations import Migrator
+from app.util.common import calculate_level, get_by_key, pick
 from config import DatabaseConfig, Emojis, multiplier_guilds
-from .migrations import Migrator
 
 if TYPE_CHECKING:
     from typing import Self
@@ -646,6 +648,123 @@ class CropManager:
             self.cached[k] = self.cached[k]._replace(crop=None, exp=0, last_harvest=None)
 
 
+@dataclass
+class PetRecord:
+    manager: PetManager
+    pet: Pet
+    total_exp: int
+    duplicates: int
+    evolution: int
+    last_recorded_energy: int
+    last_feed: datetime.datetime
+    max_energy: int
+    equipped: bool
+
+    @property
+    def level_data(self) -> tuple[int, int, int]:
+        base, factor = self.pet.leveling_curve
+        return calculate_level(self.total_exp, base=base, factor=factor, precision=10)
+
+    @property
+    def level(self) -> int:
+        return self.level_data[0]
+
+    @property
+    def exp(self) -> int:
+        return self.level_data[1]
+
+    @property
+    def exp_requirement(self) -> int:
+        return self.level_data[2]
+
+    @staticmethod
+    def _transform_record(record: asyncpg.Record) -> dict[str, Any]:
+        return pick(
+            record,
+            'duplicates', 'evolution', 'last_recorded_energy', 'last_feed', 'max_energy', 'equipped',
+            exp='total_exp',
+        )
+
+    @classmethod
+    def from_record(cls, manager: PetManager, record: asyncpg.Record) -> Self:
+        return cls(manager=manager, pet=get_by_key(Pets, record['pet']), **cls._transform_record(record))
+
+    @property
+    def user_id(self) -> int:
+        return self.manager._record.user_id
+
+    @property
+    def db(self) -> Database:
+        return self.manager._record.db
+
+    async def update_with(self, query: str, *, connection: asyncpg.Connection | None = None, **kwargs: Any) -> None:
+        record = await (self.db or connection).fetchrow(query, self.user_id, *kwargs.values())
+        self.__dict__.update(**self._transform_record(record))
+
+    async def update(self, *, connection: asyncpg.Connection | None = None, **kwargs: Any) -> None:
+        query = 'UPDATE pets SET {0} WHERE user_id = $1 RETURNING *'.format(
+            ', '.join(f'{k} = ${i}' for i, k in enumerate(kwargs, start=2))
+        )
+        await self.update_with(query, connection=connection, **kwargs)
+
+    async def add(self, *, connection: asyncpg.Connection | None = None, **kwargs: Any) -> None:
+        query = 'UPDATE pets SET {0} WHERE user_id = $1 RETURNING *'.format(
+            ', '.join(f'{k} = {k} + ${i}' for i, k in enumerate(kwargs, start=2))
+        )
+        await self.update_with(query, connection=connection, **kwargs)
+
+    async def set_energy(self, energy: int, *, connection: asyncpg.Connection | None = None) -> None:
+        query = """
+                UPDATE pets SET last_recorded_energy = $2, last_feed = CURRENT_TIMESTAMP
+                WHERE user_id = $1
+                RETURNING last_feed;
+                """
+
+        self.last_feed = await (connection or self.db).fetchval(query, self.user_id, energy)
+        self.last_recorded_energy = energy
+
+    async def add_energy(self, energy: int, *, connection: asyncpg.Connection | None = None) -> None:
+        energy = max(0, min(self.max_energy, self.last_recorded_energy + energy))
+        await self.set_energy(energy, connection=connection)
+
+    async def evolve(self) -> None:
+        async with self.db.acquire() as conn:
+            await self.add(evolution=1, connection=conn)
+            await self.update(exp=0, connection=conn)
+            await self.set_energy(0, connection=conn)
+
+
+class PetManager:
+    def __init__(self, record: UserRecord) -> None:
+        self._record = record
+        self.cached: dict[Pet, PetRecord] = {}
+        self.__fetch_task = asyncio.create_task(self.fetch())
+
+    async def wait(self) -> Self:
+        await self.__fetch_task
+        return self
+
+    async def fetch(self) -> None:
+        await self._record.db.wait()
+        query = 'SELECT * FROM pets WHERE user_id = $1;'
+        records = await self._record.db.fetch(query, self._record.user_id)
+        records = (PetRecord.from_record(manager=self, record=r) for r in records)
+        self.cached = {r.pet: r for r in records}
+
+    def get_equipped_pet(self, pet: Pet) -> PetRecord | None:
+        if record := self.cached.get(pet):
+            return record if record.equipped else None
+
+    @property
+    def equipped_count(self) -> int:
+        return sum(r.equipped for r in self.cached.values())
+
+    async def add_pet(self, pet: Pet, *, connection: asyncpg.Connection | None = None) -> None:
+        query = 'INSERT INTO pets (user_id, pet) VALUES ($1, $2) RETURNING *'
+        record = await (connection or self._record.db).fetchrow(query, self._record.user_id, pet.key)
+        self.cached[pet] = PetRecord.from_record(manager=self, record=record)
+
+
 class UserHistoryEntry(NamedTuple):
     wallet: int
     total: int
@@ -698,6 +817,7 @@ class UserRecord:
         self.__cooldown_manager: CooldownManager | None = None
         self.__skill_manager: SkillManager | None = None
         self.__crop_manager: CropManager | None = None
+        self.__pet_manager: PetManager | None = None
 
     def __repr__(self) -> str:
         return f'<UserRecord wallet={self.wallet} bank={self.bank} level_data={self.level_data}>'
@@ -983,6 +1103,10 @@ class UserRecord:
         return self.data['dm_notifications']
 
     @property
+    def max_equipped_pets(self) -> int:
+        return self.data['max_equipped_pets']
+
+    @property
     def inventory_manager(self) -> InventoryManager:
         if not self.__inventory_manager:
             self.__inventory_manager = InventoryManager(self)
@@ -1016,3 +1140,10 @@ class UserRecord:
             self.__crop_manager = CropManager(self)
 
         return self.__crop_manager
+
+    @property
+    def pet_manager(self) -> PetManager:
+        if not self.__pet_manager:
+            self.__pet_manager = PetManager(self)
+
+        return self.__pet_manager
