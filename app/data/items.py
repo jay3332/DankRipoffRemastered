@@ -1084,6 +1084,7 @@ class Items:
                 Pets.cat: 1,
                 Pets.bird: 0.9,
                 Pets.bee: 0.2,
+                Pets.cow: 0.04,
             },
             priority=0,
         ),

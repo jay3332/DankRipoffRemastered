@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import Callable, NamedTuple
 
+from config import Emojis
+
 
 class PetRarity(Enum):
     common = 0
@@ -99,6 +101,23 @@ class Pets:
             f'- {2 + level * 0.25}% chance to sting someone when they try robbing you'
         ),
         abilities=lambda level: (
-            f'- Produce honey (1 per hour) with `.honey`'
+            f'- Produce honey (1 per hour) with `.honey` ({Emojis.bolt} 60)'
+        )
+    )
+
+    cow = Pet(
+        name='Cow',
+        key='cow',
+        emoji='\U0001f42e',
+        rarity=PetRarity.rare,
+        description='A large mammal used for producing milk (and steak of course).',
+        energy_per_minute=3,
+        max_energy=500,
+        benefit=lambda level: (
+            f'- +{2 + level * 0.5}% more coins from beg, search, and crime\n'
+            f'- +{2 + level * 0.6}% global XP multiplier\n'
+        ),
+        abilities=lambda level: (
+            f'- Produce milk (1 per hour) with `.milk` ({Emojis.bolt} 100)'
         )
     )

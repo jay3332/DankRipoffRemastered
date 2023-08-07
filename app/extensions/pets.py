@@ -90,7 +90,8 @@ class PetsCog(Cog, name='Pets'):
         Pets.dog: 0.8,
         Pets.cat: 0.8,
         Pets.bird: 0.8,
-        Pets.bee: 0.01,
+        Pets.bee: 0.02,
+        Pets.cow: 0.004,
     }
 
     @command(aliases={'catch', 'hu', 'ct'}, hybrid=True)
@@ -401,6 +402,11 @@ class PetsCog(Cog, name='Pets'):
 
         ctx.bot.loop.create_task(ctx.thumbs())
         return f'Swapped your **{to_unequip.display}** with your **{to_equip.display}**.', REPLY
+
+    @command(aliases={'fe'}, hybrid=True)
+    @app_commands.describe(pet='The pet to feed.')
+    async def feed(self, ctx: Context, *, pet: query_pet) -> CommandResponse:
+        return 'todo', REPLY  # TODO
 
     @pets_info.autocomplete('pet')
     @pets_equip.autocomplete('pet')
