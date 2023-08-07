@@ -405,6 +405,7 @@ class Items:
         price=7500,
         buyable=True,
         dispose=True,
+        energy=20,
     )
 
     @cheese.to_use
@@ -538,6 +539,7 @@ class Items:
         emoji='<:worm:938575708580634634>',
         description='The common worm. You can sell these or craft Fish Bait from these.',
         sell=100,
+        energy=1,
     )
 
     gummy_worm = Worm(
@@ -546,6 +548,7 @@ class Items:
         emoji='<:gummy_worm:939297088209055764>',
         description='A gummy worm - at least it\'s better than a normal worm.',
         sell=250,
+        energy=2,
     )
 
     earthworm = Worm(
@@ -554,6 +557,7 @@ class Items:
         emoji='<:earthworm:939297155997392926>',
         description='Quite literally an "earth" worm.',
         sell=500,
+        energy=4,
     )
 
     hook_worm = Worm(
@@ -563,6 +567,7 @@ class Items:
         description='hookworm',
         sell=1000,
         rarity=ItemRarity.uncommon,
+        energy=8,
     )
 
     poly_worm = Worm(
@@ -572,6 +577,7 @@ class Items:
         description='A very colorful worm',
         sell=1500,
         rarity=ItemRarity.rare,
+        energy=12,
     )
 
     ancient_relic = Item(
@@ -641,6 +647,7 @@ class Items:
         emoji='<:fish:935002348361748491>',
         description='A normal fish. Commonly found in the ocean.',
         sell=100,
+        energy=1,
     )
 
     sardine = Fish(
@@ -649,6 +656,7 @@ class Items:
         emoji='<:sardine:935265248091451493>',
         description='A nutritious fish. They are small and easy to catch.',
         sell=150,
+        energy=1,
     )
 
     angel_fish = Fish(
@@ -658,6 +666,7 @@ class Items:
         emoji='<:angel_fish:935265295000551475>',
         description='Angelfish are tropical freshwater fish that come in a variety of colors.',
         sell=250,
+        energy=2,
     )
 
     blowfish = Fish(
@@ -667,6 +676,7 @@ class Items:
         emoji='<:blowfish:935265366601498685>',
         description='These are also known as pufferfish. These are caught in it\'s inflated form.',
         sell=350,
+        energy=3,
     )
 
     crab = Fish(
@@ -676,6 +686,7 @@ class Items:
         description='Crabs are crustaceans that are found in the ocean. Also the mascot of the Rust programming language.',
         rarity=ItemRarity.uncommon,
         sell=450,
+        energy=4,
     )
 
     lobster = Fish(
@@ -685,6 +696,7 @@ class Items:
         description='Lobsters are large crustaceans that are found in the ocean.',
         rarity=ItemRarity.uncommon,
         sell=575,
+        energy=5,
     )
 
     octopus = Fish(
@@ -695,6 +707,7 @@ class Items:
         description='Octopuses have 3 hearts and 9 brains. And yes, that is the correct plural form of octopus.',
         rarity=ItemRarity.uncommon,
         sell=800,
+        energy=7,
     )
 
     dolphin = Fish(
@@ -704,6 +717,7 @@ class Items:
         description='Dolphins are large aquatic mammals that are found in the ocean.',
         rarity=ItemRarity.rare,
         sell=1050,
+        energy=10,
     )
 
     shark = Fish(
@@ -713,6 +727,7 @@ class Items:
         description='Sharks are large predatory fish that are found in the ocean.',
         rarity=ItemRarity.rare,
         sell=1250,
+        energy=12,
     )
 
     whale = Fish(
@@ -722,6 +737,7 @@ class Items:
         description='Whales are huge mammals that swim deep in the ocean. How do you even manage to catch these?',
         rarity=ItemRarity.rare,
         sell=1760,
+        energy=15,
     )
 
     axolotl = Fish(
@@ -731,6 +747,7 @@ class Items:
         description='The cool salamander',
         rarity=ItemRarity.epic,
         sell=3000,
+        energy=25,
     )
 
     vibe_fish = Fish(
@@ -750,6 +767,7 @@ class Items:
         description='A long fish that is commonly found in the ocean. These are not obtainable from fishing.',
         rarity=ItemRarity.mythic,
         sell=35000,
+        energy=100,
     )
 
     wood = Wood(
@@ -1149,6 +1167,7 @@ class Items:
         emoji='<:tomato:940794702175801444>',
         description='A regular tomato, grown from the tomato crop.',
         sell=50,
+        energy=1,
     )
 
     tomato_crop = Crop(
@@ -1170,6 +1189,7 @@ class Items:
         emoji='<:wheat:941089760317952020>',
         description='An ear of wheat, grown from the wheat crop.',
         sell=40,
+        energy=1,
     )
 
     wheat_crop = Crop(
@@ -1190,6 +1210,7 @@ class Items:
         emoji='<:carrot:941096334365175839>',
         description='A carrot, grown from the carrot crop.',
         sell=75,
+        energy=1,
     )
 
     carrot_crop = Crop(
@@ -1211,6 +1232,7 @@ class Items:
         emoji='<:corn:941097271544643594>',
         description='An ear of corn, grown from the corn crop.',
         sell=75,
+        energy=1,
     )
 
     corn_crop = Crop(
@@ -1232,6 +1254,7 @@ class Items:
         emoji='<:lettuce:941136607594041344>',
         description='A head of lettuce, grown from the lettuce crop.',
         sell=80,
+        energy=1,
     )
 
     lettuce_crop = Crop(
@@ -1253,6 +1276,7 @@ class Items:
         emoji='<:potato:941139578226626682>',
         description='A potato, grown from the potato crop.',
         sell=110,
+        energy=1,
     )
 
     potato_crop = Crop(

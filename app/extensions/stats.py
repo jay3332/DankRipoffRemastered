@@ -45,7 +45,9 @@ class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
                 case _:
                     start = '<:bullet:934890293902327838>'
 
-            result.append(f'{start} **{discord.utils.escape_markdown(str(member))}** — {Emojis.coin} {record.wallet:,}')
+            result.append(
+                f'{start} {Emojis.coin} **{record.wallet:,}** \u2014 {discord.utils.escape_markdown(str(member))}'
+            )
 
         embed = discord.Embed(color=Colors.primary, description='\n'.join(result), timestamp=paginator.ctx.now)
         # noinspection PyTypeChecker

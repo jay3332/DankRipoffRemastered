@@ -645,14 +645,13 @@ class Transactions(Cog):
 
         return embed, REPLY
 
-    @command(aliases={'u', 'consume', 'activate'})
+    @command(aliases={'u', 'consume', 'activate', 'open'})
     @simple_cooldown(2, 10)
     @user_max_concurrency(1)
     @lock_transactions
     async def use(self, ctx: Context, *, item_and_quantity: ItemAndQuantityConverter(USE)):
         """Use the items you own!"""
         item, quantity = item_and_quantity
-
         record = await ctx.db.get_user_record(ctx.author.id)
 
         async with ctx.db.acquire() as conn:
@@ -666,7 +665,7 @@ class Transactions(Cog):
 
         await ctx.thumbs()
 
-    @command(aliases={'rm', 'dispose', 'deactivate'})
+    @command(aliases={'rm', 'dispose', 'deactivate', 'discard'})
     @simple_cooldown(2, 10)
     @user_max_concurrency(1)
     @lock_transactions
@@ -895,7 +894,7 @@ class Transactions(Cog):
         '- Any non-tangible entities such as notifications and cooldowns.'
     )
 
-    @command(aliases={'pres', 'pr', 'prest', 'rebirth'})
+    @command(aliases={'pres', 'pr', 'prest', 'rebirth'}, hybrid=True)
     @simple_cooldown(1, 10)
     async def prestige(self, ctx: Context) -> CommandResponse:
         """Prestige and start over with a brand-new wallet, bank, and inventory in exchange for long-term multipliers."""

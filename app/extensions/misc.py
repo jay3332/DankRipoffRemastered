@@ -159,7 +159,7 @@ class Miscellaneous(Cog):
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields)), REPLY
 
-    @command(aliases={'setting', 'set', 'config', 'conf'})
+    @command(aliases={'setting', 'set', 'config', 'conf'}, hybrid=True)  # TODO: add autocomplete
     @simple_cooldown(2, 2)
     async def settings(self, ctx: Context, setting: query_setting = None, value: better_bool = None):
         """View your current settings and/or change them."""
@@ -172,7 +172,7 @@ class Miscellaneous(Cog):
             try:
                 value = record.data[setting.key]
             except KeyError:
-                return 'Unknown key', BAD_ARGUMENT
+                return 'Unknown setting', BAD_ARGUMENT
 
             readable = f'{Emojis.enabled} Enabled' if value else f'{Emojis.disabled} Disabled'
             return f'{setting.name} is currently **{readable}**.', REPLY
