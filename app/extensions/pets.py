@@ -754,7 +754,13 @@ class FeedView(UserView):
         )
         ratio = self.entry.energy / self.entry.max_energy
         pet_embed.add_field(
-            name=f'{Emojis.bolt} {self.entry.energy:,}/{self.entry.max_energy:,} Energy',
+            name=(
+                f'{Emojis.bolt} {self.entry.energy:,}/{self.entry.max_energy:,} Energy'
+                + (
+                    f' (Runs out {format_dt(self.entry.exhausts_at, "R")})'
+                    if self.entry.energy > 0 else ''
+                )
+            ),
             value=f'{progress_bar(ratio, length=8)}  {ratio:.1%}',
         )
 
@@ -763,7 +769,7 @@ class FeedView(UserView):
         item_embed.set_thumbnail(url=image_url_from_emoji(str(self.current_item.emoji)))
         item_embed.description = self.current_item.description
         item_embed.add_field(
-            name=f'Energy (Runs out {format_dt(self.entry.exhausts_at, "R")})',
+            name='Energy',
             value=(
                 f'{Emojis.bolt} **+{self.current_item.energy:,}** each'
                 + (
