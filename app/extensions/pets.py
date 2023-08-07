@@ -104,11 +104,15 @@ class PetsCog(Cog, name='Pets'):
         )
 
     HUNT_DEFAULT_WEIGHTS = {
-        None: 1,
+        None: 1.2,
         Pets.dog: 0.8,
         Pets.cat: 0.8,
         Pets.bird: 0.8,
-        Pets.bee: 0.02,
+        Pets.bunny: 0.8,
+        Pets.hamster: 0.8,
+        Pets.mouse: 0.8,
+        Pets.bee: 0.05,
+        Pets.duck: 0.05,
         Pets.cow: 0.004,
     }
 

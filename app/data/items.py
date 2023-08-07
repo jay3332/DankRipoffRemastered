@@ -1079,11 +1079,15 @@ class Items:
         buyable=True,
         metadata=NetMetadata(
             weights={
-                None: 1,
-                Pets.dog: 1,
-                Pets.cat: 1,
+                None: 1.1,
+                Pets.dog: 0.9,
+                Pets.cat: 0.9,
                 Pets.bird: 0.9,
+                Pets.bunny: 0.9,
+                Pets.hamster: 0.9,
+                Pets.mouse: 0.9,
                 Pets.bee: 0.2,
+                Pets.duck: 0.2,
                 Pets.cow: 0.04,
             },
             priority=0,

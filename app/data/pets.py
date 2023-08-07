@@ -88,6 +88,62 @@ class Pets:
         ),
     )
 
+    bunny = Pet(
+        name='Bunny',
+        key='bunny',
+        emoji='\U0001f430',
+        rarity=PetRarity.common,
+        description='A mammal with long ears that hops around.',
+        energy_per_minute=1,
+        max_energy=100,
+        benefit=lambda level: (
+            f'- +{1 + level * 0.5}% global XP multiplier'
+        ),
+    )
+
+    hamster = Pet(
+        name='Hamster',
+        key='hamster',
+        emoji='\U0001f439',
+        rarity=PetRarity.common,
+        description='A small rodent that is often kept as a pet.',
+        energy_per_minute=1,
+        max_energy=100,
+        benefit=lambda level: (
+            f'- +{1 + level * 0.4}% weight on finding rarer items when digging\n'
+            f'- +{0.5 + level * 0.1}% money back when buying items'
+        ),
+    )
+
+    mouse = Pet(
+        name='Mouse',
+        key='mouse',
+        emoji='\U0001f42d',
+        rarity=PetRarity.common,
+        description='A small rodent that likes cheese.',
+        energy_per_minute=1,
+        max_energy=100,
+        benefit=lambda level: (
+            f'- +{5 + level * 0.5}% XP multiplier increase from eating cheese\n'
+            f'- +{1 + level * 0.4}% chance to find items while searching'
+        ),
+    )
+
+    duck = Pet(
+        name='Duck',
+        key='duck',
+        emoji='\U0001f986',
+        rarity=PetRarity.uncommon,
+        description='Waddle waddle and then they go quack',
+        energy_per_minute=2,
+        max_energy=200,
+        benefit=lambda level: (
+            f'- +{2 + level * 0.5}% profit from working\n'
+            f'- +{1 + level * 0.25}% chance to get an Uncommon Crate when claiming hourly crates\n'
+            f'- +{1 + level * 0.3}% global XP multiplier'
+        ),
+    )
+
     bee = Pet(
         name='Bee',
         key='bee',
