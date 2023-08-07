@@ -24,6 +24,7 @@ class Skill:
     """Stores data about skill area."""
     key: str
     name: str
+    emoji: str
     description: str
     benefit: str | BenefitFmt
     price: int
@@ -48,6 +49,10 @@ class Skill:
     @property
     def benefit_per_point(self) -> str:
         return self.benefit(1)
+
+    @property
+    def display(self) -> str:
+        return f'{self.emoji} {self.name}'
 
     def to_train(self, func: TrainingCallback) -> TrainingCallback:
         self.training_callback = func
@@ -231,7 +236,8 @@ class Skills:
     begging = Skill(
         key='begging',
         name='Begging',
-        description='Improving this skill will increase the chance and coins gained from the `beg` command.',
+        emoji='\U0001f64f',
+        description='Increase the chance and coins gained from the `beg` command.',
         benefit=lambda p: f'+{p / 2}% chance to get items from begging, +{p * 2}% coins from begging',
         price=2500,
         max_points=100,
@@ -276,6 +282,7 @@ class Skills:
     robbery = Skill(
         key='robbery',
         name='Robbery',
+        emoji='\U0001f977',
         description='Improve your chances of success along with net gain when using the `rob` command. (Max. +50% payouts)',
         benefit=lambda p: f'+{p}% success chance, -{p / 2}% death chance, +{min(p * 2, 50)}% payouts',
         price=8000,
@@ -314,6 +321,7 @@ class Skills:
     defense = Skill(
         key='defense',
         name='Defense',
+        emoji='\U0001f6e1\ufe0f',
         description='Lowers the success chance of others trying to rob you.',
         benefit=lambda p: f'-{p * 1.5}% rob success chance, +{p / 2}% death chance for others',
         price=8000,

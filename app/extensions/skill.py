@@ -8,11 +8,12 @@ from typing import Any, TYPE_CHECKING
 
 import discord
 from discord import app_commands
+from discord.utils import format_dt
 
 from app.core import BAD_ARGUMENT, Cog, Context, REPLY, command, group, lock_transactions, simple_cooldown, \
     user_max_concurrency
 from app.data.skills import Skill as SkillObject, Skills, TrainingFailure
-from app.util.common import humanize_duration, walk_collection
+from app.util.common import humanize_duration, image_url_from_emoji, query_collection_many, walk_collection
 from app.util.converters import query_skill
 from app.util.pagination import FieldBasedFormatter, Paginator
 from app.util.types import TypedInteraction
@@ -43,21 +44,23 @@ class Skill(Cog):
 
         for skill in walk_collection(Skills, SkillObject):
             if skill_record := skills.get_skill(skill):
+                s = 's' if skill_record.points != 1 else ''
                 fields.append({
-                    'name': f'{skill.name}',
+                    'name': f'**{skill.display}** \u2014 {skill_record.points:,} Skill Point{s}',
                     'value': dedent(f"""
-                        Skill Points: **{skill_record.points:,}**
-                        Train this skill by running `{ctx.clean_prefix}train {skill.key}`.
-
                         {skill.description}
                         *{skill.benefit(skill_record.points)}*
+                        *Train this skill by running `{ctx.clean_prefix}train {skill.key}`.*
                     """),
                     'inline': False,
                 })
             elif record.level < skill.level_unlocked:
                 fields.append({
-                    'name': f'{skill.name} (Unlocked at Level {skill.level_unlocked})',
-                    'value': f'You do not meet the level requirement to unlock this skill.\n\n{skill.description}\n*{skill.benefit_per_point} per point*',
+                    'name': f'{skill.display} (Unlocked at Level {skill.level_unlocked})',
+                    'value': (
+                        f'{skill.description}\n*{skill.benefit_per_point}*\n'
+                        '*You do not meet the level requirement to unlock this skill.*'
+                    ),
                     'inline': False
                 })
             else:
@@ -67,12 +70,13 @@ class Skill(Cog):
                     value = f'Buy this skill by running `{ctx.clean_prefix}skill buy {skill.key}`.'
 
                 fields.append({
-                    'name': f'{skill.name} (Unlock for {Emojis.coin} {skill.price:,})',
-                    'value': value + f'\n\n{skill.description}\n*{skill.benefit_per_point} per point*',
+                    'name': f'{skill.display} (Unlock for {Emojis.coin} {skill.price:,})',
+                    'value': f'{skill.description}\n*{skill.benefit_per_point} per point*\n*{value}*',
                     'inline': False,
                 })
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_thumbnail(url=image_url_from_emoji(self.emoji))
         embed.set_author(name=f'{ctx.author.name}\'s Skills', icon_url=ctx.author.avatar.url)
         embed.description = f'You have unlocked {len(skills.cached):,} skills.'
 
@@ -109,30 +113,42 @@ class Skill(Cog):
 
         embed = discord.Embed(color=Colors.primary, description=skill.description, title=skill.name, timestamp=ctx.now)
         embed.set_author(name=f'Skill: {skill.name}', icon_url=ctx.author.avatar.url)
+        embed.set_thumbnail(url=image_url_from_emoji(skill.emoji))
 
         embed.add_field(name='General', value=dedent(f"""
-            Name: {skill.name}
+            Name: **{skill.name}**
             Query Key: **`{skill.key}`**
-            Maximum Skill Points: {skill.max_points or 'Unlimited'}
-            Training Cooldown: {humanize_duration(skill.training_cooldown)}
+            Maximum Skill Points: **{skill.max_points or 'Unlimited'}**
+            Training Cooldown: **{humanize_duration(skill.training_cooldown)}**
         """))
 
         embed.add_field(name='Requirements', value=dedent(f"""
-            Level Unlocked: {skill.level_unlocked:,}
-            Price to Unlock: {Emojis.coin} {skill.price:,}
+            Level Unlocked: **{skill.level_unlocked:,}**
+            Price to Unlock: {Emojis.coin} **{skill.price:,}**
         """))
 
         if skill_record := skills.get_skill(skill):
-            embed.add_field(name='Benefit', value=skill.benefit(skill_record.points), inline=False)
+            embed.add_field(name=f'{self.emoji} Benefit', value=skill.benefit(skill_record.points), inline=False)
+            if skill_record.cooldown_until and ctx.now < skill_record.cooldown_until:
+                embed.add_field(
+                    name='\u23f0 Training Cooldown',
+                    value=f'You may train again {format_dt(skill_record.cooldown_until, "R")}',
+                    inline=False,
+                )
+            else:
+                embed.add_field(
+                    name='\u23f0 Train this Skill',
+                    value=f'Run `{ctx.clean_prefix}train {skill.key}` to train this skill.',
+                    inline=False,
+                )
 
             embed.add_field(name='Skill Points', value=f'{skill_record.points:,}')
             embed.add_field(name='Maximum Skill Points', value=f'{self.get_maximum_skill_points(record, skill_record):,}')
 
             embed.set_footer(text='Maximum skill points scale with level.')
-
         else:
-            embed.description = 'You have not unlocked this skill yet.\n\n' + embed.description
-            embed.add_field(name='Benefit', value=skill.benefit_per_point + ' per point', inline=False)
+            embed.description += '\n*You have not unlocked this skill yet.*'
+            embed.add_field(name=f'{self.emoji} Benefit', value=skill.benefit_per_point + ' per point', inline=False)
 
         return embed, REPLY
 
@@ -201,9 +217,10 @@ class Skill(Cog):
             return
 
         if skill_record.cooldown_until and ctx.now < skill_record.cooldown_until:
-            dur = humanize_duration((skill_record.cooldown_until - ctx.now).total_seconds())
-
-            yield f'You must wait {dur} before training this skill again.', BAD_ARGUMENT
+            yield (
+                f'You must wait {format_dt(skill_record.cooldown_until, "R")} before training this skill again.',
+                BAD_ARGUMENT,
+            )
             return
 
         yield f'{Emojis.loading} Training {skill.name}...', REPLY
@@ -228,13 +245,14 @@ class Skill(Cog):
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
         embed.set_author(name='Training Successful', icon_url=ctx.author.avatar.url)
+        embed.set_thumbnail(url=image_url_from_emoji(skill.emoji))
 
         embed.description = dedent(f"""
             Successfully trained the **{skill.name}** skill.
             Added 1 skill point to this skill - you now have **{skill_record.points:,}** skill points for {skill.name}.
         """)
 
-        embed.add_field(name='Updated Benefit', value=skill.benefit(skill_record.points))
+        embed.add_field(name=f'{self.emoji} Updated Benefit', value=skill.benefit(skill_record.points))
 
         yield embed, REPLY
 
@@ -245,8 +263,7 @@ class Skill(Cog):
         current = current.lower()
         return [
             app_commands.Choice(name=skill.name, value=skill.key)
-            for skill in walk_collection(Skills, SkillObject)
-            if current in skill.name.lower()
+            for skill in query_collection_many(Skills, SkillObject, current)
         ]
 
 
