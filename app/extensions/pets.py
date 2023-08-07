@@ -172,6 +172,7 @@ class PetsCog(Cog, name='Pets'):
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f"{ctx.author.name}'s Equipped Pets", icon_url=ctx.author.avatar)
         embed.set_thumbnail(url=image_url_from_emoji('\U0001f43e'))
+        embed.set_footer(text=f'Use {ctx.clean_prefix}pets all to view all pets.')
 
         equip_mention = ctx.bot.tree.get_app_command('pets equip').mention
         unequip_mention = ctx.bot.tree.get_app_command('pets unequip').mention
