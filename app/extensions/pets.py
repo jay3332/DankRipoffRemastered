@@ -179,7 +179,7 @@ class PetsCog(Cog, name='Pets'):
 
         if not pets.equipped_count:
             embed.description = (
-                f"You haven't equipped any pets yet. Pets must be equipped to use their powers!\n"
+                f"You haven't equipped any pets yet.\nPets must be equipped to activate their abilities!\n"
                 f"Use {equip_mention} to equip pets."
             )
             return embed, REPLY
