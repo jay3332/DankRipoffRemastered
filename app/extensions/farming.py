@@ -217,7 +217,7 @@ class Farming(Cog):
 
     emoji = '\U0001f468\u200d\U0001f33e'
 
-    @group(aliases={'crops', 'fa', 'crop', 'land', 'area'}, hybrid=True, fallback='view')
+    @group(aliases={'crops', 'fa', 'crop', 'land', 'area'}, hybrid=True, fallback='view', expand_subcommands=True)
     @simple_cooldown(2, 4)
     async def farm(self, ctx: Context) -> CommandResponse:
         """View your farm and it's crops.

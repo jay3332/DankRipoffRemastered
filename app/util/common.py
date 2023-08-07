@@ -10,7 +10,7 @@ from typing import (
     Any,
     Awaitable,
     Callable,
-    Iterator,
+    Iterable, Iterator,
     Mapping,
     Optional,
     ParamSpec,
@@ -126,7 +126,7 @@ def get_by_key(collection: type, key: str) -> Any:
             return obj
 
 
-def query_collection(
+def query_collection_many(
     collection: type,
     cls: Type[Q],
     query: str,
@@ -134,7 +134,7 @@ def query_collection(
     get_key: Callable[[Q], str] = lambda item: item.key,
     get_name: Callable[[Q], str] = lambda item: item.name,
     prioritizer: Callable[[Q], int] = lambda _: 0,  # higher priority = more favorable
-) -> Optional[Q]:
+) -> Iterable[Q]:
     query = query.lower()
     queued = []
 
@@ -142,7 +142,7 @@ def query_collection(
         name = get_name(obj).lower()
 
         if query in (name, get_key(obj)):
-            return obj
+            return [obj]
 
         if len(query) >= 3 and query in name or query in get_key(obj):
             queued.append(obj)
@@ -152,7 +152,21 @@ def query_collection(
             queued.append(obj)
 
     if queued:
-        return min(queued, key=lambda item: (-prioritizer(item), len(get_key(item))))
+        return sorted(queued, key=lambda item: (-prioritizer(item), len(get_key(item))))
+    return []
+
+
+def query_collection(
+    collection: type,
+    cls: Type[Q],
+    query: str,
+    *,
+    get_key: Callable[[Q], str] = lambda item: item.key,
+    get_name: Callable[[Q], str] = lambda item: item.name,
+    prioritizer: Callable[[Q], int] = lambda _: 0,  # higher priority = more favorable
+) -> Optional[Q]:
+    results = query_collection_many(collection, cls, query, get_key=get_key, get_name=get_name, prioritizer=prioritizer)
+    return next(iter(results), None)
 
 
 def cutoff(string: str, /, max_length: int = 64, *, exact: bool = False) -> str:

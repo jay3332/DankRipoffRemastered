@@ -39,15 +39,16 @@ MISSING = sentinel('MISSING', bool=False, repr='MISSING')
 
 CURRENCY_COGS: Final[frozenset[str]] = frozenset({
     'Casino',
+    'Farming',
+    'Pets',
     'Profit',
+    'Skill',
     'Stats',
     'Transactions',
 })
 
 
 def clean_interaction_kwargs(kwargs: dict[str, Any]) -> None:
-    kwargs.pop('reference', None)
-
     # no files in interactions
     kwargs.pop('file', None)
     kwargs.pop('files', None)
@@ -55,6 +56,7 @@ def clean_interaction_kwargs(kwargs: dict[str, Any]) -> None:
 
 async def _into_interaction_response(interaction: TypedInteraction, kwargs: dict[str, Any]) -> None:
     clean_interaction_kwargs(kwargs)
+    kwargs.pop('reference', None)
 
     if kwargs.get('embed') and kwargs.get('embeds') is not None:
         kwargs['embeds'].append(kwargs['embed'])

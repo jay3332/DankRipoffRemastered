@@ -677,6 +677,21 @@ class PetRecord:
     def exp_requirement(self) -> int:
         return self.level_data[2]
 
+    @property
+    def is_max_level(self) -> int:
+        return self.level >= self.pet.max_level
+
+    @property
+    def energy(self) -> int:
+        if self.last_recorded_energy <= 0:
+            return 0
+        elapsed = discord.utils.utcnow() - self.last_feed
+        return max(0, round(self.last_recorded_energy - elapsed.total_seconds() / 60 * self.pet.energy_per_minute))
+
+    @property
+    def exhausts_at(self) -> datetime.datetime:
+        return self.last_feed + datetime.timedelta(minutes=self.last_recorded_energy / self.pet.energy_per_minute)
+
     @staticmethod
     def _transform_record(record: asyncpg.Record) -> dict[str, Any]:
         return pick(
@@ -751,17 +766,19 @@ class PetManager:
         records = (PetRecord.from_record(manager=self, record=r) for r in records)
         self.cached = {r.pet: r for r in records}
 
-    def get_equipped_pet(self, pet: Pet) -> PetRecord | None:
+    def get_active_pet(self, pet: Pet) -> PetRecord | None:
         if record := self.cached.get(pet):
-            return record if record.equipped else None
+            return record if record.equipped and record.energy > 0 else None
 
     @property
     def equipped_count(self) -> int:
         return sum(r.equipped for r in self.cached.values())
 
     async def add_pet(self, pet: Pet, *, connection: asyncpg.Connection | None = None) -> None:
-        query = 'INSERT INTO pets (user_id, pet) VALUES ($1, $2) RETURNING *'
-        record = await (connection or self._record.db).fetchrow(query, self._record.user_id, pet.key)
+        query = 'INSERT INTO pets (user_id, pet, max_energy) VALUES ($1, $2, $3) RETURNING *'
+        record = await (connection or self._record.db).fetchrow(
+            query, self._record.user_id, pet.key, pet.max_energy,
+        )
         self.cached[pet] = PetRecord.from_record(manager=self, record=record)
 
 

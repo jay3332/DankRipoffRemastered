@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, Iterable, TYPE_CHECKING
 
 import discord
 from discord.ext import commands
@@ -44,7 +44,7 @@ class CogSelect(discord.ui.Select[PaginatorView]):
     @staticmethod
     def get_base_cog_embed(ctx: Context, cog: Cog) -> discord.Embed:
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.description = f'There are {len(cog.get_commands())} commands in this category.'
+        embed.description = f'There are {len(cog.get_commands())} root commands in this category.'
         embed.set_author(name=f'Help ({cog.qualified_name}): {ctx.author.name}', icon_url=ctx.author.avatar.url)
         embed.set_footer(text=f'Run `{ctx.clean_prefix}help <command>` to get help on a specific command.')
         if emoji := getattr(cog, 'emoji', None):
@@ -101,7 +101,7 @@ class CenterButton(discord.ui.Button[PaginatorView]):
 
         return embed
 
-    async def callback(self, interaction: discord.Interaction) -> None:
+    async def callback(self, interaction: TypedInteraction) -> None:
         self._active = not self._active
 
         if self._active:
@@ -137,9 +137,17 @@ class HelpCommand(commands.HelpCommand):
             help='Shows help about the bot.',
         ), **attrs)
 
-    @staticmethod
-    def format_commands(cmds: list[Command]) -> str:
-        return '\u2002'.join(f'`{cmd.qualified_name}`' for cmd in sorted(cmds, key=lambda c: c.qualified_name))
+    @classmethod
+    def _format_command(cls, cmd: Command) -> str:
+        base = f'`{cmd.qualified_name}`'
+
+        if getattr(cmd, 'expand_subcommands', False) and hasattr(cmd, 'commands'):
+            return f'{base},\u2002{cls.format_commands(cmd for cmd in cmd.commands if not cmd.hidden)}'
+        return base
+
+    @classmethod
+    def format_commands(cls, cmds: Iterable[Command]) -> str:
+        return ',\u2002'.join(map(cls._format_command, sorted(cmds, key=lambda c: c.qualified_name)))
 
     def get_bot_mapping(self) -> dict[Cog, list[Command]]:
         mapping = super().get_bot_mapping()
@@ -151,15 +159,23 @@ class HelpCommand(commands.HelpCommand):
     def filter_mapping(mapping: dict[Cog, list[Command]]) -> dict[Cog, list[Command]]:
         return {cog: v for cog, v in mapping.items() if not getattr(cog, '__hidden__', True)}
 
-    @staticmethod
-    def commands_into_fields(ctx: Context, cmd: list[Command]) -> list[dict[str, str | bool]]:
+    @classmethod
+    def _walk_commands(cls, cmds: list[Command]) -> Iterable[Command]:
+        for cmd in cmds:
+            yield cmd
+
+            if getattr(cmd, 'expand_subcommands', False) and hasattr(cmd, 'commands'):
+                yield from cls._walk_commands(cmd.commands)
+
+    @classmethod
+    def commands_into_fields(cls, ctx: Context, cmd: list[Command]) -> list[dict[str, str | bool]]:
         return [
             {
                 'name': cutoff(ctx.clean_prefix + command.qualified_name + ' ' + command.signature, exact=True),
                 'value': command.short_doc or command.description or 'No description provided.',
                 'inline': False,
             }
-            for command in sorted(cmd, key=lambda c: c.qualified_name)
+            for command in sorted(cls._walk_commands(cmd), key=lambda c: c.qualified_name)
             if not command.hidden
         ]
 
@@ -180,7 +196,7 @@ class HelpCommand(commands.HelpCommand):
 
         return Paginator(
             ctx,
-            FieldBasedFormatter(embed, fields, per_page=7, page_in_footer=True),
+            FieldBasedFormatter(embed, fields, per_page=8, page_in_footer=True),
             center_button=CenterButton(ctx),
             other_components=[CogSelect(mapping)],
             row=1,

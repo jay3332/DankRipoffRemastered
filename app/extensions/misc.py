@@ -179,7 +179,7 @@ class Miscellaneous(Cog):
 
         await setting.set(ctx, value)
 
-    @group(aliases={'cd', 'cds', 'cooldown'}, hybrid=True, fallback='list')
+    @group(aliases={'cd', 'cds', 'cooldown'}, hybrid=True, fallback='list', expand_subcommands=True)
     @simple_cooldown(2, 3)
     async def cooldowns(self, ctx: Context) -> CommandResponse:
         """View all pending cooldowns."""

@@ -72,6 +72,7 @@ class Emojis:
 
     enabled = '<:_:939549340458954762>'
     disabled = '<:_:939549360570662952>'
+    neutral = '<:_:838593591965384734>'
 
     class Arrows:
         left: str = ''

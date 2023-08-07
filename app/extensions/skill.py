@@ -28,7 +28,7 @@ class Skill(Cog):
     emoji = '\U0001f52e'
 
     # noinspection PyTypeChecker
-    @group(aliases={'skill', 'sk'}, hybrid=True)
+    @group(aliases={'skill', 'sk'}, hybrid=True, expand_subcommands=True)
     @simple_cooldown(2, 2)
     async def skills(self, ctx: Context, *, skill: query_skill = None) -> tuple[Paginator, Any] | None:
         """View a dashboard of all of your skills, or information on a specific skill."""

@@ -225,6 +225,7 @@ class Command(commands.Command):
             self._permissions.bot.update(bot_permissions)
 
         self.custom_flags: FlagMeta[Any] | None = None
+        self.expand_subcommands: bool = kwargs.pop('expand_subcommands', False)
 
         super().__init__(func, **kwargs)
         self.add_check(self._permissions.check)

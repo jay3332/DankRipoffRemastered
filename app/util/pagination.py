@@ -212,6 +212,8 @@ class Paginator:
         elif isinstance(entity, File):
             send_kwargs['file'] = entity
 
+        if interaction is not None:
+            send_kwargs.pop('reference', None)
         if edit:
             responder = self.ctx.maybe_edit if interaction is None else interaction.response.edit_message
         else:
@@ -260,19 +262,32 @@ class Formatter(ABC, Generic[T]):
 
 
 class LineBasedFormatter(Formatter[str]):
-    def __init__(self, embed: Embed, lines: list[str], *, per_page: int = 10, field_name: str | None = None) -> None:
+    def __init__(
+        self,
+        embed: Embed,
+        lines: list[str],
+        *,
+        per_page: int = 10,
+        field_name: str | None = None,
+        insert_field_at: int | None = None,
+    ) -> None:
         self.embed: Embed = embed
         self.field_name: str | None = field_name
+        self.insert_field_at: int | None = insert_field_at
 
         super().__init__(lines, per_page=per_page)
 
     async def format_page(self, paginator: Paginator, lines: list[str]) -> Embed | File:
-        embed = self.embed.copy()
+        embed = Embed.from_dict(deepcopy(self.embed.to_dict()))
 
         if self.field_name is None:
             embed.description = '\n'.join(lines)
         else:
-            embed.add_field(name=self.field_name, value='\n'.join(lines))
+            kwargs = dict(name=self.field_name, value='\n'.join(lines), inline=False)
+            if self.insert_field_at is None:
+                embed.add_field(**kwargs)
+            else:
+                embed.insert_field_at(self.insert_field_at, **kwargs)
 
         return embed
 
