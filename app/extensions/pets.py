@@ -453,6 +453,7 @@ class PetsCog(Cog, name='Pets'):
 
     @command(aliases={'fe'}, hybrid=True)
     @app_commands.describe(pet='The pet to feed.')
+    @simple_cooldown(1, 10)
     async def feed(self, ctx: Context, *, pet: query_pet = None) -> CommandResponse:
         """Feed a pet food to give it energy."""
         record = await ctx.db.get_user_record(ctx.author.id)
