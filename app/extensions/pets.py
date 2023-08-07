@@ -178,7 +178,7 @@ class PetsCog(Cog, name='Pets'):
         swap_mention = ctx.bot.tree.get_app_command('pets swap').mention
 
         if not pets.equipped_count:
-            embed.description += (
+            embed.description = (
                 f"You haven't equipped any pets yet. Pets must be equipped to use their powers!\n"
                 f"Use {equip_mention} to equip pets."
             )
