@@ -1124,6 +1124,14 @@ class UserRecord:
         return self.data['max_equipped_pets']
 
     @property
+    def pet_operations(self) -> int:
+        return self.data['pet_operations']
+
+    @property
+    def pet_operations_cooldown_start(self) -> datetime.datetime:
+        return self.data['pet_operations_cooldown_start']
+
+    @property
     def inventory_manager(self) -> InventoryManager:
         if not self.__inventory_manager:
             self.__inventory_manager = InventoryManager(self)

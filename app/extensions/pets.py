@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import random
 import time
-from typing import Iterator, TYPE_CHECKING
+from typing import Final, Iterator, TYPE_CHECKING
 
 import aiohttp
 import discord
 from discord import app_commands
+from discord.ext import commands
 from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
-from app.core import Cog, Context, HybridContext, command, group, simple_cooldown
+from app.core import Cog, Context, command, group, simple_cooldown
 from app.core.helpers import EDIT, REPLY, cooldown_message, user_max_concurrency
 from app.data.items import Item, ItemType, NetMetadata
 from app.data.pets import Pet, Pets
@@ -39,10 +41,26 @@ else:
         raise BadArgument(f'No pet named {query!r} found.')
 
 
+def has_operations(count: int):
+    async def predicate(ctx: Context) -> bool:
+        record = await ctx.db.get_user_record(ctx.author.id)
+        expiry = record.pet_operations_cooldown_start + PetsCog.PET_MAX_OPERATIONS_WINDOW
+        if ctx.now > expiry or record.pet_operations + count <= PetsCog.PET_MAX_OPERATIONS_COUNT:
+            return True
+
+        raise BadArgument(
+            f'You have no more pet swaps remaining. They will replenish {format_dt(expiry, "R")}.'
+        )
+    return commands.check(predicate)
+
+
 class PetsCog(Cog, name='Pets'):
     """Hunt, manage, and raise your pets!"""
 
     emoji = '\U0001f415\u200d\U0001f9ba'
+
+    PET_MAX_OPERATIONS_COUNT: Final[int] = 10  # 5 swaps
+    PET_MAX_OPERATIONS_WINDOW: Final[datetime.timedelta] = datetime.timedelta(hours=2)
 
     def __setup__(self) -> None:
         self._last_measured_api_latency: float | None = None
@@ -337,8 +355,18 @@ class PetsCog(Cog, name='Pets'):
         )
         return embed, REPLY
 
+    async def refresh_operations(self, ctx: Context, record: UserRecord, operations: int, *, connection) -> str:
+        if record.pet_operations_cooldown_start + self.PET_MAX_OPERATIONS_WINDOW < ctx.now:
+            await record.update(pet_operations_cooldown_start=ctx.now, pet_operations=operations, connection=connection)
+        else:
+            await record.add(pet_operations=operations, connection=connection)
+
+        remaining = self.PET_MAX_OPERATIONS_COUNT - record.pet_operations
+        return f'You have {remaining / 2:g} pet swaps remaining.'
+
     @pets.command(name='equip', aliases={'+', 'e', 'eq', 'activate', 'add'}, hybrid=True)
     @app_commands.describe(pet='The pet to equip.')
+    @has_operations(1)
     async def pets_equip(self, ctx: Context, *, pet: query_pet) -> CommandResponse:
         """Equip a pet. This will activate its effects and abilities."""
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -357,12 +385,16 @@ class PetsCog(Cog, name='Pets'):
                 f'Use {swap_mention} to swap out a pet instead.'
             ), REPLY
 
-        await entry.update(equipped=True)
+        async with ctx.db.acquire() as conn:
+            await entry.update(equipped=True, connection=conn)
+            swaps = await self.refresh_operations(ctx, record, 1, connection=conn)
+
         ctx.bot.loop.create_task(ctx.thumbs())
-        return f'Equipped your **{pet.display}**.', REPLY
+        return f'Equipped your **{pet.display}**.\n{swaps}', REPLY
 
     @pets.command(name='unequip', aliases={'-', 'u', 'deactivate', 'remove'}, hybrid=True)
     @app_commands.describe(pet='The pet to unequip.')
+    @has_operations(1)
     async def pets_unequip(self, ctx: Context, *, pet: query_pet) -> CommandResponse:
         """Unequip a pet. This will remove its effects and abilities."""
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -374,12 +406,16 @@ class PetsCog(Cog, name='Pets'):
         if not entry.equipped:
             return f'Your **{pet.display}** is not equipped.', REPLY
 
-        await entry.update(equipped=False)
+        async with ctx.db.acquire() as conn:
+            await entry.update(equipped=False)
+            swaps = await self.refresh_operations(ctx, record, 1, connection=conn)
+
         ctx.bot.loop.create_task(ctx.thumbs())
-        return f'Unequipped your **{pet.display}**.', REPLY
+        return f'Unequipped your **{pet.display}**.\n{swaps}', REPLY
 
     @pets.command(name='swap', aliases={'s', 'switch', 'change', '~'}, hybrid=True)
     @app_commands.describe(to_unequip='The pet to unequip and replace.', to_equip='The pet to equip.')
+    @has_operations(2)
     async def pets_swap(self, ctx: Context, to_unequip: query_pet, *, to_equip: query_pet) -> CommandResponse:
         """Swap an equipped pet with an unequipped pet."""
         if to_unequip == to_equip:
@@ -402,9 +438,10 @@ class PetsCog(Cog, name='Pets'):
         async with ctx.db.acquire() as conn:
             await unequip_entry.update(equipped=False, connection=conn)
             await equip_entry.update(equipped=True, connection=conn)
+            swaps = await self.refresh_operations(ctx, record, 2, connection=conn)
 
         ctx.bot.loop.create_task(ctx.thumbs())
-        return f'Swapped your **{to_unequip.display}** with your **{to_equip.display}**.', REPLY
+        return f'Swapped your **{to_unequip.display}** with your **{to_equip.display}**.\n{swaps}', REPLY
 
     @command(aliases={'fe'}, hybrid=True)
     @app_commands.describe(pet='The pet to feed.')
