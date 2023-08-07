@@ -705,7 +705,6 @@ class FeedView(UserView):
                     description=f'{entry.energy:,}/{entry.max_energy:,} Energy',
                     value=entry.pet.key,
                     emoji=entry.pet.emoji,
-                    default=entry == self.entry,
                 )
 
         self.update_view()
