@@ -690,13 +690,24 @@ class FeedView(UserView):
         self.index: int = 0
         self._color = Colors.primary
 
+        equipped_pets = filter(lambda pet: pet.equipped, self.pets.cached.values())
         if self.pets.equipped_count <= 1:
             self.remove_item(self.select_pet)  # type: ignore
-
         elif self.pets.equipped_count < 3:
             self.remove_item(self.select_pet)  # type: ignore
-            for entry in filter(lambda pet: pet.equipped, self.pets.cached.values()):
+            for entry in equipped_pets:
                 self.add_item(FeedPetButton(entry))
+        else:
+            it: discord.ui.Select = self.select_pet  # type: ignore
+            for entry in equipped_pets:
+                it.add_option(
+                    label=entry.pet.name,
+                    description=f'{entry.energy:,}/{entry.max_energy:,} Energy',
+                    value=entry.pet.key,
+                    emoji=entry.pet.emoji,
+                    default=entry == self.entry,
+                )
+
         self.update_view()
 
     @property
@@ -767,7 +778,8 @@ class FeedView(UserView):
     @discord.ui.select(placeholder='Select a pet to feed', row=0)
     async def select_pet(self, interaction: TypedInteraction, select: discord.ui.Select) -> None:
         self.entry = next(pet for pet in self.pets.cached if pet.key == select.values[0])
-        await interaction.response.edit_message(view=self)
+        self.update_view()
+        await interaction.response.edit_message(embeds=self.make_embeds(), view=self)
 
     @discord.ui.button(label='Previous', emoji=Emojis.Arrows.previous, style=discord.ButtonStyle.secondary, row=1)
     async def previous(self, interaction: TypedInteraction, _) -> None:
