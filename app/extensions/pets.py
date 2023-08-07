@@ -232,7 +232,7 @@ class PetsCog(Cog, name='Pets'):
                 'value': _format_entry(entry),
                 'inline': False,
             }
-            for entry in sorted(pets.cached.values(), key=lambda pet: pet.rarity.value, reverse=True)
+            for entry in sorted(pets.cached.values(), key=lambda entry: entry.pet.rarity.value, reverse=True)
             if entry.equipped
         ]
         formatter = FieldBasedFormatter(embed=embed, field_kwargs=fields, per_page=5)
@@ -261,7 +261,7 @@ class PetsCog(Cog, name='Pets'):
             lines=[
                 f'**{entry.pet.display}** \u2014 {entry.pet.rarity.name.title()} (Level {entry.level:,}) '
                 + ('[EQUIPPED]' if entry.equipped else '')
-                for entry in sorted(pets.cached.values(), key=lambda pet: (-pet.rarity.value, pet.name))
+                for entry in sorted(pets.cached.values(), key=lambda entry: (-entry.pet.rarity.value, entry.pet.name))
             ],
             per_page=10,
         )
