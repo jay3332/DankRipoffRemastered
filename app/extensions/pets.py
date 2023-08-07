@@ -763,11 +763,11 @@ class FeedView(UserView):
         item_embed.set_thumbnail(url=image_url_from_emoji(str(self.current_item.emoji)))
         item_embed.description = self.current_item.description
         item_embed.add_field(
-            name='Energy',
+            name=f'Energy (Runs out {format_dt(self.entry.exhausts_at, "R")})',
             value=(
                 f'{Emojis.bolt} **+{self.current_item.energy:,}** each'
                 + (
-                    f'\n{Emojis.bolt} **+{self.current_item.energy * quantity:,}** total'
+                    f'\n{Emojis.max_bolt} **+{self.current_item.energy * quantity:,}** total'
                     if quantity > 1 else ''
                 )
             ),
@@ -819,7 +819,10 @@ class FeedView(UserView):
             + (
                 f'\n{Emojis.Expansion.standalone} \U0001f52e **LEVEL UP!** **{previous_level}** {Emojis.arrow} **{new_level}**'
                 if new_level > previous_level
-                else f' {Emojis.arrow} {self.entry.exp:,}/{self.entry.total_exp:,} XP'
+                else (
+                    f' {Emojis.arrow} {self.entry.exp:,}/{self.entry.total_exp:,} XP'
+                    if exp > 0 else ''
+                )
             ),
             ephemeral=True
         )
