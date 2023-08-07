@@ -218,7 +218,7 @@ class Skill(Cog):
 
         if skill_record.cooldown_until and ctx.now < skill_record.cooldown_until:
             yield (
-                f'You must wait {format_dt(skill_record.cooldown_until, "R")} before training this skill again.',
+                f'You may train this skill again {format_dt(skill_record.cooldown_until, "R")}.',
                 BAD_ARGUMENT,
             )
             return
