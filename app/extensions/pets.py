@@ -783,7 +783,7 @@ class FeedView(UserView):
 
     @discord.ui.select(placeholder='Select a pet to feed', row=0)
     async def select_pet(self, interaction: TypedInteraction, select: discord.ui.Select) -> None:
-        self.entry = next(pet for pet in self.pets.cached if pet.key == select.values[0])
+        self.entry = next(entry for pet, entry in self.pets.cached.items() if pet.key == select.values[0])
         self.update_view()
         await interaction.response.edit_message(embeds=self.make_embeds(), view=self)
 
