@@ -739,7 +739,7 @@ class PetRecord:
         self.last_recorded_energy = energy
 
     async def add_energy(self, energy: int, *, connection: asyncpg.Connection | None = None) -> None:
-        energy = max(0, min(self.max_energy, self.last_recorded_energy + energy))
+        energy = max(0, min(self.max_energy, self.energy + energy))
         await self.set_energy(energy, connection=connection)
 
     async def evolve(self) -> None:
