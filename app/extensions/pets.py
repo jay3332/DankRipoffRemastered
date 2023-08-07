@@ -11,7 +11,7 @@ from discord import app_commands
 from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
-from app.core import Cog, Context, command, group, simple_cooldown
+from app.core import Cog, Context, HybridContext, command, group, simple_cooldown
 from app.core.helpers import EDIT, REPLY, cooldown_message, user_max_concurrency
 from app.data.items import Item, ItemType, NetMetadata
 from app.data.pets import Pet, Pets
@@ -159,8 +159,16 @@ class PetsCog(Cog, name='Pets'):
         button.style = discord.ButtonStyle.primary
         yield 'You were too slow and the pet escaped! Better luck next time.', view, EDIT
 
-    @group(aliases={'pet', 'zoo', 'p'}, hybrid=True, fallback='view', expand_subcommands=True)
-    async def pets(self, ctx: Context) -> CommandResponse:
+    @group(aliases={'pet', 'zoo', 'p'}, hybrid=True, expand_subcommands=True)
+    async def pets(self, ctx: Context, *, pet: query_pet = None) -> None:
+        """View and manage equipped pets."""
+        if pet is not None:
+            return await ctx.invoke(self.pets_info, pet=pet)  # type: ignore
+
+        await ctx.invoke(self.pets_view)  # type: ignore
+
+    @pets.command(name='view', aliases={'equipped'}, hybrid=True, hidden=True)
+    async def pets_view(self, ctx: Context) -> CommandResponse:
         """View and manage equipped pets."""
         record = await ctx.db.get_user_record(ctx.author.id)
         pets = await record.pet_manager.wait()
@@ -237,7 +245,7 @@ class PetsCog(Cog, name='Pets'):
 
         return Paginator(ctx, formatter), REPLY
 
-    @pets.command(name='info', aliases={'v', 'view', 'i'}, hybrid=True)
+    @pets.command(name='info', aliases={'i', 'details', 'stats'}, hybrid=True)
     @app_commands.describe(pet='The pet to view information on.')
     async def pets_info(self, ctx: Context, *, pet: query_pet) -> CommandResponse:
         """View information on a particular pet."""
