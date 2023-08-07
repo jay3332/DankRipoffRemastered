@@ -319,6 +319,7 @@ class PetsCog(Cog, name='Pets'):
         )
         if entry.equipped:
             ratio = entry.energy / entry.max_energy
+            feed_mention = ctx.bot.tree.get_app_command('feed').mention
             embed.add_field(
                 name=(
                     f'{Emojis.bolt} **{entry.energy:,}**/{entry.max_energy:,} Energy'
@@ -330,7 +331,7 @@ class PetsCog(Cog, name='Pets'):
                 value=(
                     f'{progress_bar(ratio, length=8)}  {ratio:.1%}'
                     + (
-                        '\n\n\u26a0\ufe0f **No energy left!** Feed this pet to restore energy.\n'
+                        f'\n\n\u26a0\ufe0f **No energy left!** Feed this pet to restore energy. ({feed_mention})\n'
                         '*Pet abilities only apply when they have enough energy.*'
                         if entry.energy <= 0 else ''
                     )
@@ -453,6 +454,7 @@ class PetsCog(Cog, name='Pets'):
     @pets_unequip.autocomplete('pet')
     @pets_swap.autocomplete('to_unequip')
     @pets_swap.autocomplete('to_equip')
+    @feed.autocomplete('pet')
     async def autocomplete_pet(self, _interaction: TypedInteraction, current: str):
         return [
             app_commands.Choice(name=pet.name, value=pet.key)

@@ -224,6 +224,53 @@ def parse_quantity_and_item(argument: str, **kwargs) -> tuple[Item | None, str]:
     return item, quantity
 
 
+async def transform_item_and_quantity(
+    ctx: Context, method: Literal[0, 1, 2], item: Item, quantity: str,
+) -> ItemAndQuantity:
+    plural = item.get_display_name(plural=True)
+    if method == BUY and not item.buyable:
+        raise BadArgument(f'{plural} are currently not buyable.')
+
+    if method == SELL and not item.sellable:
+        raise BadArgument(f'{plural} are not sellable.')
+
+    if method == USE and not item.usable:
+        raise BadArgument(f'{plural} are not usable.')
+
+    if method == DROP and not item.giftable:
+        raise BadArgument(f'{plural} are not giftable.')
+
+    record = await ctx.db.get_user_record(ctx.author.id)
+
+    if method == BUY:
+        maximum = record.wallet // item.price
+    else:
+        inventory = await record.inventory_manager.wait()
+        maximum = inventory.cached.quantity_of(item)
+
+    try:
+        quantity = get_amount(maximum, 1, maximum, quantity)
+    except PastMinimum:
+        raise BadArgument(f'You must {method} at least one of that item.')
+    except ZeroQuantity:
+        raise BadArgument(f'You don\'t have any {plural}.')
+    except NotAnInteger:
+        raise BadArgument(
+            f'Invalid quantity {quantity} - either what you specified yields 0, is negative, or it is not an integer.',
+        )
+    except NotEnough:
+        raise BadArgument(
+            f'Insufficient funds - you do not have enough coins to buy that much of that item.'
+            if method == BUY
+            else 'You do not have that many of that item.'
+        )
+
+    except ZeroDivisionError:
+        raise BadArgument('Very funny, division by 0.')
+
+    return ItemAndQuantity(item, quantity)
+
+
 def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemAndQuantity]:
     class Wrapper(Converter):
         async def convert(self, ctx: Context, argument: str) -> ItemAndQuantity:
@@ -233,48 +280,7 @@ def ItemAndQuantityConverter(method: Literal[0, 1, 2]) -> Type[Converter | ItemA
             if not item:
                 raise BadArgument(f'Item "{argument}" not found.')
 
-            plural = item.get_display_name(plural=True)
-            if method == BUY and not item.buyable:
-                raise BadArgument(f'{plural} are currently not buyable.')
-
-            if method == SELL and not item.sellable:
-                raise BadArgument(f'{plural} are not sellable.')
-
-            if method == USE and not item.usable:
-                raise BadArgument(f'{plural} are not usable.')
-
-            if method == DROP and not item.giftable:
-                raise BadArgument(f'{plural} are not giftable.')
-
-            record = await ctx.db.get_user_record(ctx.author.id)
-
-            if method == BUY:
-                maximum = record.wallet // item.price
-            else:
-                inventory = await record.inventory_manager.wait()
-                maximum = inventory.cached.quantity_of(item)
-
-            try:
-                quantity = get_amount(maximum, 1, maximum, quantity)
-            except PastMinimum:
-                raise BadArgument(f'You must {method} at least one of that item.')
-            except ZeroQuantity:
-                raise BadArgument(f'You don\'t have any {plural}.')
-            except NotAnInteger:
-                raise BadArgument(
-                    f'Invalid quantity {quantity} - either what you specified yields 0, is negative, or it is not an integer.',
-                )
-            except NotEnough:
-                raise BadArgument(
-                    f'Insufficient funds - you do not have enough coins to buy that much of that item.'
-                    if method == BUY
-                    else 'You do not have that many of that item.'
-                )
-
-            except ZeroDivisionError:
-                raise BadArgument('Very funny, division by 0.')
-
-            return ItemAndQuantity(item, quantity)
+            return await transform_item_and_quantity(ctx, method, item, quantity)
 
     return Wrapper
 

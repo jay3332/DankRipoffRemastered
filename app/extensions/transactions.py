@@ -17,7 +17,7 @@ from app.core import (
     Context,
     EDIT,
     HybridCommand,
-    NO_EXTRA,
+    HybridContext, NO_EXTRA,
     REPLY,
     command,
     lock_transactions,
@@ -26,7 +26,15 @@ from app.core import (
 )
 from app.data.items import Item, ItemRarity, ItemType, Items
 from app.data.recipes import Recipe, Recipes
-from app.util.common import cutoff, get_by_key, image_url_from_emoji, progress_bar, query_collection, walk_collection
+from app.util.common import (
+    cutoff,
+    get_by_key,
+    image_url_from_emoji,
+    progress_bar,
+    query_collection,
+    query_collection_many,
+    walk_collection,
+)
 from app.util.converters import (
     BUY,
     BankTransaction,
@@ -42,6 +50,7 @@ from app.util.converters import (
     get_amount,
     query_item,
     query_recipe,
+    transform_item_and_quantity,
 )
 from app.util.pagination import FieldBasedFormatter, Paginator
 from app.util.structures import LockWithReason
@@ -51,6 +60,21 @@ from config import Colors, Emojis
 if TYPE_CHECKING:
     from app.database import InventoryManager, UserRecord
     from app.util.types import CommandResponse, TypedInteraction
+
+
+class ItemTransformer(app_commands.Transformer):
+    @classmethod
+    async def convert(cls, _, value: str) -> Item:
+        return query_item(value)
+
+    async def transform(self, _, value: str) -> Item:
+        return query_item(value)
+
+    async def autocomplete(self, _, value: str) -> list[app_commands.Choice]:
+        return [
+            app_commands.Choice(name=item.name, value=item.key)
+            for item in query_collection_many(Items, Item, value)
+        ]
 
 
 class DropView(discord.ui.View):
@@ -526,7 +550,8 @@ class Transactions(Cog):
 
         return embed, view, REPLY
 
-    @command(aliases={"store", "market", "sh", "iteminfo", "ii", "item"})
+    @command(aliases={"store", "market", "sh", "iteminfo", "ii", "item"}, hybrid=True)
+    @app_commands.describe(item='The item to view specific information on.')
     @simple_cooldown(1, 6)
     async def shop(self, ctx: Context, *, item: query_item = None) -> CommandResponse:
         """View the item shop, or view information on a specific item.
@@ -579,7 +604,7 @@ class Transactions(Cog):
     def _bool_to_human(b: bool) -> str:
         return 'Yes' if b else 'No'
 
-    @command(alias='purchase')
+    @command(alias='purchase', hybrid=True, with_app_command=False)
     @simple_cooldown(3, 8)
     @user_max_concurrency(1)
     @lock_transactions
@@ -612,7 +637,21 @@ class Transactions(Cog):
 
         return embed, REPLY
 
-    @command(alias='s')
+    @buy.define_app_command()
+    @app_commands.describe(
+        item='The item to purchase.',
+        quantity='How many of the item to purchase. Use "max" to buy as many as possible.',
+    )
+    async def buy_app_command(
+        self,
+        ctx: HybridContext,
+        item: app_commands.Transform[Item, ItemTransformer],
+        quantity: str = '1',
+    ) -> None:
+        transformed = await transform_item_and_quantity(ctx, BUY, item, quantity)
+        await ctx.full_invoke(item_and_quantity=transformed)
+
+    @command(alias='s', hybrid=True, with_app_command=False)
     @simple_cooldown(3, 8)
     @user_max_concurrency(1)
     @lock_transactions
@@ -645,7 +684,21 @@ class Transactions(Cog):
 
         return embed, REPLY
 
-    @command(aliases={'u', 'consume', 'activate', 'open'})
+    @sell.define_app_command()
+    @app_commands.describe(
+        item='The item to sell',
+        quantity='How many of the item to sell. Use "all" to sell all.',
+    )
+    async def sell_app_command(
+        self,
+        ctx: HybridContext,
+        item: app_commands.Transform[Item, ItemTransformer],
+        quantity: str = '1',
+    ) -> None:
+        transformed = await transform_item_and_quantity(ctx, SELL, item, quantity)
+        await ctx.full_invoke(item_and_quantity=transformed)
+
+    @command(aliases={'u', 'consume', 'activate', 'open'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 10)
     @user_max_concurrency(1)
     @lock_transactions
@@ -665,7 +718,21 @@ class Transactions(Cog):
 
         await ctx.thumbs()
 
-    @command(aliases={'rm', 'dispose', 'deactivate', 'discard'})
+    @use.define_app_command()
+    @app_commands.describe(
+        item='The item to use',
+        quantity='How many of the item to use. Note that some items may not be usable in bulk.',
+    )
+    async def use_app_command(
+        self,
+        ctx: HybridContext,
+        item: app_commands.Transform[Item, ItemTransformer],
+        quantity: str = '1',
+    ) -> None:
+        transformed = await transform_item_and_quantity(ctx, USE, item, quantity)
+        await ctx.full_invoke(item_and_quantity=transformed)
+
+    @command(aliases={'rm', 'dispose', 'deactivate', 'discard'}, hybrid=True)
     @simple_cooldown(2, 10)
     @user_max_concurrency(1)
     @lock_transactions
@@ -680,6 +747,14 @@ class Transactions(Cog):
             await item.remove(ctx)
 
         await ctx.thumbs()
+
+    @shop.autocomplete('item')
+    @remove.autocomplete('item')
+    async def item_autocomplete(self, _, current: str) -> list[app_commands.Choice]:
+        return [
+            app_commands.Choice(name=item.name, value=item.key)
+            for item in query_collection_many(Items, Item, current)
+        ]
 
     @command(aliases={'give', 'gift', 'donate', 'pay'})
     @simple_cooldown(1, 30)
@@ -804,7 +879,7 @@ class Transactions(Cog):
 
         yield embed, view, EDIT
 
-    @command(aliases={'recipe', 'rc'})
+    @command(aliases={'recipe', 'rc'}, hybrid=True)
     @simple_cooldown(1, 4)
     @user_max_concurrency(1)
     async def recipes(self, ctx: Context, *, recipe: query_recipe = None):
@@ -816,6 +891,13 @@ class Transactions(Cog):
         yield view.build_embed(), view, REPLY
 
         await view.wait()
+
+    @recipes.autocomplete('recipe')
+    async def recipe_autocomplete(self, _, current: str) -> list[app_commands.Choice]:
+        return [
+            app_commands.Choice(name=recipe.name, value=recipe.key)
+            for recipe in query_collection_many(Recipes, Recipe, current)
+        ]
 
     @command(aliases={'cr', 'make'})
     @simple_cooldown(1, 10)
@@ -897,7 +979,7 @@ class Transactions(Cog):
     @command(aliases={'pres', 'pr', 'prest', 'rebirth'}, hybrid=True)
     @simple_cooldown(1, 10)
     async def prestige(self, ctx: Context) -> CommandResponse:
-        """Prestige and start over with a brand-new wallet, bank, and inventory in exchange for long-term multipliers."""
+        """Prestige and start over in exchange for long-term multipliers."""
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = await record.inventory_manager.wait()
 

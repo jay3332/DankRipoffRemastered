@@ -517,6 +517,7 @@ def define_app_command_impl(
             ctx.full_invoke = invoker
             return await func(slf, ctx, *args, **kwds)
 
+        wrapper.__globals__.update(func.__globals__)  # type: ignore
         source.app_command = cls(
             name=source.name,
             description=source.short_doc,
@@ -524,6 +525,10 @@ def define_app_command_impl(
             callback=wrapper,
             **kwargs,
         )
+
+        @source.app_command.error
+        async def on_error(_, interaction: TypedInteraction, error: BaseException) -> None:
+            interaction.client.dispatch('command_error', interaction._baton, error)
 
     return decorator
 
