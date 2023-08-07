@@ -273,7 +273,7 @@ class PetsCog(Cog, name='Pets'):
         level = 0 if entry is None else entry.level
         embed.add_field(name=f'\U0001f634 Passive Abilities', value=pet.benefit(level), inline=False)
         if abilities := pet.abilities:
-            embed.add_field(name=f'{Emojis.bolt} Active Abilities', value=abilities(level), inline=False)
+            embed.add_field(name=f'\U0001f3c3\u200d\u2642\ufe0f Active Abilities', value=abilities(level), inline=False)
 
         if entry is None:
             embed.description += '\n*You have not discovered this pet yet.*'
@@ -494,7 +494,7 @@ class HuntTargetButton(discord.ui.Button['HuntView']):
             await pets.add_pet(self.pet)
             embed.add_field(name=f'\U0001f634 Passive Abilities', value=self.pet.benefit(0), inline=False)
             if abilities := self.pet.abilities:
-                embed.add_field(name=f'{Emojis.bolt} Active Abilities', value=abilities(0), inline=False)
+                embed.add_field(name=f'\U0001f3c3\u200d\u2642\ufe0f Active Abilities', value=abilities(0), inline=False)
 
         embed.set_footer(text=f'Use {self.view.ctx.clean_prefix}pets info {self.pet.key} to see more details!')
         await itx.response.edit_message(view=self.view)
