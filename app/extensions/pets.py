@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import random
 import time
+from math import ceil
 from typing import Final, Iterator, TYPE_CHECKING
 
 import aiohttp
@@ -15,8 +16,9 @@ from discord.utils import format_dt
 
 from app.core import Cog, Context, command, group, simple_cooldown
 from app.core.helpers import EDIT, REPLY, cooldown_message, user_max_concurrency
-from app.data.items import Item, ItemType, NetMetadata
+from app.data.items import Item, ItemType, Items, NetMetadata
 from app.data.pets import Pet, Pets
+from app.util import converters
 from app.util.common import (
     image_url_from_emoji,
     ordinal,
@@ -25,12 +27,13 @@ from app.util.common import (
     query_collection_many,
     walk_collection,
 )
+from app.util.converters import get_amount, try_query_item
 from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginator
 from app.util.views import UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.database import PetRecord, UserRecord
+    from app.database import PetManager, PetRecord, UserRecord
     from app.util.types import CommandResponse, TypedInteraction
 
     query_pet = Pet
@@ -450,8 +453,23 @@ class PetsCog(Cog, name='Pets'):
 
     @command(aliases={'fe'}, hybrid=True)
     @app_commands.describe(pet='The pet to feed.')
-    async def feed(self, ctx: Context, *, pet: query_pet) -> CommandResponse:
-        return 'todo', REPLY  # TODO
+    async def feed(self, ctx: Context, *, pet: query_pet = None) -> CommandResponse:
+        """Feed a pet food to give it energy."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.inventory_manager.wait()
+        pets = await record.pet_manager.wait()
+        if pet is not None and pet not in pets.cached:
+            return f'You have not discovered a **{pet.display}** yet.', REPLY
+        if not pets.equipped_count:
+            equip_mention = ctx.bot.tree.get_app_command('pets equip').mention
+            return (
+                f'You have no equipped pets to feed. Equip a pet using {equip_mention}, then use this command again!',
+                REPLY,
+            )
+
+        entry = next(entry for entry in pets.cached.values() if entry.equipped) if pet is None else pets.cached[pet]  # type: ignore
+        view = FeedView(ctx, record, entry)
+        return *view.make_embeds(), view, REPLY
 
     @pets_info.autocomplete('pet')
     @pets_equip.autocomplete('pet')
@@ -577,6 +595,234 @@ def _format_entry(entry: PetRecord) -> str:
         f'{expansion.first} \u2728 {_format_level_data(entry)}\n'
         f'{expansion.last} {Emojis.bolt} {entry.energy:,}/{entry.max_energy:,} Energy {exhaustion}'
     )
+
+
+class FeedPetButton(discord.ui.Button['FeedView']):
+    def __init__(self, entry: PetRecord) -> None:
+        super().__init__(emoji=entry.pet.emoji, style=discord.ButtonStyle.secondary, row=0, label=entry.pet.name)
+        self.entry = entry
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        if self.view.entry == self.entry:
+            return await interaction.response.defer()
+
+        self.view.entry = self.entry
+        self.view.update_view()
+        await interaction.response.edit_message(embeds=self.view.make_embeds(), view=self.view)
+
+
+class SearchItemModal(discord.ui.Modal):
+    item = discord.ui.TextInput(
+        label='Which item do you want to feed to your pet?',
+        placeholder='Enter an item name... (e.g. "fish")',
+        min_length=2,
+        max_length=32,
+        required=True,
+    )
+
+    def __init__(self, parent: FeedView) -> None:
+        super().__init__(title='Feed Item')
+        self.parent = parent
+
+    async def on_submit(self, interaction: TypedInteraction, /) -> None:
+        if item := try_query_item(self.item.value):
+            # use linear search instead of binary search in case item quantities change, which would change the sort key
+            try:
+                self.parent.index = self.parent.items.index(item)
+            except ValueError:
+                return await interaction.response.send_message(
+                    f'{item.display_name} is not a feedable item.', ephemeral=True,
+                )
+            self.parent.update_view()
+            return await interaction.response.edit_message(embeds=self.parent.make_embeds(), view=self.parent)
+
+        await interaction.response.send_message(
+            f'Could not find an item named "{self.item.value}".', ephemeral=True,
+        )
+
+
+class FeedCustomModal(discord.ui.Modal):
+    quantity = discord.ui.TextInput(
+        label='How many of this item do you want to feed?',
+        placeholder='Enter a quantity, e.g. a number like "5" or "half"...',
+        min_length=1,
+        max_length=7,
+        required=True,
+    )
+
+    def __init__(self, parent: FeedView) -> None:
+        super().__init__(timeout=60, title='Feed Item')
+        self.parent = parent
+
+    async def on_submit(self, interaction: TypedInteraction, /) -> None:
+        max = self.parent.max
+        item = self.parent.current_item
+        owned = self.parent.inventory.cached.quantity_of(item)
+        try:
+            quantity = get_amount(owned, 1, max, self.quantity.value)
+        except converters.PastMinimum:
+            raise BadArgument(f'You must feed at least one {item.display_name}.')
+        except converters.ZeroQuantity:
+            raise BadArgument(f"You don't have any {item.get_display_name(plural=True)} item anymore.")
+        except converters.NotAnInteger:
+            raise BadArgument(
+                f'Invalid quantity {self.quantity.value!r}. Make sure you pass in a positive integer.',
+            )
+        except converters.NotEnough:
+            raise BadArgument(f'You only have {item.get_sentence_chunk(owned, bold=False)}.')
+        except ZeroDivisionError:
+            raise BadArgument('Very funny, division by 0.')
+
+        await self.parent.do_feed(interaction, quantity)
+
+
+class FeedView(UserView):
+    def __init__(self, ctx: Context, record: UserRecord, entry: PetRecord) -> None:
+        super().__init__(ctx.author, timeout=60)
+        self.ctx = ctx
+        self.inventory = record.inventory_manager
+        self.pets = record.pet_manager
+        self.entry: PetRecord = entry
+        self.items: list[Item] = sorted(
+            (item for item in Items.all() if item.energy),
+            key=lambda item: (self.inventory.cached.quantity_of(item) <= 0, item.energy),
+        )
+        self.index: int = 0
+        self._color = Colors.primary
+
+        if self.pets.equipped_count <= 1:
+            self.remove_item(self.select_pet)  # type: ignore
+
+        elif self.pets.equipped_count < 3:
+            self.remove_item(self.select_pet)  # type: ignore
+            for entry in filter(lambda pet: pet.equipped, self.pets.cached.values()):
+                self.add_item(FeedPetButton(entry))
+        self.update_view()
+
+    @property
+    def current_item(self) -> Item:
+        return self.items[self.index % len(self.items)]
+
+    @property
+    def max(self) -> int:
+        energy_needed = self.entry.max_energy - self.entry.energy
+        return min(
+            ceil(energy_needed / self.current_item.energy),
+            self.inventory.cached.quantity_of(self.current_item),
+        )
+
+    def update_view(self) -> None:
+        for child in self.children:
+            if isinstance(child, FeedPetButton):
+                selected = child.entry == self.entry
+                child.style = discord.ButtonStyle.primary if selected else discord.ButtonStyle.secondary
+                child.label = child.entry.pet.name
+
+                if child.entry.energy >= child.entry.max_energy:
+                    child.label += ' [FULL]'
+                    child.disabled = True
+
+        next_item = self.items[(self.index + 1) % len(self.items)]
+        self.next.emoji = next_item.emoji
+        self.next.label = f'Next ({next_item.name})'
+
+        max = self.max
+        self.feed_one.disabled = max <= 0
+        self.feed_max.disabled = single = max <= 1
+        self.feed_custom.disabled = single
+        if max > 1:
+            self.feed_max.label = f'Feed Max ({max:,})'
+
+    def make_embeds(self) -> list[discord.Embed]:
+        pet_embed = discord.Embed(color=self._color)
+        pet_embed.set_author(name=f'{self.ctx.author.name}: Feeding', icon_url=self.ctx.author.avatar)
+        pet_embed.set_thumbnail(url=image_url_from_emoji(str(self.entry.pet.emoji)))
+        pet_embed.description = (
+            f'You are feeding your **{self.entry.pet.display}**.\n'
+            'Use the buttons below to find food to feed your pet.'
+        )
+        ratio = self.entry.energy / self.entry.max_energy
+        pet_embed.add_field(
+            name=f'{Emojis.bolt} {self.entry.energy:,}/{self.entry.max_energy:,} Energy',
+            value=f'{progress_bar(ratio, length=8)}  {ratio:.1%}',
+        )
+
+        quantity = self.inventory.cached.quantity_of(self.current_item)
+        item_embed = discord.Embed(color=self._color, timestamp=self.ctx.now, title=self.current_item.display_name)
+        item_embed.set_thumbnail(url=image_url_from_emoji(str(self.current_item.emoji)))
+        item_embed.description = self.current_item.description
+        item_embed.add_field(
+            name='Energy',
+            value=(
+                f'{Emojis.bolt} **+{self.current_item.energy:,}** each'
+                + (
+                    f'\n{Emojis.bolt} **+{self.current_item.energy * quantity:,}** total'
+                    if quantity > 1 else ''
+                )
+            ),
+        )
+        item_embed.add_field(name='Quantity', value=f'**{quantity:,}** owned in inventory')
+        return [pet_embed, item_embed]
+
+    @discord.ui.select(placeholder='Select a pet to feed', row=0)
+    async def select_pet(self, interaction: TypedInteraction, select: discord.ui.Select) -> None:
+        self.entry = next(pet for pet in self.pets.cached if pet.key == select.values[0])
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label='Previous', emoji=Emojis.Arrows.previous, style=discord.ButtonStyle.secondary, row=1)
+    async def previous(self, interaction: TypedInteraction, _) -> None:
+        self.index -= 1
+        self.update_view()
+        await interaction.response.edit_message(embeds=self.make_embeds(), view=self)
+
+    @discord.ui.button(label='Next', style=discord.ButtonStyle.secondary, row=1)
+    async def next(self, interaction: TypedInteraction, _) -> None:
+        self.index += 1
+        self.update_view()
+        await interaction.response.edit_message(embeds=self.make_embeds(), view=self)
+
+    @discord.ui.button(label='Change Item', emoji='\U0001f50e', style=discord.ButtonStyle.secondary, row=1)
+    async def change_item(self, interaction: TypedInteraction, _) -> None:
+        await interaction.response.send_modal(SearchItemModal(self))
+
+    async def do_feed(self, interaction: TypedInteraction, quantity: int) -> None:
+        async with self.ctx.db.acquire() as conn:
+            await self.inventory.add_item(self.current_item, -quantity, connection=conn)
+            await self.entry.add_energy(energy := self.current_item.energy * quantity, connection=conn)
+
+            # Give 1 XP for every 3 energy fed
+            exp = energy // 3
+            previous_level = self.entry.level
+            if random.random() < (energy / 3) % 1:
+                exp += 1
+            await self.entry.add(exp=exp, connection=conn)
+            new_level = self.entry.level
+
+        self.update_view()
+        await interaction.response.edit_message(embeds=self.make_embeds(), view=self)
+        await interaction.followup.send(
+            f'You fed your **{self.entry.pet.display}** {self.current_item.get_sentence_chunk(quantity)}.\n'
+            f'{Emojis.bolt} **+{energy:,}** {Emojis.arrow} {self.entry.energy:,} Energy'
+            + (f'\n\u2728 **+{exp:,} XP**' if exp > 0 else '')
+            + (
+                f'\n{Emojis.Expansion.standalone} \U0001f52e **LEVEL UP!** **{previous_level}** {Emojis.arrow} **{new_level}**'
+                if new_level > previous_level
+                else f' {Emojis.arrow} {self.entry.exp:,}/{self.entry.total_exp:,} XP'
+            ),
+            ephemeral=True
+        )
+
+    @discord.ui.button(label='Feed One', emoji=Emojis.bolt, style=discord.ButtonStyle.blurple, row=2)
+    async def feed_one(self, interaction: TypedInteraction, _) -> None:
+        await self.do_feed(interaction, 1)
+
+    @discord.ui.button(label='Feed Max', emoji=Emojis.max_bolt, style=discord.ButtonStyle.blurple, row=2)
+    async def feed_max(self, interaction: TypedInteraction, _) -> None:
+        await self.do_feed(interaction, self.max)
+
+    @discord.ui.button(label='Feed Custom', style=discord.ButtonStyle.blurple, row=2)
+    async def feed_custom(self, interaction: TypedInteraction, _) -> None:
+        await interaction.response.send_modal(FeedCustomModal(self))
 
 
 setup = PetsCog.simple_setup
