@@ -302,16 +302,19 @@ class PetsCog(Cog, name='Pets'):
         if entry.equipped:
             ratio = entry.energy / entry.max_energy
             embed.add_field(
-                name=f'{Emojis.bolt} **{entry.energy:,}**/{entry.max_energy:,} Energy',
-                value=(
-                    f'{progress_bar(ratio, length=8)}  {ratio:.1%}\n'
+                name=(
+                    f'{Emojis.bolt} **{entry.energy:,}**/{entry.max_energy:,} Energy'
                     + (
-                        f'\u23f0 Runs out {format_dt(entry.exhausts_at, "R")}'
-                        if entry.energy
-                        else (
-                            '\n\u26a0\ufe0f **No energy left!** Feed this pet to restore energy.\n'
-                            '*Pet abilities only apply when they have enough energy.*'
-                        )
+                        f' (\u23f0 Runs out {format_dt(entry.exhausts_at, "R")})'
+                        if entry.energy > 0 else ''
+                    )
+                ),
+                value=(
+                    f'{progress_bar(ratio, length=8)}  {ratio:.1%}'
+                    + (
+                        '\n\n\u26a0\ufe0f **No energy left!** Feed this pet to restore energy.\n'
+                        '*Pet abilities only apply when they have enough energy.*'
+                        if entry.energy <= 0 else ''
                     )
                 ),
             )
