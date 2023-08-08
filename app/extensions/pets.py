@@ -741,8 +741,7 @@ class FeedView(UserView):
         self.feed_one.disabled = max <= 0
         self.feed_max.disabled = single = max <= 1
         self.feed_custom.disabled = single
-        if max > 1:
-            self.feed_max.label = f'Feed Max ({max:,})'
+        self.feed_max.label = f'Feed Max ({max:,})' if max > 1 else 'Feed Max'
 
     def make_embeds(self) -> list[discord.Embed]:
         pet_embed = discord.Embed(color=self._color)
