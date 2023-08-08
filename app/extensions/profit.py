@@ -1379,7 +1379,12 @@ class Profit(Cog):
         """Claim honey from your bee."""
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = await record.inventory_manager.wait()
-        await inventory.add_item(item := Items.jar_of_honey)
+
+        bee = record.pet_manager.cached[Pets.bee]
+        async with ctx.db.acquire() as conn:
+            await bee.add_energy(-60, connection=conn)
+            await inventory.add_item(item := Items.jar_of_honey, connection=conn)
+
         return (
             f'{Pets.bee.emoji} Your **bee** produces {item.get_sentence_chunk()} and stores it in your inventory.',
             REPLY,
@@ -1395,6 +1400,12 @@ class Profit(Cog):
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = await record.inventory_manager.wait()
         await inventory.add_item(item := Items.milk)
+
+        cow = record.pet_manager.cached[Pets.bee]
+        async with ctx.db.acquire() as conn:
+            await cow.add_energy(-100, connection=conn)
+            await inventory.add_item(item := Items.milk, connection=conn)
+
         return (
             f'{Pets.cow.emoji} Your **cow** produces {item.get_sentence_chunk()} and stores it in your inventory.',
             REPLY,
