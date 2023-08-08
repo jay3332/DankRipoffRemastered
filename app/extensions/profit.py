@@ -37,7 +37,7 @@ from app.util.views import AnyUser, StaticCommandButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.database import PetRecord, UserRecord
+    from app.database import UserRecord
     from app.util.types import CommandResponse, TypedInteraction
 
 
@@ -142,7 +142,7 @@ def active_pet(pet: Pet, energy: int, verb: str):
         pets = await record.pet_manager.wait()
         entry = pets.get_active_pet(pet)
         if not entry:
-            if pet in pets.cached:
+            if entry := pets.cached.get(pet):
                 if not entry.equipped:
                     raise BadArgument(
                         f'You have a **{pet.display}**, but it is not equipped. '
