@@ -500,6 +500,7 @@ class Bot(commands.Bot):
             ' '.join(command),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            **({'env': {'PGPASSWORD': DatabaseConfig.password}} if DatabaseConfig.password else {}),
         )
         stdout, stderr = await proc.communicate()
         if stdout:
