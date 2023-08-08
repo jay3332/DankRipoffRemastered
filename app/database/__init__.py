@@ -738,12 +738,12 @@ class PetRecord:
 
     async def set_energy(self, energy: int, *, connection: asyncpg.Connection | None = None) -> None:
         query = """
-                UPDATE pets SET last_recorded_energy = $2, last_feed = CURRENT_TIMESTAMP
-                WHERE user_id = $1
+                UPDATE pets SET last_recorded_energy = $3, last_feed = CURRENT_TIMESTAMP
+                WHERE user_id = $1 AND pet = $2
                 RETURNING last_feed;
                 """
 
-        self.last_feed = await (connection or self.db).fetchval(query, self.user_id, energy)
+        self.last_feed = await (connection or self.db).fetchval(query, self.user_id, self.pet.key, energy)
         self.last_recorded_energy = energy
 
     async def add_energy(self, energy: int, *, connection: asyncpg.Connection | None = None) -> None:
