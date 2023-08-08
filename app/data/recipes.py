@@ -165,3 +165,17 @@ class Recipes:
             Items.glass_of_water: 1,
         },
     )
+
+    cheese = Recipe(
+        key="cheese",
+        name="Cheese",
+        description=Items.cheese.description,
+        emoji=Items.cheese.emoji,
+        price=1500,
+        ingredients={
+            Items.milk: 8,
+        },
+        result={
+            Items.cheese: 1,
+        },
+    )
