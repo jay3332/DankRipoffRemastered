@@ -303,7 +303,9 @@ class Profit(Cog):
         if begging_skill := skills.get_skill('begging'):
             multiplier += (extra := begging_skill.points * 0.02)
             item_chance += begging_skill.points * 0.005
-            multiplier_text.append(f'{begging_skill.into_skill().display}: {Emojis.coin} **+{extra * base:,.0f}**')
+            multiplier_text.append(
+                f'{begging_skill.into_skill().display} Skill: {Emojis.coin} **+{extra * base:,.0f}**',
+            )
 
         pets = await record.pet_manager.wait()
         if dog := pets.get_active_pet(Pets.dog):
