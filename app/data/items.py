@@ -440,7 +440,7 @@ class Items:
         if mouse := record.pet_manager.get_active_pet(Pets.mouse):
             multiplier = 0.05 + mouse.level * 0.005
             gain += (extra := round(gain * multiplier))
-            content += f'\n*Your **{Pets.mouse.display}** gave you extra **{extra:.02%}** EXP multiplier!*'
+            content += f'\n*Your **{Pets.mouse.display}** gave you extra **{extra:.04%}** EXP multiplier!*'
 
         # 0.1% to 1% per slice
         await record.add(exp_multiplier=gain)
