@@ -553,9 +553,8 @@ class CropManager:
         async with self._record.db.acquire() as conn:
             for x, y in coordinates:
                 info = self.get_crop_info(x, y)
-                time = self.get_harvest_time(info.crop)
                 if info is None or info.crop is None or (
-                    info.last_harvest + datetime.timedelta(seconds=time) > discord.utils.utcnow()
+                    info.last_harvest + datetime.timedelta(seconds=self.get_harvest_time(info.crop)) > discord.utils.utcnow()
                 ):
                     continue
 
