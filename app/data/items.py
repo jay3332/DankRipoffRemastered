@@ -432,14 +432,19 @@ class Items:
 
             return
 
-        # 0.1% to 1% per slice
         gain = random.uniform(0.001 * quantity, 0.01 * quantity)
-        await record.add(exp_multiplier=gain)
-
-        await original.edit(content=dedent(f'''
+        content = dedent(f'''
             {item.emoji} You ate {readable} and gained a **{gain:.02%}** EXP multiplier.
             You now have a **{record.base_exp_multiplier:.02%}** base EXP multiplier.
-        '''))
+        ''')
+        if mouse := record.pet_manager.get_active_pet(Pets.mouse):
+            multiplier = 0.05 + mouse.level * 0.005
+            gain += (extra := round(gain * multiplier))
+            content += f'\n*Your **{Pets.mouse.display}** gave you extra **{extra:.02%}** EXP multiplier!*'
+
+        # 0.1% to 1% per slice
+        await record.add(exp_multiplier=gain)
+        await original.edit(content=content)
 
     cigarette = Item(
         type=ItemType.tool,
@@ -1358,6 +1363,30 @@ class Items:
         sell=500,
         rarity=ItemRarity.uncommon,
         energy=5,
+    )
+
+    jar_of_honey = Item(
+        type=ItemType.miscellaneous,
+        key='jar_or_honey',
+        name='Jar of Honey',
+        plural='Jars of Honey',
+        emoji='\U0001f36f',
+        description='A jar of honey. Obtainable from bees.',
+        sell=700,
+        rarity=ItemRarity.uncommon,
+        energy=5,
+    )
+
+    milk = Item(
+        type=ItemType.miscellaneous,
+        key='milk',
+        name='Milk',
+        plural='Milk',
+        emoji='\U0001f95b',
+        description='A glass of milk. Obtainable from cows.',
+        sell=800,
+        rarity=ItemRarity.uncommon,
+        energy=6,
     )
 
     sheet_of_paper = Item(

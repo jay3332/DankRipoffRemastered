@@ -246,6 +246,38 @@ def executor_function(func: Callable[P, R]) -> Callable[P, Awaitable[R]]:
     return wrapper  # type: ignore
 
 
+def expansion_list(entries: Iterable[str]) -> str:
+    """Formats a list into expansion format."""
+    entries = list(entries)
+    emojis = Emojis.Expansion
+
+    if len(entries) == 1:
+        first, *lines = entries[0].splitlines()
+        result = f'{emojis.single} {first}'
+
+        if lines:
+            result += '\n' + '\n'.join(f'{Emojis.space} {line}' for line in lines)
+
+        return result
+
+    result = []
+
+    for i, entry in enumerate(entries):
+        first, *lines = entry.splitlines()
+
+        if i + 1 == len(entries):
+            result.append(f'{emojis.last} {first}')
+            result.extend(f'{Emojis.space} {line}' for line in lines)
+            continue
+
+        emoji = emojis.first if i == 0 else emojis.mid
+
+        result.append(f'{emoji} {first}')
+        result.extend(f'{emojis.ext} {line}' for line in lines)
+
+    return '\n'.join(result)
+
+
 def progress_bar(ratio: float, *, length: int = 8, u200b: bool = True) -> str:
     # noinspection PyTypeChecker
     ratio = min(1, max(0, ratio))

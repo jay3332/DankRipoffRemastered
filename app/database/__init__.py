@@ -536,6 +536,14 @@ class CropManager:
     def get_crop_info(self, x: int, y: int) -> CropInfo:
         return self.cached.get((x, y))
 
+    def get_harvest_time(self, crop: Item[CropMetadata]) -> float:
+        speed_up = 0
+        pets = self._record.pet_manager
+        if bee := pets.get_active_pet(Pets.bee):
+            speed_up += 0.01 + bee.level * 0.004
+
+        return crop.metadata.time * (1 - speed_up)
+
     async def harvest(self, coordinates: list[tuple[int, int]]) -> tuple[dict[tuple[int, int], tuple[Item, int]], dict[Item, int]]:
         level_ups = {}
         harvested = defaultdict(int)
@@ -545,8 +553,9 @@ class CropManager:
         async with self._record.db.acquire() as conn:
             for x, y in coordinates:
                 info = self.get_crop_info(x, y)
+                time = self.get_harvest_time(info.crop)
                 if info is None or info.crop is None or (
-                    info.last_harvest + datetime.timedelta(seconds=info.crop.metadata.time) > discord.utils.utcnow()
+                    info.last_harvest + datetime.timedelta(seconds=time) > discord.utils.utcnow()
                 ):
                     continue
 
@@ -862,6 +871,7 @@ class UserRecord:
             self.data.update(await conn.fetchrow(query, self.user_id))  # TODO: Welcome user if new
             await self.fetch_history(connection=conn)
 
+        await self.pet_manager.wait()  # required for multipliers
         return self
 
     async def fetch_history(self, connection: asyncpg.Connection) -> None:
@@ -922,7 +932,7 @@ class UserRecord:
 
     async def add_coins(self, coins: int, /, *, connection: asyncpg.Connection | None = None) -> int:
         """Adds coins including applying multipliers. Returns the amount of coins added."""
-        coins = round(coins * self.coin_multiplier)
+        coins = round(coins * self.coin_multiplier) if coins > 0 else coins
 
         await self.add(wallet=coins, connection=connection)
         return coins
@@ -1048,6 +1058,23 @@ class UserRecord:
         )
         yield Multiplier(self.prestige * 0.25, f'{Emojis.get_prestige_emoji(self.prestige)} Prestige {self.prestige}')
 
+        pets = self.pet_manager
+        if cat := pets.get_active_pet(Pets.cat):
+            level = cat.level  # Somewhat expensive to calculate, store it first
+            yield Multiplier(0.008 + level * 0.003, f'{Pets.cat.display} (Level {level})')
+
+        if bunny := pets.get_active_pet(Pets.bunny):
+            level = bunny.level
+            yield Multiplier(0.01 + level * 0.005, f'{Pets.bunny.display} (Level {level})')
+
+        if duck := pets.get_active_pet(Pets.duck):
+            level = duck.level
+            yield Multiplier(0.01 + level * 0.003, f'{Pets.duck.display} (Level {level})')
+
+        if cow := pets.get_active_pet(Pets.cow):
+            level = cow.level
+            yield Multiplier(0.02 + level * 0.006, f'{Pets.cow.display} (Level {level})')
+
         if ctx is not None and ctx.guild.id in multiplier_guilds:
             yield Multiplier(0.5, ctx.guild.name, is_global=False)
 
@@ -1065,6 +1092,11 @@ class UserRecord:
             f'{Items.alcohol.emoji} Alcohol',
             expires_at=self.alcohol_expiry,
         )
+
+        pets = self.pet_manager
+        if bird := pets.get_active_pet(Pets.bird):
+            level = bird.level
+            yield Multiplier(0.01 + level * 0.004, f'{Pets.bird.display} (Level {level})')
 
     @property
     def coin_multiplier(self) -> float:

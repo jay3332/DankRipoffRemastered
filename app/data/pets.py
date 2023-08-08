@@ -57,7 +57,7 @@ class Pets:
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.3}% coins from begging\n'
-            f'- +{min(1 + level * 0.4, 50)}% chance to find items while searching'
+            f'- +{1 + level * 0.4}% chance to find items while searching'
         ),
     )
 
@@ -71,7 +71,7 @@ class Pets:
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.2}% weight on finding rarer items when fishing\n'
-            f'- +{1 + level * 0.3}% global XP multiplier'
+            f'- +{0.8 + level * 0.4}% global XP multiplier'
         ),
     )
 
@@ -138,8 +138,8 @@ class Pets:
         energy_per_minute=2,
         max_energy=200,
         benefit=lambda level: (
-            f'- +{2 + level * 0.5}% profit from working\n'
-            f'- +{1 + level * 0.25}% chance to get an Uncommon Crate when claiming hourly crates\n'
+            f'- +{2 + level * 0.5}% profit from working\n'  # TODO
+            f'- +{1 + level * 0.25}% chance to get an Uncommon Crate when claiming hourly crates\n'  # TODO
             f'- +{1 + level * 0.3}% global XP multiplier'
         ),
     )

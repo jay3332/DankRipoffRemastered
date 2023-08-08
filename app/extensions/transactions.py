@@ -25,6 +25,7 @@ from app.core import (
     user_max_concurrency,
 )
 from app.data.items import Item, ItemRarity, ItemType, Items
+from app.data.pets import Pets
 from app.data.recipes import Recipe, Recipes
 from app.util.common import (
     cutoff,
@@ -623,17 +624,31 @@ class Transactions(Cog):
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = record.inventory_manager
 
+        money_back = 0
+        money_back_text = []
+
+        pets = record.pet_manager
+        if hamster := pets.get_active_pet(Pets.hamster):
+            factor = 0.005 + hamster.level * 0.001
+            money_back += round(price * factor)
+            money_back_text.append(
+                f'Your **{Pets.hamster.display}** finds you {Emojis.coin} **{money_back:,}** coins back!',
+            )
+
         async with ctx.db.acquire() as conn:
             await record.add_random_exp(10, 15, chance=0.5, ctx=ctx, connection=conn)
             await record.add_random_bank_space(10, 15, chance=0.5, connection=conn)
 
-            await record.add(wallet=-price, connection=conn)
+            await record.add(wallet=-price + money_back, connection=conn)
             await inventory.add_item(item, quantity, connection=conn)
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
         embed.description = f'You bought {item.get_sentence_chunk(quantity)} for {Emojis.coin} **{price:,}** coins.'
         embed.set_author(name=f'Successful Purchase: {ctx.author}', icon_url=ctx.author.avatar.url)
         embed.set_thumbnail(url=image_url_from_emoji(item.emoji))
+
+        if money_back and money_back_text:
+            embed.add_field(name='Money Back', value='\n'.join(f'- {line}' for line in money_back_text), inline=False)
 
         return embed, REPLY
 

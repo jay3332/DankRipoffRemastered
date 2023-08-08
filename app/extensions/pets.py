@@ -693,22 +693,13 @@ class FeedView(UserView):
         self.index: int = 0
         self._color = Colors.primary
 
-        equipped_pets = filter(lambda pet: pet.equipped, self.pets.cached.values())
+        self._equipped_pets = equipped_pets = [pet for pet in self.pets.cached.values() if pet.equipped]
         if self.pets.equipped_count <= 1:
             self.remove_item(self.select_pet)  # type: ignore
         elif self.pets.equipped_count < 3:
             self.remove_item(self.select_pet)  # type: ignore
             for entry in equipped_pets:
                 self.add_item(FeedPetButton(entry))
-        else:
-            it: discord.ui.Select = self.select_pet  # type: ignore
-            for entry in equipped_pets:
-                it.add_option(
-                    label=entry.pet.name,
-                    description=f'{entry.energy:,}/{entry.max_energy:,} Energy',
-                    value=entry.pet.key,
-                    emoji=entry.pet.emoji,
-                )
 
         self.update_view()
 
@@ -725,6 +716,18 @@ class FeedView(UserView):
         )
 
     def update_view(self) -> None:
+        it: discord.ui.Select = self.select_pet  # type: ignore
+        it.options = [
+            discord.SelectOption(
+                label=entry.pet.name,
+                description=f'{entry.energy:,}/{entry.max_energy:,} Energy',
+                value=entry.pet.key,
+                emoji=entry.pet.emoji,
+                default=entry == self.entry,
+            )
+            for entry in self._equipped_pets
+        ]
+
         for child in self.children:
             if isinstance(child, FeedPetButton):
                 selected = child.entry == self.entry
@@ -768,7 +771,7 @@ class FeedView(UserView):
         quantity = self.inventory.cached.quantity_of(self.current_item)
         item_embed = discord.Embed(color=self._color, timestamp=self.ctx.now, title=self.current_item.display_name)
         item_embed.set_thumbnail(url=image_url_from_emoji(str(self.current_item.emoji)))
-        item_embed.description = self.current_item.description
+        item_embed.description = self.current_item.brief
         item_embed.add_field(
             name='Energy',
             value=(
@@ -807,7 +810,8 @@ class FeedView(UserView):
     async def do_feed(self, interaction: TypedInteraction, quantity: int) -> None:
         async with self.ctx.db.acquire() as conn:
             await self.inventory.add_item(self.current_item, -quantity, connection=conn)
-            await self.entry.add_energy(energy := self.current_item.energy * quantity, connection=conn)
+            energy = min(self.current_item.energy * quantity, self.entry.max_energy - self.entry.energy)
+            await self.entry.add_energy(energy, connection=conn)
 
             # Give 1 XP for every 3 energy fed
             exp = energy // 3

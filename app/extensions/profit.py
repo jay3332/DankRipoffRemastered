@@ -11,6 +11,8 @@ from typing import Any, Generic, Literal, NamedTuple, TypeVar, TYPE_CHECKING
 
 import discord
 from discord import app_commands
+from discord.ext import commands
+from discord.ext.commands import BadArgument
 
 from app.core import (
     BAD_ARGUMENT,
@@ -26,15 +28,16 @@ from app.core import (
 )
 from app.core.helpers import cooldown_message
 from app.data.items import Item, Items
+from app.data.pets import Pet, Pets
 from app.data.skills import RobberyTrainingButton
-from app.util.common import humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar
+from app.util.common import expansion_list, humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
 from app.util.views import AnyUser, StaticCommandButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.database import UserRecord
+    from app.database import PetRecord, UserRecord
     from app.util.types import CommandResponse, TypedInteraction
 
 
@@ -46,7 +49,7 @@ class SearchArea(NamedTuple):
     success_responses: list[str] = []  # We can use a list literal here as these are defined as constants and will never be appended to.
     failure_responses: list[str] = []
     death_responses: list[str] = []
-    items: dict[Item, float] = {}  # Similar situation with list literals
+    items: dict[Item | None, float] = {None: 1}  # Similar situation with list literals
 
 
 class CrimeData(NamedTuple):
@@ -131,6 +134,32 @@ class TriviaQuestion(NamedTuple):
         data['incorrect_answers'] = [unescape(answer) for answer in data['incorrect_answers']]
 
         return cls(**data)
+
+
+def active_pet(pet: Pet, energy: int, verb: str):
+    async def predicate(ctx: Context) -> bool:
+        record = await ctx.db.get_user_record(ctx.author.id)
+        pets = await record.pet_manager.wait()
+        entry = pets.get_active_pet(pet)
+        if not entry:
+            if pet in pets.cached:
+                if not entry.equipped:
+                    raise BadArgument(
+                        f'You have a **{pet.display}**, but it is not equipped. '
+                        f'Equip it with `{ctx.clean_prefix}pets equip {pet.key}`.',
+                    )
+                raise BadArgument(
+                    f'Your **{pet.display}** does not have enough energy to {verb}! '
+                    f'Feed it with `{ctx.clean_prefix}pets feed {pet.key}`.\n'
+                    f'({Emojis.bolt} **{energy:,}** Energy required, but only {Emojis.bolt} {entry.energy} available)',
+                )
+            hunt_mention = ctx.bot.tree.get_app_command('hunt').mention
+            raise BadArgument(
+                f"You don't have a {Pets.bee.display} to produce honey! Hunt for one using {hunt_mention}"
+            )
+        return True
+
+    return commands.check(predicate)
 
 
 class Profit(Cog):
@@ -265,16 +294,35 @@ class Profit(Cog):
             yield '', embed, view, EDIT
             return
 
+        base = random.randint(150, 450)
         multiplier = 1
+        multiplier_text = []
         item_chance = 0.06
 
         skills = await record.skill_manager.wait()
         if begging_skill := skills.get_skill('begging'):
-            multiplier += begging_skill.points * 0.02
+            multiplier += (extra := begging_skill.points * 0.02)
             item_chance += begging_skill.points * 0.005
+            multiplier_text.append(f'{begging_skill.into_skill().display}: {Emojis.coin} **+{extra * base:,.0f}**')
+
+        pets = await record.pet_manager.wait()
+        if dog := pets.get_active_pet(Pets.dog):
+            multiplier += (extra := 0.01 + dog.level * 0.003)
+            multiplier_text.append(f'{dog.pet.display}: {Emojis.coin} **+{extra * base:,.0f}**')
+
+        if cow := pets.get_active_pet(Pets.cow):
+            multiplier += (extra := 0.02 + cow.level * 0.005)
+            multiplier_text.append(f'{cow.pet.display}: {Emojis.coin} **+{extra * base:,.0f}**')
+
+        if record.coin_multiplier > 1:
+            extra = record.coin_multiplier - 1
+            multiplier_mention = ctx.bot.tree.get_app_command('multiplier').mention
+            multiplier_text.append(
+                f'+{extra:.1%} Coin Multiplier ({multiplier_mention}): {Emojis.coin} **+{extra * base:,.0f}**',
+            )
 
         async with ctx.db.acquire() as conn:
-            profit = await record.add_coins(random.randint(150, 450) * multiplier, connection=conn)
+            profit = await record.add_coins(base * multiplier, connection=conn)
             message = f'{Emojis.coin} **{profit:,}**'
 
             if random.random() < item_chance:
@@ -287,6 +335,11 @@ class Profit(Cog):
         embed.description = self._capitalize_first(
             random.choice(self.BEG_SUCCESS_MESSAGES).format(person, message)
         )
+        if multiplier_text:
+            embed.add_field(
+                name='Breakdown',
+                value=f'{Emojis.coin} **+{base:,.0f}** (base profit)\n' + expansion_list(multiplier_text),
+            )
 
         yield '', embed, view, EDIT
         return
@@ -388,6 +441,7 @@ class Profit(Cog):
                 'Not only do you stink now, but you found absolutely nothing in the trash can.',
             ],
             items={
+                None: 0.94,
                 Items.stick: 0.04,
                 Items.cheese: 0.02,
             }
@@ -410,7 +464,9 @@ class Profit(Cog):
                 'You were held at gunpoint for driving a hijacked car. Reluctant to comply, you were shot and killed by the police.',
             ],
             items={
+                None: 0.97,
                 Items.banknote: 0.03,
+                Items.key: 0.03,
             },
         ),
         'bank': SearchArea(
@@ -430,6 +486,7 @@ class Profit(Cog):
                 'You were caught breaking into the bank. You were shot and killed by the police.',
             ],
             items={
+                None: 0.85,
                 Items.banknote: 0.15,
             },
         ),
@@ -458,6 +515,7 @@ class Profit(Cog):
                 'You punctured an artery on the broken window and bled out soon after.',
             ],
             items={
+                None: 0.91,
                 Items.padlock: 0.06,
                 Items.banknote: 0.03,
             },
@@ -512,7 +570,7 @@ class Profit(Cog):
     async def search(self, ctx: Context):
         """Search for coins."""
         view: SearchView[SearchArea] = SearchView(ctx, random.sample(list(self.SEARCH_AREAS), 3), self.SEARCH_AREAS)
-        yield 'Where would you like to search?', view, REPLY
+        yield '\U0001f50d Where would you like to search?', view, REPLY
 
         await view.wait()
         if not view.choice:
@@ -526,6 +584,17 @@ class Profit(Cog):
         embed = discord.Embed(timestamp=ctx.now)
         embed.set_author(name=f'Search: {ctx.author}', icon_url=ctx.author.avatar.url)
         embed.set_footer(text=f'Search area: {name}')
+
+        accumulated = 0
+        weights = choice.items.copy()
+        pets = await record.pet_manager.wait()
+        if dog := pets.get_active_pet(Pets.dog):
+            accumulated += 0.01 + dog.level * 0.004
+
+        if mouse := pets.get_active_pet(Pets.mouse):
+            accumulated += 0.01 + mouse.level * 0.004
+
+        weights[None] *= 1 - accumulated
 
         cont = discord.ui.View(timeout=120)
         cont.add_item(StaticCommandButton(label='/beg', command=self.beg))
@@ -550,15 +619,17 @@ class Profit(Cog):
             yield embed, cont, REPLY
             return
 
+        gain = random.randint(choice.minimum, choice.maximum)
+        if cow := pets.get_active_pet(Pets.cow):
+            gain += gain * (0.02 + cow.level * 0.005)
+
         async with ctx.db.acquire() as conn:
-            profit = await record.add_coins(random.randint(choice.minimum, choice.maximum), connection=conn)
+            profit = await record.add_coins(gain, connection=conn)
             message = f'{Emojis.coin} **{profit:,}**'
 
-            for item, chance in choice.items.items():
-                if random.random() < chance:
-                    message += f' and {item.get_sentence_chunk(1)}'
-                    await record.inventory_manager.add_item(item, 1, connection=conn)
-                    break
+            if item := random.choices(list(weights), weights=list(weights.values()))[0]:
+                message += f' and {item.get_sentence_chunk(1)}'
+                await record.inventory_manager.add_item(item, 1, connection=conn)
 
         embed.colour = Colors.success
         embed.add_field(name='Profit!', value=random.choice(choice.success_responses).format(message))
@@ -723,8 +794,13 @@ class Profit(Cog):
             yield embed, cont, REPLY
             return
 
+        pets = await record.pet_manager.wait()
+        gain = random.randint(choice.minimum, choice.maximum)
+        if cow := pets.get_active_pet(Pets.cow):
+            gain += gain * (0.02 + cow.level * 0.005)
+
         async with ctx.db.acquire() as conn:
-            profit = await record.add_coins(random.randint(choice.minimum, choice.maximum), connection=conn)
+            profit = await record.add_coins(gain, connection=conn)
             message = [f'{Emojis.coin} **{profit:,}**']
 
             if random.random() < choice.item_chance:
@@ -739,7 +815,7 @@ class Profit(Cog):
 
         yield embed, cont, REPLY
 
-    FISH_CHANCES = {
+    FISH_CHANCES: dict[Item | None, float] = {
         None: 1,
         Items.fish: 0.4,
         Items.sardine: 0.25,
@@ -755,7 +831,7 @@ class Profit(Cog):
         Items.vibe_fish: 0.00025,
     }
 
-    FISH_CHANCES_WITH_BAIT = {
+    FISH_CHANCES_WITH_BAIT: dict[Item | None, float] = {
         None: 1,
         Items.fish: 0.4,
         Items.sardine: 0.25,
@@ -808,6 +884,13 @@ class Profit(Cog):
         else:
             mapping = self.FISH_CHANCES
 
+        mapping = mapping.copy()
+        pets = await record.pet_manager.wait()
+        if cat := pets.get_active_pet(Pets.cat):
+            extra = 0.01 + cat.level * 0.002
+            for item in self.RARE_FISH:
+                mapping[item] += extra
+
         await record.add_random_exp(12, 18, chance=0.8, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.6)
 
@@ -825,12 +908,15 @@ class Profit(Cog):
             message = random.choice(self.FISHING_PROMPTS)
 
             yield (
-                f'Looks like one of the fish you caught was pretty heavy! Type `{insert_random_u200b(message)}` to wind up your fishing pole before it breaks!',
+                f'Looks like one of the fish you caught was pretty heavy! Type `{insert_random_u200b(message)}` to '
+                f'wind up your fishing pole before it breaks!',
                 EDIT,
             )
 
             try:
-                response = await ctx.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=10)
+                response = await ctx.bot.wait_for(
+                    'message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=10,
+                )
                 initial = "You failed to wind up your fishing pole"
 
             except asyncio.TimeoutError:
@@ -843,7 +929,10 @@ class Profit(Cog):
                 if random.random() < 0.15:
                     await record.make_dead(reason='a fish biting your head off')
 
-                    yield f'{initial}, and the fish jumped out of the water and bit your head off. You died, and also lost your fishing pole.', REPLY
+                    yield (
+                        f'{initial}, and the fish jumped out of the water and bit your head off. '
+                        f'You died, and also lost your fishing pole.'
+                    ), REPLY
                     return
 
                 yield f'{initial}, and your fishing pole snapped in half. Nice one.', REPLY
@@ -899,7 +988,12 @@ class Profit(Cog):
             yield f'You need {Items.shovel.get_sentence_chunk(1)} to dig.', BAD_ARGUMENT
             return
 
-        mapping = shovel.metadata
+        mapping = shovel.metadata.copy()
+        pets = await record.pet_manager.wait()
+        if hamster := pets.get_active_pet(Pets.hamster):
+            extra = 0.01 + hamster.level * 0.004
+            for item in self.RARE_DIG_ITEMS:
+                mapping[item] += extra
 
         items = random.choices(list(mapping), weights=list(mapping.values()), k=7)
         items = {item: items.count(item) for item in set(items) if item is not None}
@@ -936,7 +1030,11 @@ class Profit(Cog):
                 if random.random() < 0.15:
                     await record.make_dead(reason='being buried alive')
 
-                    yield f'{initial}, and the mound of dirt you have dug up beforehand collapses in on you, burying yourself alive. You suffocate to death.', REPLY
+                    yield (
+                        f'{initial}, and the mound of dirt you have dug up beforehand collapses in on you, '
+                        f'burying yourself alive. You suffocate to death.',
+                        REPLY,
+                    )
                     return
 
                 yield f'{initial}. You try your best to dig the item up, but your shovel suddenly snaps in half! Whoops.', REPLY
@@ -1272,6 +1370,36 @@ class Profit(Cog):
 
         return embed, REPLY
 
+    @command(aliases={'hon', 'bee'}, hybrid=True)
+    @database_cooldown(3600)
+    @user_max_concurrency(1)
+    @cooldown_message('Your bee needs time to make more honey!')
+    @active_pet(Pets.bee, energy=60, verb='produce honey')
+    async def honey(self, ctx: Context) -> CommandResponse:
+        """Claim honey from your bee."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+        await inventory.add_item(item := Items.jar_of_honey)
+        return (
+            f'{Pets.bee.emoji} Your **bee** produces {item.get_sentence_chunk()} and stores it in your inventory.',
+            REPLY,
+        )
+
+    @command(aliases={'cow', 'mk'}, hybrid=True)
+    @database_cooldown(3600)
+    @user_max_concurrency(1)
+    @cooldown_message('Your cow needs time to make more milk!')
+    @active_pet(Pets.cow, energy=100, verb='produce milk')
+    async def milk(self, ctx: Context) -> CommandResponse:
+        """Claim milk from your cow."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+        await inventory.add_item(item := Items.milk)
+        return (
+            f'{Pets.cow.emoji} Your **cow** produces {item.get_sentence_chunk()} and stores it in your inventory.',
+            REPLY,
+        )
+
     def store_rob(self, ctx: Context, victim: AnyUser, amount: int) -> RobData:
         self._recent_robs[victim.id] = entry = RobData(
             timestamp=ctx.utcnow(), robbed_by=ctx.author, victim=victim, amount=amount,
@@ -1352,6 +1480,18 @@ class Profit(Cog):
 
             yield f'{Emojis.loading} Robbing {user.name}...', REPLY
             await asyncio.sleep(random.uniform(1.5, 3.5))
+
+            their_pets = await their_record.pet_manager.wait()
+            if bee := their_pets.get_active_pet(Pets.bee):
+                if random.random() < 0.02 + bee.level * 0.0025:
+                    fine = record.wallet * random.uniform(0.05, 0.2)
+                    await record.add(wallet=-fine)
+
+                    yield (
+                        f'{Pets.bee.emoji} Ouch! You were stung by {user.name}\'s pet **bee**!\n'
+                        f'Stunned, the police caught you and fined you {Emojis.coin} **{fine:,}**.'
+                    )
+                    return
 
             padlock_worked = False
 

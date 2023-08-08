@@ -362,8 +362,9 @@ class Farming(Cog):
         lower, upper = crop.metadata.count
         count = f'x{lower:,}' if lower == upper else f'x{lower:,} - x{upper:,}'
 
+        harvest_time = manager.get_harvest_time(crop)
         embed.add_field(name='Crop Information', value=dedent(f"""
-            **Harvesting Time:** {humanize_duration(crop.metadata.time)}
+            **Harvesting Time:** {humanize_duration(harvest_time)}
             **Harvesting Quantity:** {count}
             **Harvests:** {crop.metadata.item.get_display_name(bold=True)}
         """))
@@ -373,7 +374,7 @@ class Farming(Cog):
 
             info = manager.cached[coordinate_or_crop]
             level, xp, max_xp = info.level_data
-            next_harvest = info.last_harvest + timedelta(seconds=crop.metadata.time)
+            next_harvest = info.last_harvest + timedelta(seconds=harvest_time)
 
             embed.add_field(name='Specific Information', value=dedent(f"""
                 **Level:** {level:,} ({xp:,} / {max_xp:,} XP)
