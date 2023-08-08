@@ -437,7 +437,8 @@ class Items:
             {item.emoji} You ate {readable} and gained a **{gain:.02%}** EXP multiplier.
             You now have a **{record.base_exp_multiplier:.02%}** base EXP multiplier.
         ''')
-        if mouse := record.pet_manager.get_active_pet(Pets.mouse):
+        pets = await record.pet_manager.wait()
+        if mouse := pets.get_active_pet(Pets.mouse):
             multiplier = 0.05 + mouse.level * 0.005
             gain += (extra := gain * multiplier)
             content += f'\n*Your **{Pets.mouse.display}** gave you extra **{extra:.03%}** EXP multiplier!*'
