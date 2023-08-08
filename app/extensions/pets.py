@@ -451,6 +451,12 @@ class PetsCog(Cog, name='Pets'):
         ctx.bot.loop.create_task(ctx.thumbs())
         return f'Swapped your **{to_unequip.display}** with your **{to_equip.display}**.\n{swaps}', REPLY
 
+    @pets.command(name='feed', aliases={'fe'}, hidden=True)
+    async def pets_feed(self, ctx: Context, *, _pet: query_pet = None) -> CommandResponse:
+        """Redirect command for `feed`"""
+        feed_mention = ctx.bot.tree.get_app_command('feed').mention
+        return f"It's `{ctx.clean_prefix}feed` ({feed_mention})", REPLY
+
     @command(aliases={'fe'}, hybrid=True)
     @app_commands.describe(pet='The pet to feed.')
     @simple_cooldown(1, 10)

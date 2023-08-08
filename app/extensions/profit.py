@@ -150,7 +150,7 @@ def active_pet(pet: Pet, energy: int, verb: str):
                     )
                 raise BadArgument(
                     f'Your **{pet.display}** does not have enough energy to {verb}! '
-                    f'Feed it with `{ctx.clean_prefix}pets feed {pet.key}`.\n'
+                    f'Feed it with `{ctx.clean_prefix}feed {pet.key}`.\n'
                     f'({Emojis.bolt} **{energy:,}** Energy required, but only {Emojis.bolt} {entry.energy} available)',
                 )
             hunt_mention = ctx.bot.tree.get_app_command('hunt').mention
