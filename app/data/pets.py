@@ -121,7 +121,7 @@ class Pets:
         emoji='\U0001f42d',
         rarity=PetRarity.common,
         description='A small rodent that likes cheese.',
-        energy_per_minute=1,
+        energy_per_minute=0.5,
         max_energy=100,
         benefit=lambda level: (
             f'- +{5 + level * 0.5}% XP multiplier increase from eating cheese\n'
