@@ -469,6 +469,8 @@ class PetsCog(Cog, name='Pets'):
             )
 
         entry = next(entry for entry in pets.cached.values() if entry.equipped) if pet is None else pets.cached[pet]  # type: ignore
+        if not entry.equipped:
+            return f'Your **{pet.display}** is not equipped.', REPLY  # type: ignore
         view = FeedView(ctx, record, entry)
         return *view.make_embeds(), view, REPLY
 
