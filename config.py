@@ -41,6 +41,9 @@ multiplier_guilds: set[int] = {
     893991611262976091,  # Unnamed bot testing
 }
 
+backups_channel: int = 1138551276062396469
+guilds_channel: int = 1138551294907387974
+
 
 class _RandomColor:
     def __get__(self, *_) -> int:

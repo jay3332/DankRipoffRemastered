@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from asyncio import subprocess
 import functools
 import math
 import os
 import re
+import sys
 from collections import deque
+from datetime import datetime, time
+from io import BytesIO
 from typing import Any, ClassVar, Final, TYPE_CHECKING
 
 import discord
@@ -12,7 +16,7 @@ import discord.gateway as gateway
 import jishaku
 from aiohttp import ClientSession
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from app.core.help import HelpCommand
 from app.core.flags import FlagMeta
@@ -24,10 +28,12 @@ from app.util.ansi import AnsiStringBuilder, AnsiColor
 from app.util.common import humanize_duration, pluralize
 from app.util.structures import LockWithReason
 from app.util.views import StaticCommandButton
-from config import Colors, allowed_mentions, default_prefix, description, name, owner, token, version
+from config import (
+    Colors, DatabaseConfig, allowed_mentions, backups_channel, default_prefix,
+    description, name, owner, token, version,
+)
 
 if TYPE_CHECKING:
-    from datetime import datetime
     from typing import TypeAlias
 
     from discord.abc import Snowflake
@@ -475,6 +481,37 @@ class Bot(commands.Bot):
 
         ansi = builder.ensure_codeblock().dynamic(ctx)
         await ctx.send(f'Could not parse your command input properly:\n{ansi}', reference=ctx.message, ephemeral=True)
+
+    # Run backup every 2 hours
+    @tasks.loop(time=[time(hour=hour) for hour in range(0, 24, 2)])
+    async def backup(self) -> None:
+        await self.wait_until_ready()
+        channel = self.get_partial_messageable(backups_channel)
+        command = [
+            'pg_dump',
+            '-d', DatabaseConfig.name,
+            *(('-U', DatabaseConfig.user) if DatabaseConfig.user else ()),
+            *(('-h', DatabaseConfig.host) if DatabaseConfig.host else ()),
+            *(('-p', DatabaseConfig.port) if DatabaseConfig.port else ()),
+            '-w'
+        ]
+
+        proc = await subprocess.create_subprocess_shell(
+            ' '.join(command),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if stdout:
+            await channel.send(
+                f'Backup {discord.utils.format_dt(discord.utils.utcnow())} on {sys.platform}',
+                file=discord.File(BytesIO(stdout), filename='backup.sql'),
+            )
+        if stderr:
+            await channel.send(
+                f'ERROR backing up {discord.utils.format_dt(discord.utils.utcnow())} on {sys.platform} <@{owner}>',
+                file=discord.File(BytesIO(stderr), filename='error.txt'),
+            )
 
     async def close(self) -> None:
         await self.session.close()
