@@ -312,6 +312,7 @@ class Bot(commands.Bot):
         self.loop.create_task(self._dispatch_first_ready())
         await self._load_extensions()
         await self.tree.fetch_commands()  # populate cache
+        self.backup.start()
 
     async def get_context(
         self,
