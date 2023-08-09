@@ -24,9 +24,11 @@ __all__ = (
 
 beta: bool = system() != 'Linux'
 
-name: str = 'Dank Ripoff Remastered'
+name: str = 'Coined'
 version: str = '0.0.0'
-description: str = 'Hmm...'
+description: str = (
+    'Have fun with your friends with Coined, a carefully crafted, feature-packed, and open-source economy bot.'
+)
 
 # An ID or list of IDs
 owner: Collection[int] | int = 414556245178056706

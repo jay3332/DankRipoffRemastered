@@ -1414,6 +1414,16 @@ class Items:
         rarity=ItemRarity.mythic,
     )
 
+    coinhead = Item(
+        type=ItemType.collectible,
+        key='coinhead',
+        name='Coinhead',
+        emoji='<a:coinhead:1138846404870152303>',
+        description='this goofy coinhead',
+        sell=5_000_000,
+        rarity=ItemRarity.mythic,
+    )
+
     @classmethod
     def all(cls) -> Generator[Item, Any, Any]:
         """Lazily iterates through all items."""

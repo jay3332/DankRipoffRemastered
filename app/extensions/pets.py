@@ -15,7 +15,7 @@ from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
 from app.core import Cog, Context, command, group, simple_cooldown
-from app.core.helpers import EDIT, REPLY, cooldown_message, user_max_concurrency
+from app.core.helpers import BAD_ARGUMENT, EDIT, REPLY, cooldown_message, user_max_concurrency
 from app.data.items import Item, ItemType, Items, NetMetadata
 from app.data.pets import Pet, Pets
 from app.util import converters
@@ -380,11 +380,11 @@ class PetsCog(Cog, name='Pets'):
         record = await ctx.db.get_user_record(ctx.author.id)
         pets = await record.pet_manager.wait()
         if pet not in pets.cached:
-            return f'You have not discovered a **{pet.display}** yet.', REPLY
+            return f'You have not discovered a **{pet.display}** yet.', BAD_ARGUMENT
 
         entry = pets.cached[pet]
         if entry.equipped:
-            return f'Your **{pet.display}** is already equipped.', REPLY
+            return f'Your **{pet.display}** is already equipped.', BAD_ARGUMENT
 
         if pets.equipped_count >= record.max_equipped_pets:
             swap_mention = ctx.bot.tree.get_app_command('pets swap').mention
@@ -408,11 +408,11 @@ class PetsCog(Cog, name='Pets'):
         record = await ctx.db.get_user_record(ctx.author.id)
         pets = await record.pet_manager.wait()
         if pet not in pets.cached:
-            return f'You have not discovered a **{pet.display}** yet.', REPLY
+            return f'You have not discovered a **{pet.display}** yet.', BAD_ARGUMENT
 
         entry = pets.cached[pet]
         if not entry.equipped:
-            return f'Your **{pet.display}** is not equipped.', REPLY
+            return f'Your **{pet.display}** is not equipped.', BAD_ARGUMENT
 
         async with ctx.db.acquire() as conn:
             await entry.update(equipped=False)
@@ -432,16 +432,16 @@ class PetsCog(Cog, name='Pets'):
         record = await ctx.db.get_user_record(ctx.author.id)
         pets = await record.pet_manager.wait()
         if to_unequip not in pets.cached:
-            return f'You have not discovered a **{to_unequip.display}** yet.', REPLY
+            return f'You have not discovered a **{to_unequip.display}** yet.', BAD_ARGUMENT
         if to_equip not in pets.cached:
-            return f'You have not discovered a **{to_equip.display}** yet.', REPLY
+            return f'You have not discovered a **{to_equip.display}** yet.', BAD_ARGUMENT
 
         unequip_entry = pets.cached[to_unequip]
         equip_entry = pets.cached[to_equip]
         if not unequip_entry.equipped:
-            return f'Your **{to_unequip.display}** is not equipped.', REPLY
+            return f'Your **{to_unequip.display}** is not equipped.', BAD_ARGUMENT
         if equip_entry.equipped:
-            return f'Your **{to_equip.display}** is already equipped.', REPLY
+            return f'Your **{to_equip.display}** is already equipped.', BAD_ARGUMENT
 
         async with ctx.db.acquire() as conn:
             await unequip_entry.update(equipped=False, connection=conn)
@@ -460,17 +460,17 @@ class PetsCog(Cog, name='Pets'):
         await record.inventory_manager.wait()
         pets = await record.pet_manager.wait()
         if pet is not None and pet not in pets.cached:
-            return f'You have not discovered a **{pet.display}** yet.', REPLY
+            return f'You have not discovered a **{pet.display}** yet.', BAD_ARGUMENT
         if not pets.equipped_count:
             equip_mention = ctx.bot.tree.get_app_command('pets equip').mention
             return (
                 f'You have no equipped pets to feed. Equip a pet using {equip_mention}, then use this command again!',
-                REPLY,
+                BAD_ARGUMENT,
             )
 
         entry = next(entry for entry in pets.cached.values() if entry.equipped) if pet is None else pets.cached[pet]  # type: ignore
         if not entry.equipped:
-            return f'Your **{pet.display}** is not equipped.', REPLY  # type: ignore
+            return f'Your **{pet.display}** is not equipped.', BAD_ARGUMENT  # type: ignore
         view = FeedView(ctx, record, entry)
         return *view.make_embeds(), view, REPLY
 
