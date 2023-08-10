@@ -1247,7 +1247,7 @@ class Items:
         emoji='<:carrot:941096334365175839>',
         description='A carrot, grown from the carrot crop.',
         sell=75,
-        energy=1,
+        energy=3,
     )
 
     carrot_crop = Crop(
