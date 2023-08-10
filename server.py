@@ -7,18 +7,20 @@ routes = web.RouteTableDef()
 ipc = Client(secret_key=ipc_secret)
 
 
-@routes.get('/')
+@routes.get('/api')
 async def hello(_request: web.Request) -> web.Response:
     return web.Response(text='Hello, world!')
 
 
-@routes.post('/dbl')
+@routes.post('/api/dbl')
 async def dbl(request: web.Request) -> web.Response:
     if request.headers.get('Authorization') != dbl_secret:
         raise web.HTTPUnauthorized()
 
     data = await request.json()
-    await ipc.request('dbl_vote', user_id=int(data['user']), type=data['type'], is_weekend=data['isWeekend'])
+    # documented as isWeekend but is actually is_weekend
+    is_weekend = data.get('is_weekend') or data.get('isWeekend') or False
+    await ipc.request('dbl_vote', user_id=int(data['user']), type=data['type'], is_weekend=is_weekend)
     return web.Response()
 
 
