@@ -184,17 +184,15 @@ class Events(Cog):
             name='Owner',
             value=(
                 f'{guild.owner} ({guild.owner_id})\n'
-                f'Account created {format_dt(guild.owner.created_at, "R")} ({format_dt(guild.owner.created_at)})'
-            )
+                f'Account created {format_dt(guild.owner.created_at, "R")}\n({format_dt(guild.owner.created_at)})'
+            ),
+            inline=False
         )
         embed.add_field(
             name='Member Count',
             value=f'Total: {guild.member_count}\nHumans: {sum(not m.bot for m in guild.members)}',
         )
-        try:
-            await channel.send(embed=embed)
-        except discord.HTTPException:
-            pass
+        await channel.send(embed=embed)
 
     @Cog.listener()
     async def on_guild_leave(self, guild: discord.Guild) -> None:
