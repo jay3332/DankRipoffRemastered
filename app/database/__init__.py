@@ -291,7 +291,7 @@ class NotificationsManager:
 
         result = False
         if self._record.dm_notifications:
-            result = await self._dispatch_dm_notification(title, content)
+            result = self._record.db.loop.create_task(self._dispatch_dm_notification(title, content))
 
         if not result:
             await self._record.add(unread_notifications=1, connection=connection)

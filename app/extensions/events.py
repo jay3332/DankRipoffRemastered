@@ -12,10 +12,11 @@ from discord.utils import format_dt
 from app.core import Cog, Command, Context
 from app.core.flags import FlagMeta
 from app.core.helpers import ActiveTransactionLock
+from app.data.items import Items
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.common import humanize_duration, pluralize
 from app.util.views import StaticCommandButton
-from config import Colors, guilds_channel
+from config import Colors, guilds_channel, votes_channel
 
 
 class Events(Cog):
@@ -216,8 +217,33 @@ class Events(Cog):
     @Server.route()
     async def dbl_vote(self, data: ClientPayload) -> None:
         """Handle a vote from top.gg"""
-        channel = self.bot.get_partial_messageable(guilds_channel)
-        await channel.send(f'vote from {data.user_id} YAHOO!')
+        record = await self.bot.db.get_user_record(data.user_id)
+        inventory = await record.inventory_manager.wait()
+
+        async with self.bot.db.acquire() as conn:
+            await inventory.add_item(
+                item := Items.epic_crate if data.is_weekend else Items.voting_crate,
+                connection=conn,
+            )
+            await record.notifications_manager.add_notification(
+                title='Thank you for voting!',
+                content=f'You received {item.get_sentence_chunk()} for your vote.',
+                connection=conn,
+            )
+
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(label='Vote for Coined', url=f'https://top.gg/bot/{self.bot.user.id}/vote'))
+        weekend = (
+            '\n\U0001f525 **Weekend Bonus:** Received an epic crate instead of a voting crate'
+            if data.is_weekend else ''
+        )
+
+        channel = self.bot.get_partial_messageable(votes_channel)
+        await channel.send(
+            f'{data.user} ({data.user_id}) just voted for the bot! '
+            f'They received {item.get_sentence_chunk()} for their vote. Thank you!{weekend}',
+            view=view,
+        )
 
 
 setup = Events.simple_setup

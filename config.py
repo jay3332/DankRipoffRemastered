@@ -49,6 +49,7 @@ multiplier_guilds: set[int] = {
 
 backups_channel: int = 1138551276062396469
 guilds_channel: int = 1138551294907387974
+votes_channel: int = 1139280620216930524
 
 
 class _RandomColor:
