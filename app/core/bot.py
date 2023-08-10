@@ -243,6 +243,7 @@ class Bot(commands.Bot):
             allowed_mentions=allowed_mentions,
             intents=self.INTENTS,
             status=discord.Status.dnd,
+            activity=discord.Game('.help'),
             max_messages=10,
             tree_cls=Tree,
             **{key: owner},
