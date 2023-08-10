@@ -50,8 +50,15 @@ class ConstantT:
     pass
 
 
+def _create_sentinel_callback(v: V) -> Callable[[ConstantT], V]:
+    def wrapper(_self: ConstantT) -> V:
+        return v
+
+    return wrapper
+
+
 def sentinel(name: str, **dunders) -> ConstantT:
-    attrs = {f'__{k}__': lambda _: v for k, v in dunders.items()}
+    attrs = {f'__{k}__': _create_sentinel_callback(v) for k, v in dunders.items()}
     return type(name, (ConstantT,), attrs)()
 
 

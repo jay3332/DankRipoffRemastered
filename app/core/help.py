@@ -21,11 +21,14 @@ class CogSelect(discord.ui.Select[PaginatorView]):
     def __init__(self, mapping: dict[Cog, list[Command]], *, default: Cog = None) -> None:
         super().__init__(placeholder='Select a category...', row=0)
 
-        self.add_option(label='Home', value='Home')
+        self.add_option(
+            label='Home',
+            value='Home',
+            description='Go back to the main help page.',
+            emoji='\U0001f3e0',
+        )
 
         for cog in mapping:
-            # TODO: emojis for cogs
-
             self.add_option(
                 label=cog.qualified_name,
                 value=cog.qualified_name,

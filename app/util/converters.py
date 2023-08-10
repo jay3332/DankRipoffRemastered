@@ -107,7 +107,8 @@ class ZeroQuantity(NotAnInteger):
 
 
 class NotEnough(Exception):
-    pass
+    def __init__(self, amount: int) -> None:
+        self.amount = amount
 
 
 class PastMinimum(Exception):
@@ -154,7 +155,7 @@ def get_amount(total: float, minimum: int, maximum: int, arg: str) -> int:
             raise NotAnInteger()
 
     if amount > total:
-        raise NotEnough()
+        raise NotEnough(amount)
 
     if amount <= 0:
         if total == 0:
@@ -253,18 +254,21 @@ async def transform_item_and_quantity(
     except PastMinimum:
         raise BadArgument(f'You must {method} at least one of that item.')
     except ZeroQuantity:
-        raise BadArgument(f'You don\'t have any {plural}.')
+        raise BadArgument(
+            f"You don't have any coins, pooron" if method == BUY else f'You don\'t have any {plural}.'
+        )
     except NotAnInteger:
         raise BadArgument(
             f'Invalid quantity {quantity} - either what you specified yields 0, is negative, or it is not an integer.',
         )
-    except NotEnough:
+    except NotEnough as exc:
+        quantity = exc.amount
         raise BadArgument(
-            f'Insufficient funds - you do not have enough coins to buy that much of that item.'
+            f'Insufficient funds, you need {Emojis.coin} **{item.price * quantity:,}** to buy '
+            f'{item.get_sentence_chunk(quantity)}, but you only have {Emojis.coin} **{record.wallet:,}**.'
             if method == BUY
-            else 'You do not have that many of that item.'
+            else f'You don\'t have that many, you only own {item.get_sentence_chunk(quantity)}.'
         )
-
     except ZeroDivisionError:
         raise BadArgument('Very funny, division by 0.')
 
@@ -394,12 +398,13 @@ def BankTransaction(method: Literal[0, 1]) -> Type[Converter | int]:
                     else "You don't have any coins to withdraw."
                 )
 
+            verb = 'withdraw' if method == WITHDRAW else 'deposit'
             try:
                 return get_amount(_all, 0, maximum, arg)
+            except ZeroQuantity:
+                raise BadArgument(f"You have nothing to {verb}.")
             except NotAnInteger:
-                raise BadArgument(
-                    f"{'Withdraw' if method == WITHDRAW else 'Deposit'} amount must be a positive integer."
-                )
+                raise BadArgument(f"{verb.capitalize()} amount must be a positive integer.")
             except NotEnough:
                 raise BadArgument(
                     "You don't have that many coins in your wallet, get better."
@@ -420,16 +425,16 @@ def Investment(minimum: int = 500, maximum: int = 50000000) -> Type[Converter | 
 
             try:
                 return get_amount(_all, minimum, maximum, arg)
-
+            except ZeroQuantity:
+                raise BadArgument("You don't have any coins in your wallet to invest, maybe get some?")
             except NotAnInteger:
                 raise BadArgument("Investment amount must be a positive integer.")
-
             except NotEnough:
-                raise BadArgument("You don't have that many coins.")
-
+                raise BadArgument(
+                    f"You don't have that many coins. You only have {Emojis.coin} **{record.wallet:,}** in your wallet."
+                )
             except PastMinimum:
                 raise BadArgument(f"The minimum investment is {Emojis.coin} **{minimum:,}**.")
-
             except ZeroDivisionError:
                 raise BadArgument("very funny, division by zero.")
 
@@ -443,16 +448,16 @@ async def DropAmount(ctx: Context, arg: str) -> int:
 
     try:
         return get_amount(_all, 1, _all, arg)
-
+    except ZeroQuantity:
+        raise BadArgument("You don't have any coins in your wallet to drop, pooron")
     except NotAnInteger:
         raise BadArgument("Entity must be a positive integer or a valid item with an optional quantity.")
-
     except NotEnough:
-        raise BadArgument("You don't have that many coins.")
-
+        raise BadArgument(
+            f"You don't have that many coins. You only have {Emojis.coin} **{record.wallet:,}** in your wallet."
+        )
     except PastMinimum:
         raise BadArgument("Amount must be positive.")
-
     except ZeroDivisionError:
         raise BadArgument("very funny, division by zero.")
 
@@ -464,16 +469,18 @@ def CasinoBet(minimum: int = 200, maximum: int = 500000) -> Type[Converter | int
 
             try:
                 return get_amount(record.wallet, minimum, maximum, argument)
-
+            except ZeroQuantity:
+                raise BadArgument("You dont have any coins in your wallet to bet, pooron")
             except NotAnInteger:
                 raise BadArgument("Bet amount must be a positive integer.")
-
             except NotEnough:
-                raise BadArgument("You don't have that many coins.")
-
+                raise BadArgument(
+                    f"You don't have that many coins. You only have {Emojis.coin} **{record.wallet:,}** in your wallet."
+                )
             except PastMinimum:
-                raise BadArgument(f"The minimum bet for `{ctx.command.qualified_name}` is {Emojis.coin} **{minimum:,}**.")
-
+                raise BadArgument(
+                    f"The minimum bet for `{ctx.command.qualified_name}` is {Emojis.coin} **{minimum:,}**.",
+                )
             except ZeroDivisionError:
                 raise BadArgument("very funny, division by zero.")
 
