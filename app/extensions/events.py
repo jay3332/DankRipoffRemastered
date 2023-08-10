@@ -236,9 +236,10 @@ class Events(Cog):
             if data.is_weekend else ''
         )
 
+        user = self.bot.get_user(data.user_id) or 'Unknown User'
         channel = self.bot.get_partial_messageable(votes_channel)
         await channel.send(
-            f'{data.user} ({data.user_id}) just voted for the bot! '
+            f'{user} ({data.user_id}) just voted for the bot! '
             f'They received {item.get_sentence_chunk()} for their vote. Thank you!{weekend}',
             view=view,
         )
