@@ -195,7 +195,7 @@ class Events(Cog):
         await channel.send(embed=embed)
 
     @Cog.listener()
-    async def on_guild_leave(self, guild: discord.Guild) -> None:
+    async def on_guild_remove(self, guild: discord.Guild) -> None:
         channel = self.bot.get_partial_messageable(guilds_channel)
         embed = discord.Embed(
             title=guild.name,

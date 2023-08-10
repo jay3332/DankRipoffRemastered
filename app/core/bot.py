@@ -227,7 +227,6 @@ class Bot(commands.Bot):
     INTENTS: Final[ClassVar[discord.Intents]] = discord.Intents(
         messages=True,
         message_content=True,
-        presences=True,
         members=True,
         guilds=True,
     )
