@@ -6,6 +6,7 @@ from typing import Any
 
 import discord
 from discord.ext import commands
+from discord.ext.ipc import ClientPayload, Server
 from discord.utils import format_dt
 
 from app.core import Cog, Command, Context
@@ -211,6 +212,12 @@ class Events(Cog):
             inline=False,
         )
         await channel.send(embed=embed)
+
+    @Server.route()
+    async def dbl_vote(self, data: ClientPayload) -> None:
+        """Handle a vote from top.gg"""
+        channel = self.bot.get_partial_messageable(guilds_channel)
+        await channel.send(f'vote from {data.user_id} YAHOO!')
 
 
 setup = Events.simple_setup

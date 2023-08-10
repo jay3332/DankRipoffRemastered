@@ -990,6 +990,7 @@ class Items:
             maximum=3500,
             items={
                 fishing_pole: (0.1, 1, 1),
+                alcohol: (0.1, 1, 1),
                 banknote: (0.15, 1, 2),
                 cheese: (0.4, 1, 2),
                 lifesaver: (0.5, 1, 2),
@@ -997,6 +998,27 @@ class Items:
             },
         ),
         rarity=ItemRarity.rare,
+    )
+
+    voting_crate = Crate(
+        key='voting_crate',
+        name='Voting Crate',
+        emoji='<:votingcrate:1139250072731791470>',
+        description='A crate that can be obtained by [voting for the bot](https://top.gg/bot/753017377922482248).',
+        price=4000,
+        metadata=CrateMetadata(
+            minimum=3000,
+            maximum=6000,
+            items={
+                fishing_pole: (0.1, 1, 1),
+                alcohol: (0.1, 1, 1),
+                banknote: (0.15, 1, 2),
+                cheese: (0.4, 1, 2),
+                lifesaver: (0.5, 1, 2),
+                padlock: (0.75, 1, 2),
+            },
+        ),
+        rarity=ItemRarity.uncommon,
     )
 
     epic_crate = Crate(
@@ -1012,6 +1034,7 @@ class Items:
                 fishing_pole: (0.1, 1, 1),
                 pickaxe: (0.1, 1, 1),
                 shovel: (0.1, 1, 1),
+                alcohol: (0.1, 1, 1),
                 banknote: (0.2, 1, 3),
                 fish_bait: (0.3, 5, 15),
                 cheese: (0.4, 1, 3),
@@ -1038,6 +1061,7 @@ class Items:
                 pickaxe: (0.1, 1, 1),
                 shovel: (0.1, 1, 1),
                 axe: (0.1, 1, 1),
+                alcohol: (0.1, 1, 1),
                 banknote: (0.2, 1, 5),
                 fish_bait: (0.3, 20, 50),
                 cheese: (0.4, 2, 5),
@@ -1066,6 +1090,7 @@ class Items:
                 pickaxe: (0.1, 1, 2),
                 shovel: (0.1, 1, 2),
                 axe: (0.1, 1, 2),
+                alcohol: (0.1, 1, 2),
                 banknote: (0.2, 2, 7),
                 fish_bait: (0.3, 50, 100),
                 cheese: (0.4, 2, 7),
@@ -1103,6 +1128,7 @@ class Items:
     @common_crate.to_use
     @uncommon_crate.to_use
     @rare_crate.to_use
+    @voting_crate.to_use
     @epic_crate.to_use
     @legendary_crate.to_use
     @mythic_crate.to_use

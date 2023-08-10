@@ -16,6 +16,7 @@ import jishaku
 from aiohttp import ClientSession
 from discord import app_commands
 from discord.ext import commands, tasks
+from discord.ext.ipc import Server
 
 from app.core.help import HelpCommand
 from app.core.models import Command, Context, GroupCommand
@@ -24,7 +25,7 @@ from app.database import Database
 from app.util.structures import LockWithReason
 from config import (
     DatabaseConfig, allowed_mentions, backups_channel, default_prefix,
-    description, name, owner, token, version,
+    description, ipc_secret, name, owner, token, version,
 )
 
 if TYPE_CHECKING:
@@ -218,6 +219,7 @@ class Bot(commands.Bot):
 
     bypass_checks: bool
     db: Database
+    ipc: Server
     session: ClientSession
     startup_timestamp: datetime
     timers: TimerManager
@@ -302,8 +304,10 @@ class Bot(commands.Bot):
         self.transaction_locks = {}
         self.session = ClientSession()
         self.bypass_checks = False
+        self.ipc = Server(self, secret_key=ipc_secret)
 
         self.loop.create_task(self._dispatch_first_ready())
+        await self.ipc.start()
         await self._load_extensions()
         await self.tree.fetch_commands()  # populate cache
         self.backup.start()
@@ -378,6 +382,7 @@ class Bot(commands.Bot):
 
     async def close(self) -> None:
         await self.session.close()
+        await self.ipc.stop()
         await super().close()
 
     def run(self, token_override: str | None = None, **kwargs) -> None:
