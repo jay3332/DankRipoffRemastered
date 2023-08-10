@@ -6,6 +6,7 @@ from typing import Any
 
 import discord
 from discord.ext import commands
+from discord.utils import format_dt
 
 from app.core import Cog, Command, Context
 from app.core.flags import FlagMeta
@@ -13,7 +14,7 @@ from app.core.helpers import ActiveTransactionLock
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.common import humanize_duration, pluralize
 from app.util.views import StaticCommandButton
-from config import Colors
+from config import Colors, guilds_channel
 
 
 class Events(Cog):
@@ -152,6 +153,66 @@ class Events(Cog):
 
         ansi = builder.ensure_codeblock().dynamic(ctx)
         await ctx.send(f'Could not parse your command input properly:\n{ansi}', reference=ctx.message, ephemeral=True)
+
+    @Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        """Log minimal information about a guild to a private channel when the bot joins it, for security purposes only.
+
+        What is logged:
+        - Guild ID, name, and description
+        - Guild owner ID and name
+        - Member count
+
+        This is outlined in the bot's privacy policy.
+        """
+        channel = self.bot.get_partial_messageable(guilds_channel)
+        embed = discord.Embed(
+            title=guild.name,
+            description=guild.description,
+            color=Colors.success,
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.set_thumbnail(url=guild.icon)
+        embed.set_author(name='Chat, we got a new guild', icon_url=self.bot.user.avatar)
+        embed.set_footer(text=f'Now in {len(self.bot.guilds)} guilds')
+        embed.add_field(
+            name='Guild',
+            value=f'ID: {guild.id}\nCreated {format_dt(guild.created_at, "R")} ({format_dt(guild.created_at)})',
+            inline=False,
+        )
+        embed.add_field(
+            name='Owner',
+            value=(
+                f'{guild.owner} ({guild.owner_id})\n'
+                f'Account created {format_dt(guild.owner.created_at, "R")} ({format_dt(guild.owner.created_at)})'
+            )
+        )
+        embed.add_field(
+            name='Member Count',
+            value=f'Total: {guild.member_count}\nHumans: {sum(not m.bot for m in guild.members)}',
+        )
+        try:
+            await channel.send(embed=embed)
+        except discord.HTTPException:
+            pass
+
+    @Cog.listener()
+    async def on_guild_leave(self, guild: discord.Guild) -> None:
+        channel = self.bot.get_partial_messageable(guilds_channel)
+        embed = discord.Embed(
+            title=guild.name,
+            color=Colors.error,
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.set_thumbnail(url=guild.icon)
+        embed.set_author(name='Chat, we were removed from a guild', icon_url=self.bot.user.avatar)
+        embed.set_footer(text=f'Now in {len(self.bot.guilds)} guilds')
+        embed.add_field(
+            name='Guild',
+            value=f'ID: {guild.id}\nCreated {format_dt(guild.created_at, "R")} ({format_dt(guild.created_at)})',
+            inline=False,
+        )
+        await channel.send(embed=embed)
 
 
 setup = Events.simple_setup
