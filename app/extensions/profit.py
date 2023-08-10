@@ -1437,6 +1437,10 @@ class Profit(Cog):
             yield 'You cannot rob bot accounts.', BAD_ARGUMENT
             return
 
+        if not ctx.channel.permissions_for(user).view_channel:
+            yield f'{user.name} can\'t even see this channel, that would be pretty unfair.', BAD_ARGUMENT
+            return
+
         if entry := self._recent_robs.get(user.id):
             if ctx.now - entry.timestamp < timedelta(minutes=3):
                 yield 'That user has recently been robbed, let\'s give them a break.', BAD_ARGUMENT
