@@ -184,7 +184,7 @@ class Events(Cog):
             name='Owner',
             value=(
                 f'{guild.owner} ({guild.owner_id})\n'
-                f'Account created {format_dt(guild.owner.created_at, "R")}\n({format_dt(guild.owner.created_at)})'
+                f'Account created {format_dt(guild.owner.created_at, "R")} ({format_dt(guild.owner.created_at)})'
             ),
             inline=False
         )
