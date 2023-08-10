@@ -219,12 +219,10 @@ class Events(Cog):
         """Handle a vote from top.gg"""
         record = await self.bot.db.get_user_record(data.user_id)
         inventory = await record.inventory_manager.wait()
+        item = Items.epic_crate if data.is_weekend else Items.voting_crate
 
         async with self.bot.db.acquire() as conn:
-            await inventory.add_item(
-                item := Items.epic_crate if data.is_weekend else Items.voting_crate,
-                connection=conn,
-            )
+            await inventory.add_item(item, connection=conn)
             await record.notifications_manager.add_notification(
                 title='Thank you for voting!',
                 content=f'You received {item.get_sentence_chunk()} for your vote.',
