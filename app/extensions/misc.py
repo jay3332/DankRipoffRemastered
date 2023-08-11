@@ -375,7 +375,7 @@ class Miscellaneous(Cog):
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields)), REPLY
 
-    @group(aliases={'setting', 'set', 'config', 'conf'}, hybrid=True, fallback='set')  # TODO: add autocomplete
+    @group(aliases={'setting', 'set', 'config', 'conf'}, hybrid=True, fallback='set', expand_subcommands=True)  # TODO: add autocomplete
     @simple_cooldown(2, 2)
     async def settings(self, ctx: Context, setting: query_setting = None, value: better_bool = None):
         """View your current settings and/or change them."""
