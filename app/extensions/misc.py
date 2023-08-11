@@ -132,8 +132,11 @@ class Miscellaneous(Cog):
         )
 
         view = discord.ui.View()
-        view.add_item(discord.ui.Button(label='Click here to invite me to your server!', url=link))
-        view.add_item(discord.ui.Button(label='Click here to join our offical Discord server!', url=self.SUPPORT_SERVER))
+        view.add_item(discord.ui.Button(label='Invite me to your server!', url=link))
+        view.add_item(discord.ui.Button(label='Join our offical Discord server!', url=support_server))
+        view.add_item(discord.ui.Button(
+            label='Vote for Coined to earn free crates!', url=f'https://top.gg/bot/{ctx.bot.user.id}',
+        ))
 
         return 'For a direct text link, right click one of the buttons below and click "Copy Link"', view, REPLY
 
@@ -150,7 +153,7 @@ class Miscellaneous(Cog):
         item = Items.epic_crate if is_weekend else Items.voting_crate
         view = discord.ui.View()
         view.add_item(discord.ui.Button(
-            label=f'Vote for Coined to earn {item.get_sentence_chunk(bold=False)}',
+            label=f'Vote for Coined to earn {item.singular} {item.name}',
             url=f'https://top.gg/bot/{ctx.bot.user.id}/vote',
             emoji=item.emoji,
         ))
