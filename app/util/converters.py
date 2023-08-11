@@ -255,7 +255,7 @@ async def transform_item_and_quantity(
         raise BadArgument(f'You must {method} at least one of that item.')
     except ZeroQuantity:
         raise BadArgument(
-            f"You don't have any coins, pooron" if method == BUY else f'You don\'t have any {plural}.'
+            "You can't afford that, pooron" if method == BUY else f'You don\'t have any {plural}.'
         )
     except NotAnInteger:
         raise BadArgument(
