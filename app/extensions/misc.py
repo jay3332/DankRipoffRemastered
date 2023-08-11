@@ -22,7 +22,7 @@ from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginat
 from app.util.structures import Timer as PingTimer
 from app.util.types import CommandResponse, TypedInteraction
 from app.util.views import UserView
-from config import Colors, Emojis
+from config import Colors, Emojis, default_permissions, support_server
 
 if TYPE_CHECKING:
     from typing import Self
