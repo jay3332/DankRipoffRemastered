@@ -151,7 +151,7 @@ class Miscellaneous(Cog):
             is_weekend = data['is_weekend']
 
         item = Items.epic_crate if is_weekend else Items.voting_crate
-        view = discord.ui.View()
+        view = UserView(ctx.author)
         view.add_item(discord.ui.Button(
             label=f'Vote for Coined to earn {item.singular} {item.name}',
             url=f'https://top.gg/bot/{ctx.bot.user.id}/vote',
