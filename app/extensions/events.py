@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import functools
 import re
 from typing import Any
@@ -222,6 +223,11 @@ class Events(Cog):
         item = Items.epic_crate if data.is_weekend else Items.voting_crate
 
         async with self.bot.db.acquire() as conn:
+            if data.type == 'upvote':
+                await record.update(
+                    last_dbl_vote=datetime.datetime.fromisoformat(data.voted_at),
+                    connection=conn,
+                )
             await inventory.add_item(item, connection=conn)
             await record.notifications_manager.add_notification(
                 title='Thank you for voting!',

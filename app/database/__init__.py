@@ -1163,6 +1163,10 @@ class UserRecord:
         return self.data['pet_operations_cooldown_start']
 
     @property
+    def last_dbl_vote(self) -> datetime.datetime:
+        return self.data['last_dbl_vote']
+
+    @property
     def inventory_manager(self) -> InventoryManager:
         if not self.__inventory_manager:
             self.__inventory_manager = InventoryManager(self)

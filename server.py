@@ -1,3 +1,4 @@
+import discord.utils
 from aiohttp import web
 from discord.ext.ipc import Client
 
@@ -20,7 +21,13 @@ async def dbl(request: web.Request) -> web.Response:
     data = await request.json()
     # documented as isWeekend but is actually is_weekend
     is_weekend = data.get('is_weekend') or data.get('isWeekend') or False
-    await ipc.request('dbl_vote', user_id=int(data['user']), type=data['type'], is_weekend=is_weekend)
+    await ipc.request(
+        'dbl_vote',
+        user_id=int(data['user']),
+        type=data['type'],
+        is_weekend=is_weekend,
+        voted_at=discord.utils.utcnow().isoformat(),
+    )
     return web.Response()
 
 

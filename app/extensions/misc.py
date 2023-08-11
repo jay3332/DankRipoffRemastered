@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import functools
 import random
 from collections import defaultdict
 from typing import Any, NamedTuple, TYPE_CHECKING
@@ -13,6 +14,7 @@ from discord.utils import format_dt, oauth_url
 
 from app.core import BAD_ARGUMENT, Bot, Cog, Context, EDIT, REPLY, command, group, simple_cooldown
 from app.core.timers import Timer
+from app.data.items import Items
 from app.data.settings import Setting, Settings
 from app.util.common import converter, walk_collection
 from app.util.converters import better_bool, query_setting
@@ -134,6 +136,80 @@ class Miscellaneous(Cog):
         view.add_item(discord.ui.Button(label='Click here to join our offical Discord server!', url=self.SUPPORT_SERVER))
 
         return 'For a direct text link, right click one of the buttons below and click "Copy Link"', view, REPLY
+
+    @command(aliases={'v', 'topgg', 'dbl'}, hybrid=True)
+    @simple_cooldown(2, 2)
+    async def vote(self, ctx: Context) -> CommandResponse:
+        """Gives you a link to vote for the bot on top.gg."""
+
+        async with ctx.bot.session.get('https://top.gg/api/weekend') as response:
+            response.raise_for_status()
+            data = await response.json()
+            is_weekend = data['is_weekend']
+
+        item = Items.epic_crate if is_weekend else Items.voting_crate
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(
+            label=f'Vote for Coined to earn {item.get_sentence_chunk(bold=False)}',
+            url=f'https://top.gg/bot/{ctx.bot.user.id}/vote',
+            emoji=item.emoji,
+        ))
+
+        extra = ''
+        record = await ctx.db.get_user_record(ctx.author.id)
+        if record.last_dbl_vote is not None:
+            vote_again = record.last_dbl_vote + datetime.timedelta(hours=12)
+            if vote_again > ctx.now:
+                extra += (
+                    f'\n\u23eb *It seems like you already voted today. '
+                    f'You can vote again {format_dt(vote_again, "R")}!*'
+                )
+                button = discord.ui.Button(
+                    label='Remind me when I can vote again',
+                    emoji='\N{ALARM CLOCK}',
+                    style=discord.ButtonStyle.primary,
+                )
+                button.callback = functools.partial(self._vote_button_callback, vote_again)
+                view.add_item(button)
+
+        if is_weekend:
+            extra += (
+                '\n\U0001f525 **BONUS:** You will receive an epic crate instead of a standard voting crate this weekend!'
+            )
+
+        return f'Claim {item.get_sentence_chunk()} just for voting!{extra}', view, REPLY
+
+    async def _vote_button_callback(self, vote_again: datetime.datetime, interaction: TypedInteraction) -> None:
+        await self.bot.timers.create(
+            when=vote_again,
+            event='vote_reminder',
+            metadata={
+                'user_id': interaction.user.id,
+                'channel_id': interaction.channel.id,
+                'jump_url': interaction.message.jump_url,
+            },
+        )
+        await interaction.response.send_message(
+            f"Alright, I'll remind you to vote again {format_dt(vote_again, 'R')}!",
+            ephemeral=True,
+        )
+
+    @Cog.listener()
+    async def on_vote_reminder_timer_complete(self, timer: Timer) -> None:
+        channel = self.bot.get_partial_messageable(timer.metadata['channel_id'])
+
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(
+            label='Vote for Coined',
+            url=f'https://top.gg/bot/{self.bot.user.id}/vote',
+        ))
+        view.add_item(discord.ui.Button(label='Jump to Context', url=timer.metadata['jump_url']))
+
+        await channel.send(
+            f'Hey <@{timer.metadata["user_id"]}>, you can vote again!',
+            allowed_mentions=discord.AllowedMentions(users=True),
+            view=view,
+        )
 
     @staticmethod
     async def _send_settings(ctx: Context):
