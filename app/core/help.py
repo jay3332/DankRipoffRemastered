@@ -11,7 +11,7 @@ from app.util.common import cutoff, humanize_duration, image_url_from_emoji, plu
 from app.util.pagination import Paginator, PaginatorView, FieldBasedFormatter
 from app.util.types import TypedInteraction
 from app.util.views import UserView
-from config import Colors
+from config import Colors, default_permissions, support_server
 
 if TYPE_CHECKING:
     from app.core import Cog, Context, GroupCommand
@@ -69,7 +69,7 @@ class CogSelect(discord.ui.Select[PaginatorView]):
                 ctx,
                 FieldBasedFormatter(embed, self.get_command_fields(ctx, cog), page_in_footer=True),
                 center_button=self.view._center_button,
-                other_components=[CogSelect(self.mapping, default=cog)],
+                other_components=[CogSelect(self.mapping, default=cog), *LINKS(ctx.bot)],
                 row=1,
             )
 
@@ -129,16 +129,29 @@ class CenterButton(discord.ui.Button[PaginatorView]):
             await interaction.response.edit_message(embeds=self._old_embed_store, view=self.view)
 
 
+LINKS = lambda bot: (
+    discord.ui.Button(label='Invite', row=2, url=discord.utils.oauth_url(
+        client_id=bot.user.id,
+        permissions=discord.Permissions(default_permissions),
+    )),
+    discord.ui.Button(label='Support Server', row=2, url=support_server),
+)
+
+
 class HelpCommand(commands.HelpCommand):
     """The bot's help command."""
 
     context: Context
 
     def __init__(self, **attrs: Any) -> None:
-        super().__init__(command_attrs=dict(
-            aliases=('h',),
-            help='Shows help about the bot.',
-        ), **attrs)
+        super().__init__(
+            command_attrs=dict(
+                name='commands',
+                aliases=('cmds', 'command', 'cmd'),
+                help='Shows you all of my commands.',
+            ),
+            **attrs,
+        )
 
     @classmethod
     def _format_command(cls, cmd: Command) -> str:
@@ -151,6 +164,12 @@ class HelpCommand(commands.HelpCommand):
     @classmethod
     def format_commands(cls, cmds: Iterable[Command]) -> str:
         return ',\u2002'.join(map(cls._format_command, sorted(cmds, key=lambda c: c.qualified_name)))
+
+    def get_destination(self) -> Context:
+        return self.context
+
+    async def send_error_message(self, error: str, /) -> None:
+        await self.context.send(error, ephemeral=True)
 
     def get_bot_mapping(self) -> dict[Cog, list[Command]]:
         mapping = super().get_bot_mapping()
@@ -184,7 +203,7 @@ class HelpCommand(commands.HelpCommand):
 
     @classmethod
     def get_bot_help_paginator(cls, ctx: Context, mapping: dict[Cog, list[Command]]) -> Paginator:
-        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now, description=ctx.bot.description)
         embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar.url)
 
         mapping = cls.filter_mapping(mapping)
@@ -199,9 +218,9 @@ class HelpCommand(commands.HelpCommand):
 
         return Paginator(
             ctx,
-            FieldBasedFormatter(embed, fields, per_page=8, page_in_footer=True),
+            FieldBasedFormatter(embed, fields, per_page=5, page_in_footer=True),
             center_button=CenterButton(ctx),
-            other_components=[CogSelect(mapping)],
+            other_components=[CogSelect(mapping), *LINKS(ctx.bot)],
             row=1,
         )
 
@@ -219,7 +238,7 @@ class HelpCommand(commands.HelpCommand):
             self.context,
             FieldBasedFormatter(embed, fields, page_in_footer=True),
             center_button=CenterButton(ctx=self.context),
-            other_components=[CogSelect(self.filter_mapping(self.get_bot_mapping()))],
+            other_components=[CogSelect(self.filter_mapping(self.get_bot_mapping())), *LINKS(self.context.bot)],
             row=1,
         )
 
@@ -229,8 +248,8 @@ class HelpCommand(commands.HelpCommand):
         ctx: Context = self.context
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar.url)
-        if emoji := getattr(ctx.cog, 'emoji', None):
+        embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar)
+        if emoji := getattr(command.cog, 'emoji', None):
             embed.set_thumbnail(url=image_url_from_emoji(emoji))
 
         body = command.help or 'No description provided.'
@@ -270,6 +289,15 @@ class HelpCommand(commands.HelpCommand):
 
             embed.add_field(name='Required Permissions', value='\n'.join(parts), inline=False)
 
+        if command is self._command_impl:
+            app_command_name = 'help commands'
+        elif app_command_name := getattr(command, 'app_command_name', None):
+            pass
+        elif app_command := getattr(command, 'app_command', None):
+            app_command_name = app_command.qualified_name
+        if app_command_name and (app_command := ctx.bot.tree.get_app_command(app_command_name)):
+            embed.add_field(name='Slash Command', value=app_command.mention, inline=False)
+
         return embed
 
     async def send_group_help(self, group: GroupCommand) -> None:
@@ -292,7 +320,4 @@ class HelpCommand(commands.HelpCommand):
         view = UserView(self.context.author)
         view.add_item(CenterButton(ctx=self.context))
 
-        if self.context.is_interaction:
-            return await self.context.interaction.response.send_message(embed=embed, view=view)
-
-        await self.context.send(embed=embed, view=view)
+        await self.context.reply(embed=embed, view=view)

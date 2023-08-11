@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import functools
 import random
+import re
 from collections import defaultdict
 from typing import Any, NamedTuple, TYPE_CHECKING
 
@@ -60,6 +61,81 @@ class CooldownReminderMetadata(NamedTuple):
         return cls(channel_id=metadata['channel_id'], jump_url=metadata['jump_url'], timer_id=timer.id)
 
 
+class Guide:
+    COMMAND_SUBSTITUTION = re.compile(r'\{/([^}]+)}')
+    BACKSLASH_SUBSTITUTION = re.compile(r'\\.', re.MULTILINE)
+
+    @classmethod
+    def format_line(cls, ctx: Context, line: str) -> str:
+        line = line.format(support_server=support_server)
+
+        def sub(match: re.Match) -> str:
+            cmd = ctx.bot.tree.get_app_command(query := match.group(1))
+            if cmd is None:
+                return f'/{query}'
+            return cmd.mention
+
+        return cls.COMMAND_SUBSTITUTION.sub(sub, line)
+
+    @classmethod
+    def walk_markdown(cls, ctx: Context, lines: list[str], embed: discord.Embed) -> None:
+        index = 0
+        current = []
+        current_field = None
+
+        while index < len(lines):
+            line = lines[index]
+            line = line.strip()
+            line = cls.format_line(ctx, line)
+            while line.endswith('\\'):
+                index += 1
+                line = line[:-1] + cls.format_line(ctx, lines[index].strip())
+
+            if line.startswith('##'):
+                if current:
+                    if current_field is not None:
+                        embed.add_field(name=current_field, value='\n'.join(current), inline=False)
+                    elif current:
+                        embed.description = '\n'.join(current)
+                    current = []
+
+                current_field = line[2:].lstrip()
+            elif line.startswith('#'):
+                embed.title = line[1:].lstrip()
+            else:
+                current.append(line)
+
+            index += 1
+
+        if current_field is not None:
+            embed.add_field(name=current_field, value='\n'.join(current), inline=False)
+        elif current:
+            embed.description = '\n'.join(current)
+
+    @classmethod
+    def view(cls, ctx: Context) -> discord.ui.View:
+        view = discord.ui.View()
+        view.add_item(
+            discord.ui.Button(
+                label='Invite Coined to your server!',
+                url=oauth_url(ctx.bot.user.id, permissions=discord.Permissions(default_permissions)),
+            ),
+        )
+        view.add_item(
+            discord.ui.Button(label='Support Server', url=support_server),
+        )
+        return view
+
+    @classmethod
+    def render(cls, ctx: Context, lines: list[str]) -> discord.Embed:
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_thumbnail(url=ctx.bot.user.avatar)
+        embed.set_author(name='Coined Guide', icon_url=ctx.author.display_avatar)
+
+        cls.walk_markdown(ctx, lines, embed)
+        return embed
+
+
 class Miscellaneous(Cog):
     """Miscellaneous commands."""
 
@@ -72,13 +148,23 @@ class Miscellaneous(Cog):
         'Pong!?',
     )
 
-    SUPPORT_SERVER = 'https://discord.gg/BjzrQZjFwk'  # caif
-    # SUPPORT_SERVER = 'https://discord.gg/bpnedYgFVd'  # unnamed bot testing
-
     def __init__(self, bot: Bot) -> None:
         super().__init__(bot)
+
+        self._guides: dict[str, list[str]] = {}
         self._cooldown_reminder_exists = defaultdict[int, dict[str, CooldownReminderMetadata]](dict)
         self.__cooldown_reminder_fetch_task = self.bot.loop.create_task(self._fetch_cooldown_reminders())
+
+    async def render_guide(self, ctx: Context, page: str) -> discord.Embed:
+        if page not in self._guides:
+            with open(f'./guide/{page}.md', 'r') as f:
+                self._guides[page] = lines = f.readlines()
+
+            embed = Guide.render(ctx, lines)
+            return embed
+
+        embed = Guide.render(ctx, self._guides[page])
+        return embed
 
     async def _fetch_cooldown_reminders(self) -> None:
         await self.bot.db.wait()
@@ -98,6 +184,55 @@ class Miscellaneous(Cog):
             self._cooldown_reminder_exists[record['user_id']][record['command']] = CooldownReminderMetadata(
                 channel_id=record['channel_id'], jump_url=record['jump_url'], timer_id=record['id'],
             )
+
+    @command(name='help', aliases={'guide', 'start'}, hybrid=True, with_app_command=False)
+    async def help(self, ctx: Context, *, entity: str = None) -> CommandResponse:
+        """Sends an in-depth guide on how to use this bot.
+
+        See `.commands` for a straightforward list of commands.
+        """
+        if entity:
+            return await ctx.send_help(entity)
+
+        return await self.render_guide(ctx, 'index'), Guide.view(ctx)
+
+    help_app_command = app_commands.Group(name='help', description='Learn how to use Coined.')
+
+    @help.define_app_command(name='guide', parent=help_app_command)
+    async def help_guide(self, ctx: HybridContext) -> None:
+        await ctx.full_invoke()
+
+    @help_app_command.command(name='commands')
+    @app_commands.describe(category='The category to view commands from.')
+    async def help_commands(self, itx: TypedInteraction, category: str = None) -> None:
+        """Browse the commands Coined has to offer."""
+        ctx = await self.bot.get_context(itx)
+        if category is not None:
+            return await ctx.send_help(category)
+        await ctx.send_help()
+
+    @help_commands.autocomplete('category')
+    async def category_autocomplete(self, _itx: TypedInteraction, current: str) -> list[app_commands.Choice]:
+        return [
+            app_commands.Choice(name=name.title(), value=name) for name, cog in self.bot.cogs
+            if not getattr(cog, '__hidden__', True) and current in name
+        ]
+
+    @help_app_command.command(name='command')
+    @app_commands.rename(cmd='command')
+    @app_commands.describe(cmd='The command to learn more about.')
+    async def help_cmd(self, itx: TypedInteraction, cmd: str) -> None:
+        """Learn more about a specific command."""
+        resolved = self.bot.get_command(cmd)
+        if resolved is None:
+            return await itx.response.send_message(f'Command {cmd!r} not found.', ephemeral=True)
+
+        ctx = await self.bot.get_context(itx)
+        await ctx.send_help(resolved)
+
+    @command(aliases={'tutor', 'tut'}, hybrid=True, with_app_command=False)
+    async def tutorial(self, ctx: Context) -> CommandResponse:
+        """Starts an in-depth tutorial on how to use Coined."""
 
     @command(alias="pong", hybrid=True)
     @simple_cooldown(2, 2)
@@ -128,7 +263,9 @@ class Miscellaneous(Cog):
     async def invite(self, ctx: Context) -> tuple[str, discord.ui.View, Any]:
         """Gives you a link to invite the bot to your server."""
         link = oauth_url(
-            ctx.bot.user.id, permissions=discord.Permissions(414531833025), scopes=['bot', 'applications.commands'],
+            ctx.bot.user.id,
+            permissions=discord.Permissions(default_permissions),
+            scopes=['bot', 'applications.commands'],
         )
 
         view = discord.ui.View()
@@ -332,6 +469,7 @@ class Miscellaneous(Cog):
         await ctx.reply(f'Unknown command {cmd!r}.', ephemeral=True)
 
     @cooldowns_remind.autocomplete('cmd')
+    @help_cmd.autocomplete('cmd')
     async def command_autocomplete(self, _: TypedInteraction, current: str) -> list[Choice[str]]:
         current = current.lower()
         return [

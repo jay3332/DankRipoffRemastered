@@ -226,6 +226,7 @@ class Command(commands.Command):
 
         self.custom_flags: FlagMeta[Any] | None = None
         self.expand_subcommands: bool = kwargs.pop('expand_subcommands', False)
+        self.app_command_name: str | None = kwargs.pop('app_command_name', None)
 
         super().__init__(func, **kwargs)
         self.add_check(self._permissions.check)
@@ -235,6 +236,8 @@ class Command(commands.Command):
 
         other._permissions = self._permissions
         other.custom_flags = self.custom_flags
+        other.expand_subcommands = self.expand_subcommands
+        other.app_command_name = self.app_command_name
 
         return other
 
@@ -518,15 +521,23 @@ def define_app_command_impl(
             return await func(slf, ctx, *args, **kwds)
 
         wrapper.__globals__.update(func.__globals__)  # type: ignore
-        source.app_command = cls(
-            name=source.name,
+        parent = kwargs.pop('parent', False)
+        command = cls(
+            name=kwargs.pop('name', source.name),
             description=source.short_doc,
-            parent=source.parent.app_command if isinstance(source.parent, HybridGroupCommand) else None,
+            parent=parent or (
+                source.parent.app_command if isinstance(source.parent, HybridGroupCommand) else None
+            ),
             callback=wrapper,
             **kwargs,
         )
+        if parent:
+            parent.add_command(command)  # type: ignore
+            source.app_command_name = command.qualified_name
+        else:
+            source.app_command = command
 
-        @source.app_command.error
+        @command.error
         async def on_error(_, interaction: TypedInteraction, error: BaseException) -> None:
             interaction.client.dispatch('command_error', interaction._baton, error)
 
