@@ -119,7 +119,7 @@ class PetsCog(Cog, name='Pets'):
         Pets.cow: 0.004,
     }
 
-    @command(aliases={'catch', 'hu', 'ct'}, hybrid=True)
+    @command(aliases={'catch', 'hu', 'ct', 'h'}, hybrid=True)
     @simple_cooldown(1, 90)
     @cooldown_message("There aren't unlimited animals to hunt!")
     @user_max_concurrency(1)
