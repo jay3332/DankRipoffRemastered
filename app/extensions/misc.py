@@ -194,7 +194,7 @@ class Miscellaneous(Cog):
         if entity:
             return await ctx.send_help(entity)
 
-        return await self.render_guide(ctx, 'index'), Guide.view(ctx)
+        return await self.render_guide(ctx, 'index'), Guide.view(ctx), REPLY
 
     help_app_command = app_commands.Group(name='help', description='Learn how to use Coined.')
 
