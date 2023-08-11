@@ -1441,6 +1441,10 @@ class Profit(Cog):
             yield f'{user.name} can\'t even see this channel, that would be pretty unfair.', BAD_ARGUMENT
             return
 
+        if isinstance(ctx.channel, discord.Thread):
+            yield 'Robbing in threads is disabled as of this moment.', BAD_ARGUMENT
+            return
+
         if entry := self._recent_robs.get(user.id):
             if ctx.now - entry.timestamp < timedelta(minutes=3):
                 yield 'That user has recently been robbed, let\'s give them a break.', BAD_ARGUMENT
