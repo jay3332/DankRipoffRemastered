@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import random
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 from string import ascii_letters
@@ -88,6 +89,7 @@ class Database(_Database):
     def __init__(self, bot: Bot, *, loop: asyncio.AbstractEventLoop | None = None) -> None:
         super().__init__(loop=loop)
         self.user_records: dict[int, UserRecord] = {}
+        self.guild_records: dict[int, GuildRecord] = {}
         self.bot: Bot = bot
 
         # FIXME: for now, fetch all users and cache them
@@ -122,6 +124,27 @@ class Database(_Database):
             return record
 
         return record.fetch_if_necessary()
+
+    @overload
+    def get_guild_record(self, guild_id: int, *, fetch: Literal[True] | None = None) -> Awaitable[GuildRecord]:
+        ...
+
+    @overload
+    def get_guild_record(self, guild_id: int, *, fetch: Literal[False] = None) -> GuildRecord | None:
+        ...
+
+    def get_guild_record(self, guild_id: int, *, fetch: bool | None = None) -> GuildRecord | Awaitable[GuildRecord]:
+        """Fetches a guild record."""
+        try:
+            record = self.guild_records[guild_id]
+        except KeyError:
+            record = self.guild_records[guild_id] = GuildRecord(guild_id, db=self)
+
+        if fetch:
+            return record.fetch()
+        elif fetch is None:
+            return record.fetch_if_necessary()
+        return record
 
 
 class InventoryMapping(dict[Item, int]):
@@ -823,7 +846,41 @@ class Multiplier(NamedTuple):
         return base
 
 
-class UserRecord:
+class BaseRecord(ABC):
+    data: dict[str, Any]
+
+    @abstractmethod
+    async def fetch(self) -> Self:
+        raise NotImplementedError
+
+    async def fetch_if_necessary(self) -> Self:
+        """Fetches the record if it is not already cached."""
+        if not self.data:
+            await self.fetch()
+
+        return self
+
+    @abstractmethod
+    async def _update(
+        self,
+        key: Callable[[tuple[int, str]], str],
+        values: dict[str, Any],
+        *,
+        connection: asyncpg.Connection | None = None,
+    ) -> Self:
+        raise NotImplementedError
+
+    def update(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[Self]:
+        return self._update(lambda o: f'"{o[1]}" = ${o[0]}', values, connection=connection)
+
+    def add(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[Self]:
+        return self._update(lambda o: f'"{o[1]}" = "{o[1]}" + ${o[0]}', values, connection=connection)
+
+    def append(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[Self]:
+        return self._update(lambda o: f'"{o[1]}" = ARRAY_APPEND("{o[1]}", ${o[0]})', values, connection=connection)
+
+
+class UserRecord(BaseRecord):
     """Stores data about a user."""
 
     LEVELING_CURVE = dict(base=100, factor=1.22)
@@ -919,15 +976,6 @@ class UserRecord:
             if connection is None:
                 await self.db.release(actual_conn)
         return self
-
-    def update(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[UserRecord]:
-        return self._update(lambda o: f'"{o[1]}" = ${o[0]}', values, connection=connection)
-
-    def add(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[UserRecord]:
-        return self._update(lambda o: f'"{o[1]}" = "{o[1]}" + ${o[0]}', values, connection=connection)
-
-    def append(self, *, connection: asyncpg.Connection | None = None, **values: Any) -> Awaitable[UserRecord]:
-        return self._update(lambda o: f'"{o[1]}" = ARRAY_APPEND("{o[1]}", ${o[0]})', values, connection=connection)
 
     async def add_coins(self, coins: int, /, *, connection: asyncpg.Connection | None = None) -> int:
         """Adds coins including applying multipliers. Returns the amount of coins added."""
@@ -1207,3 +1255,51 @@ class UserRecord:
             self.__pet_manager = PetManager(self)
 
         return self.__pet_manager
+
+
+class GuildRecord(BaseRecord):
+    """Represents a guild record in the database."""
+
+    def __init__(self, guild_id: int, *, db: Database) -> None:
+        self.guild_id: int = guild_id
+        self.data: dict[str, Any] = {}
+        self.db: Database = db
+
+    async def fetch(self) -> GuildRecord:
+        """Fetches the guild record from the database."""
+        query = """
+                INSERT INTO
+                    guilds (guild_id)
+                VALUES ($1)
+                ON CONFLICT (guild_id)
+                DO UPDATE
+                    SET guild_id = $1
+                RETURNING
+                    *
+                """
+
+        self.data.update(await self.db.fetchrow(query, self.guild_id))
+        return self
+
+    async def _update(
+        self,
+        key: Callable[[tuple[int, str]], str],
+        values: dict[str, Any],
+        *,
+        connection: asyncpg.Connection | None = None,
+    ) -> GuildRecord:
+        query = '/**/ UPDATE guilds SET {} WHERE guild_id = $1 RETURNING *'
+        # noinspection PyTypeChecker
+        self.data.update(
+            await (connection or self.db).fetchrow(
+                query.format(', '.join(map(key, enumerate(values.keys(), start=2)))),
+                self.guild_id,
+                *values.values(),
+            ),
+        )
+        return self
+
+    @property
+    def prefixes(self) -> list[str]:
+        """Returns the guild's prefixes."""
+        return self.data['prefixes']

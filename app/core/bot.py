@@ -282,7 +282,13 @@ class Bot(commands.Bot):
 
     async def resolve_command_prefix(self, message: discord.Message) -> list[str]:
         """Resolves a command prefix from a message."""
-        return commands.when_mentioned_or(default_prefix)(self, message)
+        if not message.guild:
+            return commands.when_mentioned_or(default_prefix)(self, message)
+
+        record = await self.db.get_guild_record(message.guild.id)
+        prefixes = sorted(record.prefixes, key=len, reverse=True)
+
+        return commands.when_mentioned_or(*prefixes)(self, message)
 
     async def _dispatch_first_ready(self) -> None:
         """Waits for the inbound READY gateway event, then dispatches the `first_ready` event."""
