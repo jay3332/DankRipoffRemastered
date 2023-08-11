@@ -267,7 +267,7 @@ async def transform_item_and_quantity(
             f'Insufficient funds, you need {Emojis.coin} **{item.price * quantity:,}** to buy '
             f'{item.get_sentence_chunk(quantity)}, but you only have {Emojis.coin} **{record.wallet:,}**.'
             if method == BUY
-            else f'You don\'t have that many, you only own {item.get_sentence_chunk(quantity)}.'
+            else f'You don\'t have that many, you only own {item.get_sentence_chunk(maximum)}.'
         )
     except ZeroDivisionError:
         raise BadArgument('Very funny, division by 0.')
