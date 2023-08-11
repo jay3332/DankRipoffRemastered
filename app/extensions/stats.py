@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO
 from textwrap import dedent
 from typing import Any, Iterable, Literal, TYPE_CHECKING
@@ -65,6 +65,14 @@ class GraphFlags(Flags):
         short='d',
         aliases=('dur', 'time', 'interval', 'lookback', 'timespan', 'span'),
         default=timedelta(minutes=15), description='How far back to look for data.',
+    )
+
+
+class GuildGraphFlags(GraphFlags):
+    duration: IntervalConverter = flag(
+        short='d',
+        aliases=('dur', 'time', 'interval', 'lookback', 'timespan', 'span'),
+        description='How far back to look for data.',
     )
 
 
@@ -412,6 +420,44 @@ class Stats(Cog):
                 f'*Note, this is an experimental command.*'
             ),
             y_axis=target,
+            color=color,
+        )
+
+    @command(aliases={'guildgraph', 'guildhistory', 'guildchart', 'gg'})
+    @simple_cooldown(2, 6)
+    async def guilds(self, ctx: Context, *, flags: GuildGraphFlags) -> CommandResponse | None:
+        """View a graph of this bot's growth over time."""
+        if flags.duration and flags.duration < timedelta(minutes=2):
+            return 'You must graph at least 2 minutes of data.', BAD_ARGUMENT
+
+        entries = await ctx.db.fetch(
+            'SELECT guild_count, timestamp FROM guild_count_graph_data WHERE timestamp >= $1 ORDER BY timestamp',
+            ctx.now - flags.duration if flags.duration else datetime.utcfromtimestamp(0),
+        )
+        if not entries:
+            return 'No data to graph. Try specifying a larger timespan.', REPLY
+
+        history = [(entry['timestamp'], entry['guild_count']) for entry in entries]
+        history.append((ctx.now, current := len(ctx.bot.guilds)))
+
+        dates, values = zip(*history)
+        with Image.new("RGB", (30, 30), (0, 0, 0)) as background:
+            buffer = BytesIO()
+            background.save(buffer, format="PNG")
+            buffer.seek(0)
+
+        color = discord.Color.from_rgb(255, 255, 255)
+        label = f'the past {humanize_duration(flags.duration.total_seconds())}' if flags.duration else 'time'
+        await send_graph_to(
+            ctx,
+            buffer,
+            dates,
+            values,
+            content=(
+                f'**Guild Count** over {label}: (Currently in **{current:,} guilds**)\n'
+                f'*Note, this is an experimental command.*'
+            ),
+            y_axis='Guild Count',
             color=color,
         )
 
