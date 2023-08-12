@@ -1914,9 +1914,10 @@ class DivingView(UserView):
             earnings.append(f'- {item.get_display_name(bold=True)} x{quantity}')
 
         embed.insert_field_at(0, name='Earnings', value='\n'.join(earnings) or 'Nothing yet!', inline=False)
-        embed.set_footer(
-            text=f'Dive Deeper: {self.calculate_pressure_chance(depth=self._depth + 50):.02%} chance of dying from pressure',
-        )
+        if self._depth >= 50:
+            embed.set_footer(
+                text=f'Dive Deeper: {self.calculate_pressure_chance(depth=self._depth + 50):.02%} chance of dying from pressure',
+            )
         return embed
 
     async def suspend(self, interaction: TypedInteraction | None, message: str | None = None) -> None:
