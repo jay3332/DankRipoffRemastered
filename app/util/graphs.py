@@ -53,9 +53,9 @@ def create_graph(x, y, **kwargs):
 
     date_arr = np.array(sorted(x))
     value_arr = np.array(y)
-    date_num = date_num_smooth = mdates.date2num(date_arr)
+    date_num = mdates.date2num(date_arr)
 
-    # date_num_smooth = np.linspace(date_num.min(), date_num.max(), 100)
+    date_num_smooth = np.linspace(date_num.min(), date_num.max(), 500)
     spline = make_interp_spline(date_num, value_arr, k=2)
     value_np_smooth = spline(date_num_smooth)
 
