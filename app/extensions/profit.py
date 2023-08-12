@@ -1914,6 +1914,9 @@ class DivingView(UserView):
             earnings.append(f'- {item.get_display_name(bold=True)} x{quantity}')
 
         embed.insert_field_at(0, name='Earnings', value='\n'.join(earnings) or 'Nothing yet!', inline=False)
+        embed.set_footer(
+            text=f'Dive Deeper: {self.calculate_pressure_chance(depth=self._depth + 50):.02%} chance of dying from pressure',
+        )
         return embed
 
     async def suspend(self, interaction: TypedInteraction | None, message: str | None = None) -> None:
@@ -1935,7 +1938,7 @@ class DivingView(UserView):
         await self.record.make_dead(reason=message)
         await interaction.response.edit_message(embed=self.make_embed(message=message, error=True), view=self)
 
-    def calculate_pressure_chance(self) -> float:
+    def calculate_pressure_chance(self, *, depth: int | None = None) -> float:
         """Calculate the chance of dying due to water pressure.
 
         For any "death resistance" factor k, the chance can be calculated as: ::
@@ -1944,8 +1947,10 @@ class DivingView(UserView):
 
         See <https://www.desmos.com/calculator/bors91xu3x>
         """
+        depth = depth if depth is not None else self._depth
+
         k = 0.46  # this constant will change based on submarine
-        return -1 / (0.02 * self._depth ** k + 1) + 1
+        return -1 / (0.02 * depth ** k + 1) + 1
 
     LOSS_MESSAGES = (
         'You got lost and surface back up without any coins or items.',
@@ -1984,9 +1989,9 @@ class DivingView(UserView):
                 interaction, 'You dive a bit too deep and the water pressure crushes you. You died.',
             )
         # general loss chance
-        if random.random() < 0.03:  # this number will change based on submarine
+        if random.random() < 0.01:  # this number will change based on submarine
             return await self.make_dead(interaction, random.choice(self.DEATH_MESSAGES))
-        if random.random() < 0.14:  # this number will change based on submarine
+        if random.random() < 0.13:  # this number will change based on submarine
             return await self.suspend(interaction, random.choice(self.LOSS_MESSAGES))
 
         profit = random.randint(100, 250)
