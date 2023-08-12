@@ -277,9 +277,9 @@ class Profit(Cog):
         embed.set_author(name=f"Beg: {ctx.author}", icon_url=ctx.author.avatar)
 
         view = discord.ui.View(timeout=120)
-        view.add_item(StaticCommandButton(label='/search', command=self.search))
-        view.add_item(StaticCommandButton(label='/crime', command=self.crime))
-        view.add_item(StaticCommandButton(label='/dive', command=self.dive))
+        view.add_item(StaticCommandButton(label='/search', command=self.search, row=1))
+        view.add_item(StaticCommandButton(label='/crime', command=self.crime, row=1))
+        view.add_item(StaticCommandButton(label='/dive', command=self.dive, row=1))
 
         await asyncio.sleep(random.uniform(2, 4))
 
@@ -337,11 +337,18 @@ class Profit(Cog):
         embed.description = self._capitalize_first(
             random.choice(self.BEG_SUCCESS_MESSAGES).format(person, message)
         )
-        if multiplier_text:
-            embed.add_field(
-                name='Breakdown',
-                value=f'{Emojis.coin} **+{base:,.0f}** (base profit)\n' + expansion_list(multiplier_text),
+
+        button = discord.ui.Button(label='View Breakdown', emoji='\U0001f4b0', style=discord.ButtonStyle.primary)
+
+        async def callback(itx: TypedInteraction) -> None:
+            await itx.response.send_message(
+                f'### {ctx.author.mention}\'s Profit Breakdown from begging\n'
+                f'{Emojis.coin} **+{base:,.0f}** (base profit)\n' + expansion_list(multiplier_text),
+                ephemeral=True,
             )
+
+        button.callback = callback
+        view.add_item(button)
 
         yield '', embed, view, EDIT
         return
