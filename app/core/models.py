@@ -509,6 +509,7 @@ def define_app_command_impl(
             source.cog = slf
             ctx = await slf.bot.get_context(itx)
             ctx.command = source.copy()
+            ctx.command.cog = slf
 
             async def invoker(*iargs: Any, **ikwargs: Any) -> Any:
                 ctx.args = [ctx.cog, ctx, *iargs]
