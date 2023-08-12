@@ -1896,16 +1896,16 @@ class DivingView(UserView):
             name=f'Oxygen: **{max(0, self._oxygen):,}**/50',
             value=f'{progress_bar(self._oxygen / 50, length=6)}',
         )
-        if self._depth >= 50:
-            embed.set_footer(
-                text=f'Dive Deeper: {self.calculate_pressure_chance(depth=self._depth + 50):.02%} chance of dying from pressure',
-            )
 
         if message is not None:
             embed.description = message
         if error:
             embed.colour = Colors.error
             return embed
+        if self._depth >= 50:
+            embed.set_footer(
+                text=f'Dive Deeper: {self.calculate_pressure_chance(depth=self._depth + 50):.02%} chance of dying from pressure',
+            )
 
         earnings = []
         if self._profit:
