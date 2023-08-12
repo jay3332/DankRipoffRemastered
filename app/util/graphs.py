@@ -56,7 +56,7 @@ def create_graph(x, y, **kwargs):
     date_num = date_num_smooth = mdates.date2num(date_arr)
 
     # date_num_smooth = np.linspace(date_num.min(), date_num.max(), 100)
-    spline = make_interp_spline(date_num, value_arr, k=1)
+    spline = make_interp_spline(date_num, value_arr, k=2)
     value_np_smooth = spline(date_num_smooth)
 
     line, = axes.plot(adjusted := mdates.num2date(date_num_smooth), value_np_smooth, color=color)
