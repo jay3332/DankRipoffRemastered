@@ -88,7 +88,7 @@ class JobListFormatter(Formatter):
         return embed
 
 
-class JobsCog(Cog, name='Cog'):
+class JobsCog(Cog, name='Jobs'):
     """Commands related to jobs and job management."""
 
     emoji = '\U0001f4bc'
