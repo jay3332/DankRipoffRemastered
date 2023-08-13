@@ -234,7 +234,25 @@ class JobsCog(Cog, name='Jobs'):
     @work.command('info', aliases={'i', 'details'}, hybrid=True)
     async def job_info(self, ctx: Context, *, job: Annotated[Job, JobTransformer]) -> CommandResponse:
         """See details about a specific job."""
-        return 'todo'
+        embed = discord.Embed(color=Colors.primary, title=job.display, description=job.description, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}: Job Info', icon_url=ctx.author.display_avatar)
+        embed.set_thumbnail(url=image_url_from_emoji(job.emoji))
+
+        embed.add_field(name='Base Salary', value=f'{Emojis.coin} **{job.base_salary:,}**')
+        embed.add_field(name='Work Cooldown', value=humanize_duration(job.cooldown.total_seconds()))
+
+        expanded = []
+        if job.work_experience_required:
+            expanded.append(f'\N{CRYSTAL BALL} Experience Required: {job.work_experience_required:,} total shifts')
+        if job.intelligence_required:
+            expanded.append(f'\N{BRAIN} Intelligence Required: **{job.intelligence_required:,} IQ*')
+        if expanded:
+            embed.add_field(name='Requirements', value=expansion_list(expanded))
+
+        embed.add_field(name='Minigames', value=', '.join(m.name for m in job.minigames), inline=False)
+        if job.keywords:
+            embed.add_field(name='Keywords', value=', '.join(job.keywords), inline=False)
+        return embed, REPLY
 
     @work.command('apply', aliases={'set', 'a'}, hybrid=True)
     @app_commands.describe(job='The job you want to apply for.')
