@@ -1,0 +1,290 @@
+from __future__ import annotations
+
+import asyncio
+import datetime
+import random
+from copy import deepcopy
+from typing import Annotated
+
+import discord
+from discord import app_commands
+from discord.utils import format_dt
+
+from app.core import ERROR, Cog, Context, REPLY, group, user_max_concurrency
+from app.core.helpers import EPHEMERAL
+from app.data.jobs import Job, Jobs, MinigameFailure
+from app.util.common import (
+    expansion_list,
+    get_by_key, humanize_duration,
+    image_url_from_emoji,
+    pluralize,
+    query_collection,
+    query_collection_many,
+    walk_collection,
+)
+from app.util.pagination import ActiveItem, Formatter, Paginator
+from app.util.types import CommandResponse, TypedInteraction
+from app.util.views import StaticCommandButton, invoke_command
+from config import Colors, Emojis
+
+
+def query_job(query: str) -> Job:
+    return query_collection(Jobs, Job, query)
+
+
+class JobTransformer(app_commands.Transformer):
+    @classmethod
+    async def convert(cls, _, argument: str) -> Job:
+        return query_job(argument)
+
+    async def transform(self, _, argument: str) -> Job:
+        return query_job(argument)
+
+    async def autocomplete(self, _, current: str) -> list[app_commands.Choice]:
+        return [
+            app_commands.Choice(name=job.name, value=job.key)
+            for job in query_collection_many(Jobs, Job, current)
+        ]
+
+
+class ActiveJobSelect(discord.ui.Select, ActiveItem):
+    def __init__(self, ctx: Context) -> None:
+        super().__init__(placeholder='Apply for a job...', row=0)
+        self.ctx = ctx
+
+    async def active_update(self, paginator: Paginator, jobs: list[Job]) -> None:
+        self.options = [
+            discord.SelectOption(label=job.name, value=job.key, emoji=job.emoji)
+            for job in jobs
+        ]
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        await invoke_command(
+            self.ctx.bot.get_command('work apply'),  # type: ignore
+            interaction, args=(), kwargs={'job': get_by_key(Jobs, self.values[0])},
+        )
+
+
+class JobListFormatter(Formatter):
+    def __init__(self, embed: discord.Embed, jobs: list[Job], *, per_page: int = 5) -> None:
+        self.embed: discord.Embed = embed
+        super().__init__(jobs, per_page=per_page)
+
+    async def format_page(self, paginator: Paginator, jobs: list[Job]) -> discord.Embed:
+        embed = discord.Embed.from_dict(deepcopy(self.embed.to_dict()))
+        for job in jobs:
+            expanded = [f'\N{ALARM CLOCK} Cooldown: **{humanize_duration(job.cooldown.total_seconds())}**']
+            if job.work_experience_required:
+                expanded.append(f'\N{CRYSTAL BALL} Experience Required: {job.work_experience_required:,} total shifts')
+            if job.intelligence_required:
+                expanded.append(f'\N{BRAIN} Intelligence Required: **{job.intelligence_required:,} IQ*')
+
+            embed.add_field(
+                name=f'**{job.display}** \u2014 {Emojis.coin} **{job.base_salary:,}** per shift',
+                value=expansion_list(expanded),
+                inline=False,
+            )
+
+        return embed
+
+
+class JobsCog(Cog, name='Cog'):
+    """Commands related to jobs and job management."""
+
+    emoji = '\U0001f4bc'
+
+    def _prepare_find_job_error(self, ctx: Context) -> tuple[str, discord.ui.View]:
+        view = discord.ui.View()
+        view.add_item(StaticCommandButton(
+            command=self.job_list, label='Find me a job', style=discord.ButtonStyle.primary, emoji='\U0001f50e',  # type: ignore
+        ))
+        mention = ctx.bot.tree.get_app_command('work list').mention
+        return mention, view
+
+    @group(aliases={'job', 'jobs', 'j', 'occupation', 'jo'}, hybrid=True, fallback='start', expand_subcommands=True)
+    @user_max_concurrency(1)
+    async def work(self, ctx: Context) -> CommandResponse:
+        """Work your job and earn some money."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        if record.job is None:
+            mention, view = self._prepare_find_job_error(ctx)
+            return f"You aren't hired yet. Get a job first! ({mention})", view, ERROR
+
+        expires_at = record.job.cooldown_expires_at
+        if expires_at and ctx.now < expires_at:
+            return f'You recently worked your shift. You can work again {format_dt(expires_at, "R")}.', ERROR
+
+        info = record.job.job
+        minigame = random.choice(info.minigames)
+
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now, title=f'Working as {info.chunk}')
+        embed.set_author(name=f'{ctx.author.name}: Work', icon_url=ctx.author.display_avatar)
+        embed.set_thumbnail(url=image_url_from_emoji(info.emoji))
+
+        disclaimer = ' (before multipliers)' if record.coin_multiplier > 1 else ''
+        embed.description = (
+            f'Expected salary: {Emojis.coin} **{record.job.salary:,}**{disclaimer}\n'
+            'To work, complete the minigame below'
+        )
+
+        await ctx.reply(f'{Emojis.loading} Working as {info.chunk}...')
+        await asyncio.sleep(random.uniform(2.0, 4.0))
+        try:
+            message = await minigame.callback(ctx, embed, info)
+        except MinigameFailure as exc:
+            return str(exc), REPLY
+
+        message = message or ctx._message
+        raise_amount = 0 if not record.job.hours or record.job.hours % 5 else info.base_salary // 10
+
+        async with ctx.db.acquire() as conn:
+            await record.add(job_hours=1, work_experience=1, job_salary=raise_amount, connection=conn)
+            await record.update(job_cooldown_expires_at=ctx.now + info.cooldown, connection=conn)
+            raise_text = (
+                f'\n\u2934\ufe0f **You got a raise!** Your salary is now {Emojis.coin} **{record.job.salary:,}**.'
+                if raise_amount else ''
+            )
+            profit = await record.add_coins(record.job.salary, connection=conn)
+
+            item_text = ''
+            item = random.choices(list(info.items), weights=list(info.items.values()))[0]
+            if item:
+                await record.inventory_manager.add_item(item, connection=conn)
+                item_text = f' and {item.get_sentence_chunk()}'
+
+        view = discord.ui.View()
+        view.add_item(StaticCommandButton(
+            command=self.job_view, label='View Job', style=discord.ButtonStyle.primary, emoji=self.emoji,  # type: ignore
+        ))
+        await message.reply(
+            f'{info.emoji} **SUCCESS!** You work as {info.chunk} and earn {Emojis.coin} **{profit:,}**{item_text}!{raise_text}',
+            view=view,
+        )
+
+    @work.command('view', aliases={'v', 'me'}, hybrid=True)
+    async def job_view(self, ctx: Context) -> CommandResponse:
+        """View information regarding your current job."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        if record.job is None:
+            mention, view = self._prepare_find_job_error(ctx)
+            return f"You don't have a job yet. Get one first! ({mention})", view, ERROR
+
+        job = record.job.job
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}: Job', icon_url=ctx.author.display_avatar)
+        embed.set_thumbnail(url=image_url_from_emoji(job.emoji))
+        embed.description = f'You currently work as {job.chunk_display}.'
+        embed.add_field(name='Salary', value=f'{Emojis.coin} **{record.job.salary:,}**')
+        embed.add_field(name='Work Hours', value=f'**{record.job.hours:,}** (Total: {record.work_experience:,})')
+
+        available = record.job.cooldown_expires_at is None or record.job.cooldown_expires_at <= ctx.now
+        mention = ctx.bot.tree.get_app_command('work').mention
+        embed.add_field(
+            name='Work Cooldown',
+            value=(
+                  f'\N{ALARM CLOCK} You can work now! {mention}' if available
+                  else (
+                      f'\N{ALARM CLOCK} Work again {format_dt(record.job.cooldown_expires_at, "R")}\n'
+                      f'{Emojis.Expansion.standalone} Cooldown: {humanize_duration(job.cooldown.total_seconds())}'
+                  )
+            ),
+        )
+        # raise every 5 hours
+        raise_in = (record.job.hours // 5 + 1) * 5 - record.job.hours
+        embed.add_field(name='Raise', value=pluralize(f'Next raise in {raise_in} shift(s)'))
+
+        view = discord.ui.View()
+        view.add_item(StaticCommandButton(
+            command=self.work, label='Work', style=discord.ButtonStyle.primary, emoji=self.emoji,
+            disabled=not available,
+        ))
+        return embed, view
+
+    @work.command('list', aliases={'l', 'ls', 'offers', 'offerings', 'find'}, hybrid=True)
+    async def job_list(self, ctx: Context) -> CommandResponse:
+        """View available job offerings."""
+        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.name}: Job Offerings', icon_url=ctx.author.display_avatar)
+
+        formatter = JobListFormatter(embed, list(walk_collection(Jobs, Job)), per_page=3)
+        return Paginator(ctx, formatter, other_components=[ActiveJobSelect(ctx)]), REPLY
+
+    @work.command('info', aliases={'i', 'details'}, hybrid=True)
+    async def job_info(self, ctx: Context, *, job: Annotated[Job, JobTransformer]) -> CommandResponse:
+        """See details about a specific job."""
+        return 'todo'
+
+    @work.command('apply', aliases={'set', 'a'}, hybrid=True)
+    @app_commands.describe(job='The job you want to apply for.')
+    async def job_apply(self, ctx: Context, *, job: Annotated[Job, JobTransformer]) -> CommandResponse:
+        """Apply for a new job."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        if record.job is not None:
+            view = discord.ui.View()
+            view.add_item(StaticCommandButton(
+                command=self.job_resign, label='Resign', style=discord.ButtonStyle.danger, emoji='\U0001f4e4',  # type: ignore
+            ))
+            return f'You\'re already working as {record.job.job.chunk_display}!', view, ERROR
+
+        if record.job_switch_cooldown_expiry and record.job_switch_cooldown_expiry > ctx.now:
+            return (
+                f'You\'re switching jobs too fast! '
+                f'You can switch jobs again {format_dt(record.job_switch_cooldown_expiry, "R")}.',
+                ERROR,
+            )
+
+        if record.work_experience < job.work_experience_required:
+            return (
+                f'**You don\'t have enough work experience to apply for this job!** '
+                f'You need **{job.work_experience_required:,}** total shifts of work experience, '
+                f'but you only have {record.work_experience:,}.',
+                ERROR,
+            )
+
+        if record.iq < job.intelligence_required:
+            return (
+                f'**You don\'t have enough IQ to apply for this job!** '
+                f'You need **{job.intelligence_required:,}** IQ, but you only have {record.iq:,} IQ.',
+                ERROR,
+            )
+        
+        await record.update(
+            job=job.key,
+            job_salary=job.base_salary,
+            job_hours=0,
+            job_cooldown_expires_at=None,
+            job_switch_cooldown_expires_at=ctx.now + datetime.timedelta(hours=6),
+        )
+        view = discord.ui.View()
+        view.add_item(StaticCommandButton(
+            command=self.work, label='Start Working', style=discord.ButtonStyle.primary, emoji=self.emoji,
+        ))
+        return f'**Hired!** You now work as {job.chunk_display}!', view, REPLY
+
+    @work.command('resign', aliases={'retire', 'res', 'r'}, hybrid=True)
+    async def job_resign(self, ctx: Context) -> CommandResponse:
+        """Resign from your current job."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        if record.job is None:
+            return 'You don\'t have a job to resign from!', ERROR
+
+        if not await ctx.confirm(
+            f'Are you sure you want to resign from your job as {record.job.job.chunk_display}?\n'
+            + (
+                f'{Emojis.Expansion.standalone} You have worked {record.job.hours:,} shifts in this job'
+                + (
+                    f' and accumulated {Emojis.coin} **{record.job.salary - record.job.job.base_salary:,}** in raises'
+                    if record.job.hours >= 5 else ''
+                )
+                + '. You will lose these if you resign.'
+                if record.job.hours > 0 else ''
+            )
+        ):
+            return 'Alright, we will resign another day then', REPLY, EPHEMERAL
+
+        display = record.job.job.chunk_display
+        await record.update(job=None, job_salary=None, job_cooldown_expires_at=None, job_hours=None)
+        return f'You have resigned from your job as {display}.', REPLY
+
+
+setup = JobsCog.simple_setup

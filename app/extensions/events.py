@@ -12,7 +12,7 @@ from discord.utils import format_dt
 
 from app.core import Cog, Command, Context
 from app.core.flags import FlagMeta
-from app.core.helpers import ActiveTransactionLock
+from app.core.helpers import ActiveTransactionLock, GenericError
 from app.data.items import Items
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.common import humanize_duration, pluralize
@@ -52,6 +52,10 @@ class Events(Cog):
                 )
 
             ctx.command.reset_cooldown(ctx)
+            if isinstance(error, GenericError):
+                error.kwargs.setdefault('view', view)
+                return await respond(**error.kwargs)
+
             return await respond(error, view=view)
 
         if isinstance(error, commands.MaxConcurrencyReached):

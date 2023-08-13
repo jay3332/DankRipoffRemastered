@@ -24,7 +24,7 @@ from app.core.timers import TimerManager
 from app.database import Database
 from app.util.structures import LockWithReason
 from config import (
-    DatabaseConfig, allowed_mentions, backups_channel, default_prefix,
+    DatabaseConfig, allowed_mentions, backups_channel, beta, default_prefix,
     description, ipc_secret, name, owner, token, version,
 )
 
@@ -282,7 +282,7 @@ class Bot(commands.Bot):
 
     async def resolve_command_prefix(self, message: discord.Message) -> list[str]:
         """Resolves a command prefix from a message."""
-        if not message.guild:
+        if beta or not message.guild:
             return commands.when_mentioned_or(default_prefix)(self, message)
 
         record = await self.db.get_guild_record(message.guild.id)

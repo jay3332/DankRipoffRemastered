@@ -2,6 +2,7 @@ from .bot import Bot
 from .helpers import (
     BAD_ARGUMENT,
     EDIT,
+    ERROR,
     NO_EXTRA,
     REPLY,
     command,

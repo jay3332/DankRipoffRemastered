@@ -263,7 +263,7 @@ class Skills:
             embed = discord.Embed(color=Colors.primary)
 
             embed.add_field(name='Type the following into chat:', value=f'**`{insert_random_u200b(prompt)}`**')
-            embed.set_author(name=f'{ctx.author.name}: Training Begging Skill', icon_url=ctx.author.avatar.url)
+            embed.set_author(name=f'{ctx.author.name}: Training Begging Skill', icon_url=ctx.author.display_avatar)
             embed.set_footer(text=f'Prompt {i} out of 3')
 
             await ctx.send(embed=embed)
@@ -294,7 +294,7 @@ class Skills:
     @robbery.to_train
     async def train_robbery(self, ctx: Context, _: Skill) -> Any:
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'{ctx.author.name}: Training Robbery Skill', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name}: Training Robbery Skill', icon_url=ctx.author.display_avatar)
 
         embed.description = (
             "Practice entering this combination into the keypad before time runs out!\n"
@@ -333,7 +333,7 @@ class Skills:
     @defense.to_train
     async def train_defense(self, ctx: Context, _: Skill) -> Any:
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'{ctx.author.name}: Training Defense Skill', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name}: Training Defense Skill', icon_url=ctx.author.display_avatar)
         embed.set_footer(text='Starting in 5 seconds.')
 
         embed.description = (

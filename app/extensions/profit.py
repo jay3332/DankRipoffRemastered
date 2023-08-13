@@ -924,7 +924,7 @@ class Profit(Cog):
 
             try:
                 response = await ctx.bot.wait_for(
-                    'message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=10,
+                    'message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=14,
                 )
                 initial = "You failed to wind up your fishing pole"
 
@@ -1026,7 +1026,7 @@ class Profit(Cog):
             )
 
             try:
-                response = await ctx.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=10)
+                response = await ctx.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=14)
                 initial = "You failed dig up the item"
 
             except asyncio.TimeoutError:
@@ -1116,7 +1116,7 @@ class Profit(Cog):
             )
 
             try:
-                response = await ctx.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=10)
+                response = await ctx.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=14)
                 initial = "You failed mine the ore"
 
             except asyncio.TimeoutError:

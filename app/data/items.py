@@ -358,6 +358,27 @@ class Items:
         await record.update(padlock_active=False)
         await ctx.send(f'{item.emoji} Successfully deactivated your padlock.')
 
+    ban_hammer = Item(
+        type=ItemType.miscellaneous,
+        key='ban_hammer',
+        name='Ban Hammer',
+        emoji='<:ban_hammer:1140106045176414298>',
+        description='A ban hammer, obtained from the Discord Mod job.',
+        sell=1000,
+        sellable=True,
+    )
+
+    camera = Item(
+        type=ItemType.tool,
+        key='camera',
+        name='Camera',
+        emoji='<:camera:1140009247548121178>',
+        description='A camera, obtained from various jobs. Can be used to post videos online for profit.',
+        sell=5000,
+        sellable=True,
+        rarity=ItemRarity.rare,
+    )
+
     banknote = Item(
         type=ItemType.tool,
         key='banknote',
@@ -639,7 +660,7 @@ class Items:
     @shovel.to_use
     @durable_shovel.to_use
     async def use_shovel(self, ctx: Context, _) -> None:
-        await ctx.invoke(ctx.bot.get_command('dig'))
+        await ctx.invoke(ctx.bot.get_command('dig'))  # type: ignore
 
     __shovels__: tuple[Item[dict[Item, float]], ...] = (
         durable_shovel,

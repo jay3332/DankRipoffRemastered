@@ -53,7 +53,7 @@ class Pets:
         emoji='<:dog:1134641292245205123>',
         rarity=PetRarity.common,
         description="A descendant of the wolf and a man's best friend.",
-        energy_per_minute=0.5,
+        energy_per_minute=0.2,
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.3}% coins from begging\n'
@@ -67,7 +67,7 @@ class Pets:
         emoji='<:cat:1134641341092089948>',
         rarity=PetRarity.common,
         description='A small, domesticated, carnivorous mammal.',
-        energy_per_minute=0.5,
+        energy_per_minute=0.2,
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.2}% weight on finding rarer items when fishing\n'
@@ -94,7 +94,7 @@ class Pets:
         emoji='\U0001f430',
         rarity=PetRarity.common,
         description='A mammal with long ears that hops around.',
-        energy_per_minute=0.5,
+        energy_per_minute=0.2,
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.5}% global XP multiplier'
@@ -121,7 +121,7 @@ class Pets:
         emoji='\U0001f42d',
         rarity=PetRarity.common,
         description='A small rodent that likes cheese.',
-        energy_per_minute=0.5,
+        energy_per_minute=0.2,
         max_energy=100,
         benefit=lambda level: (
             f'- +{5 + level * 0.5}% XP multiplier increase from eating cheese\n'
@@ -135,7 +135,7 @@ class Pets:
         emoji='\U0001f986',
         rarity=PetRarity.uncommon,
         description='Waddle waddle and then they go quack',
-        energy_per_minute=0.75,
+        energy_per_minute=0.3,
         max_energy=200,
         benefit=lambda level: (
             f'- +{2 + level * 0.5}% profit from working\n'  # TODO
@@ -150,7 +150,7 @@ class Pets:
         emoji='\U0001f41d',
         rarity=PetRarity.uncommon,
         description='A flying insect that pollinates flowers and makes honey.',
-        energy_per_minute=0.75,
+        energy_per_minute=0.3,
         max_energy=300,
         benefit=lambda level: (
             f'- +{1 + level * 0.4}% faster harvesting crops\n'
@@ -167,7 +167,7 @@ class Pets:
         emoji='\U0001f42e',
         rarity=PetRarity.rare,
         description='A large mammal used for producing milk (and steak of course).',
-        energy_per_minute=1.25,
+        energy_per_minute=0.5,
         max_energy=500,
         benefit=lambda level: (
             f'- +{2 + level * 0.5}% more coins from beg, search, and crime\n'

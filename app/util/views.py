@@ -70,7 +70,7 @@ async def _get_context(command: HybridCommand | HybridGroupCommand, interaction:
     return await interaction.client.get_context(interaction)
 
 
-async def _invoke_command(
+async def invoke_command(
     command: HybridCommand | HybridGroupCommand,
     source: discord.Interaction | Context,
     *,
@@ -100,7 +100,7 @@ class StaticCommandButton(discord.ui.Button):
         self.command_kwargs = command_kwargs or {}
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await _invoke_command(self.command, interaction, args=self.command_args, kwargs=self.command_kwargs)
+        await invoke_command(self.command, interaction, args=self.command_args, kwargs=self.command_kwargs)
 
 
 class CommandInvocableModal(discord.ui.Modal):
@@ -113,7 +113,7 @@ class CommandInvocableModal(discord.ui.Modal):
 
     # source is _underscored to avoid conflict with commands that have a source parameter
     async def invoke(self, _source: TypedInteraction | Context, /, *args: Any, **kwargs: Any) -> None:
-        await _invoke_command(self.command, _source, args=args, kwargs=kwargs)
+        await invoke_command(self.command, _source, args=args, kwargs=kwargs)
 
 
 GetModal = (

@@ -167,7 +167,7 @@ class RecipeView(UserView):
         embed = discord.Embed(
             title=self.current.name, description=self.current.description, color=Colors.primary, timestamp=self.ctx.now,
         )
-        embed.set_author(name='Recipes', icon_url=self.ctx.author.avatar.url)
+        embed.set_author(name='Recipes', icon_url=self.ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(self.current.emoji))
 
         if not self.discovered:
@@ -240,7 +240,7 @@ class RecipeView(UserView):
                 await manager.add_item(item, quantity * amount, connection=conn)
 
         embed = discord.Embed(color=Colors.success, timestamp=self.ctx.now)
-        embed.set_author(name='Crafted Successfully', icon_url=self.ctx.author.avatar.url)
+        embed.set_author(name='Crafted Successfully', icon_url=self.ctx.author.display_avatar)
 
         embed.add_field(
             name='Crafted',

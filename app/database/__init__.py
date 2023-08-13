@@ -14,6 +14,7 @@ import discord.utils
 from discord.utils import cached_property, format_dt
 
 from app.data.items import CropMetadata, Item, Items
+from app.data.jobs import Job, Jobs
 from app.data.pets import Pet, Pets
 from app.data.skills import Skill, Skills
 from app.database.migrations import Migrator
@@ -880,6 +881,33 @@ class BaseRecord(ABC):
         return self._update(lambda o: f'"{o[1]}" = ARRAY_APPEND("{o[1]}", ${o[0]})', values, connection=connection)
 
 
+class JobProvider(NamedTuple):
+    record: UserRecord
+
+    @property
+    def key(self) -> str:
+        return self.record.data['job']
+
+    @property
+    def job(self) -> Job:
+        return get_by_key(Jobs, self.key)
+
+    @property
+    def salary(self) -> int:
+        return self.record.data['job_salary']
+
+    @property
+    def cooldown_expires_at(self) -> datetime.datetime:
+        return self.record.data['job_cooldown_expires_at']
+
+    @property
+    def hours(self) -> int:
+        return self.record.data['job_hours']
+
+    def __repr__(self) -> str:
+        return f'<JobProvider job={self.job!r} salary={self.salary} hours={self.hours}>'
+
+
 class UserRecord(BaseRecord):
     """Stores data about a user."""
 
@@ -1213,6 +1241,24 @@ class UserRecord(BaseRecord):
     @property
     def last_dbl_vote(self) -> datetime.datetime:
         return self.data['last_dbl_vote']
+
+    @property
+    def job(self) -> JobProvider | None:
+        if self.data.get('job') is None:
+            return None
+        return JobProvider(self)
+
+    @property
+    def job_switch_cooldown_expiry(self) -> datetime.datetime:
+        return self.data['job_switch_cooldown_expires_at']
+
+    @property
+    def work_experience(self) -> int:
+        return self.data['work_experience']
+
+    @property
+    def iq(self) -> int:
+        return self.data['iq']
 
     @property
     def inventory_manager(self) -> InventoryManager:

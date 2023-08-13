@@ -95,7 +95,9 @@ class Context(TypedContext):
 
         return view.value
 
-    async def maybe_edit(self, message: discord.Message, content: Any = None, **kwargs: Any) -> discord.Message | None:
+    async def maybe_edit(self, message: discord.Message = MISSING, content: Any = None, **kwargs: Any) -> discord.Message | None:
+        if message is MISSING:
+            message = self._message
         try:
             await message.edit(content=content, **kwargs)
         except (AttributeError, discord.NotFound):

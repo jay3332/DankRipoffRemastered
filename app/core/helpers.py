@@ -33,6 +33,8 @@ __all__ = (
 EDIT  = sentinel('EDIT', repr='EDIT')
 REPLY = sentinel('REPLY', repr='REPLY')
 BAD_ARGUMENT = sentinel('BAD_ARGUMENT', repr='BAD_ARGUMENT')
+ERROR = sentinel('ERROR', repr='ERROR')
+EPHEMERAL = sentinel('ERROR', repr='EPHEMERAL')
 NO_EXTRA = sentinel('NO_EXTRA', repr='NO_EXTRA')
 
 MISSING = sentinel('MISSING', bool=False, repr='MISSING')
@@ -40,6 +42,7 @@ MISSING = sentinel('MISSING', bool=False, repr='MISSING')
 CURRENCY_COGS: Final[frozenset[str]] = frozenset({
     'Casino',
     'Farming',
+    'Jobs',
     'Pets',
     'Profit',
     'Skill',
@@ -79,6 +82,12 @@ async def _into_interaction_response(interaction: TypedInteraction, kwargs: dict
         await interaction.response.send_message(**kwargs)
 
 
+class GenericError(commands.BadArgument):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(kwargs.get('content', 'Unknown error'))
+        self.kwargs = kwargs
+
+
 async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
     # sourcery no-metrics
     if payload is None:
@@ -96,6 +105,7 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
     paginator = None
     extra = True
     edit = False
+    error = False
 
     for part in payload:
         if part is REPLY:
@@ -106,6 +116,12 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
 
         elif part is BAD_ARGUMENT:
             raise commands.BadArgument(kwargs['content'])
+
+        elif part is EPHEMERAL:
+            kwargs['ephemeral'] = True
+
+        elif part is ERROR:
+            error = True
 
         elif part is NO_EXTRA:
             extra = False
@@ -130,6 +146,9 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
 
         else:
             kwargs['content'] = str(part)
+
+    if error:
+        raise GenericError(**kwargs)
 
     if extra and ctx.cog.qualified_name in CURRENCY_COGS and not kwargs.get('content') and not edit:
         record = await ctx.db.get_user_record(ctx.author.id)
