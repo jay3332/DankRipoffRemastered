@@ -278,7 +278,8 @@ class JobsCog(Cog, name='Jobs'):
                 )
                 + '. You will lose these if you resign.'
                 if record.job.hours > 0 else ''
-            )
+            ),
+            delete_after=True,
         ):
             return 'Alright, we will resign another day then', REPLY, EPHEMERAL
 
