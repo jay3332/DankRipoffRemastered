@@ -203,7 +203,7 @@ class JobsCog(Cog, name='Jobs'):
         )
 
         available = record.job.cooldown_expires_at is None or record.job.cooldown_expires_at <= ctx.now
-        mention = ctx.bot.tree.get_app_command('work').mention
+        mention = ctx.bot.tree.get_app_command('work start').mention
         embed.add_field(
             name='Work Cooldown',
             value=(
