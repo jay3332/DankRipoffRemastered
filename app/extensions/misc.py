@@ -17,7 +17,7 @@ from app.core import BAD_ARGUMENT, Bot, Cog, Context, EDIT, REPLY, command, grou
 from app.core.timers import Timer
 from app.data.items import Items
 from app.data.settings import Setting, Settings
-from app.util.common import converter, cutoff, pluralize, walk_collection
+from app.util.common import converter, cutoff, format_line, pluralize, walk_collection
 from app.util.converters import better_bool, query_setting
 from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginator
 from app.util.structures import Timer as PingTimer
@@ -62,20 +62,7 @@ class CooldownReminderMetadata(NamedTuple):
 
 
 class Guide:
-    COMMAND_SUBSTITUTION = re.compile(r'\{/([^}]+)}')
     BACKSLASH_SUBSTITUTION = re.compile(r'\\.', re.MULTILINE)
-
-    @classmethod
-    def format_line(cls, ctx: Context, line: str) -> str:
-        line = line.format(support_server=support_server)
-
-        def sub(match: re.Match) -> str:
-            cmd = ctx.bot.tree.get_app_command(query := match.group(1))
-            if cmd is None:
-                return f'/{query}'
-            return cmd.mention
-
-        return cls.COMMAND_SUBSTITUTION.sub(sub, line)
 
     @classmethod
     def walk_markdown(cls, ctx: Context, lines: list[str], embed: discord.Embed) -> None:
@@ -86,10 +73,10 @@ class Guide:
         while index < len(lines):
             line = lines[index]
             line = line.strip()
-            line = cls.format_line(ctx, line)
+            line = format_line(ctx, line)
             while line.endswith('\\'):
                 index += 1
-                line = line[:-1] + cls.format_line(ctx, lines[index].strip())
+                line = line[:-1] + format_line(ctx, lines[index].strip())
 
             if line.startswith('##'):
                 if current:

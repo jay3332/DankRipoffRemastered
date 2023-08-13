@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import random
 from datetime import timedelta
 from functools import wraps
 from typing import Any, Callable, Final, Iterable, Literal, TYPE_CHECKING, overload
@@ -10,7 +11,7 @@ from discord.app_commands import Command as AppCommand
 from discord.ext import commands
 
 from app.core.models import Command, GroupCommand, HybridCommand, HybridGroupCommand
-from app.util.common import sentinel
+from app.util.common import format_line, sentinel
 from app.util.pagination import Paginator
 from app.util.structures import LockWithReason
 
@@ -88,6 +89,10 @@ class GenericError(commands.BadArgument):
         self.kwargs = kwargs
 
 
+with open('assets/tips.txt', 'r') as f:
+    TIPS = f.readlines()
+
+
 async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
     # sourcery no-metrics
     if payload is None:
@@ -159,7 +164,10 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
                 f"Run `{ctx.clean_prefix}notifications` to view them."
             )
 
-        # TODO: tips
+        if random.random() < 0.2:
+            tip = random.choice(TIPS)
+            kwargs.setdefault('content', '')
+            kwargs['content'] += f'\n\U0001f4a1 **Tip:** {format_line(ctx, tip)}'
 
     interaction = getattr(ctx, 'interaction', None)
 

@@ -22,7 +22,7 @@ from typing import (
 
 from discord.ext.commands import Converter
 
-from config import Emojis
+from config import Emojis, support_server
 
 if TYPE_CHECKING:
     from app.core import Context
@@ -341,3 +341,19 @@ def pick(d: Mapping[K, V], /, *keys: K, **transform_keys: V) -> dict[K, V]:
     if transform_keys:
         return {transform_keys.get(k, k): v for k, v in d.items() if k in keys or k in transform_keys}
     return {k: v for k, v in d.items() if k in keys}
+
+
+COMMAND_SUBSTITUTION = re.compile(r'\{/([^}]+)}')
+
+
+def format_line(ctx: Context, line: str) -> str:
+    """Formats an external line."""
+    line = line.format(support_server=support_server)
+
+    def sub(match: re.Match) -> str:
+        cmd = ctx.bot.tree.get_app_command(query := match.group(1))
+        if cmd is None:
+            return f'/{query}'
+        return cmd.mention
+
+    return COMMAND_SUBSTITUTION.sub(sub, line)
