@@ -270,7 +270,7 @@ async def retype(ctx: Context, embed: discord.Embed, job: Job) -> discord.Messag
     await ctx.maybe_edit(embed=embed)
 
     def check(m: discord.Message) -> bool:
-        return m.author == ctx.author and m.content == phrase
+        return m.author == ctx.author and m.channel == ctx.channel
 
     try:
         response = await ctx.bot.wait_for('message', check=check, timeout=12)
