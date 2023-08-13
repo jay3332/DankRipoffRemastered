@@ -278,31 +278,31 @@ class Items:
                 f"You can drink alcohol again {format_dt(retry_at, 'R')}."
             )
 
-        message = await ctx.send(f'{item.emoji} Drinking the alcohol...')
+        message = await ctx.reply(f'{item.emoji} Drinking the alcohol...')
         await asyncio.sleep(2)
 
         # pay a fine
         if random.random() < 0.1:
             fine = max(500, int(record.wallet * random.uniform(0.4, 1.0)))
-            message = random.choice(self.ALCOHOL_FINE_MESSAGES).format(f'{Emojis.coin} **{fine}**')
+            msg = random.choice(self.ALCOHOL_FINE_MESSAGES).format(f'{Emojis.coin} **{fine}**')
 
             if record.wallet < 500:
-                message += ' Since you\'re poor, they kill you instead and take your wallet.'
+                msg += ' Since you\'re poor, they kill you instead and take your wallet.'
                 async with ctx.db.acquire() as conn:
                     await record.make_dead(reason='not being able to afford fines', connection=conn)
                     await record.update(wallet=0)
 
-                await ctx.send(f'\U0001f480 {message}')
+                await ctx.maybe_edit(message, f'\U0001f480 {msg}')
                 return
 
             await record.add(wallet=-fine)
-            await ctx.send(f'\U0001f6a8 {message}')
+            await ctx.maybe_edit(message, f'\U0001f6a8 {msg}')
             return
 
         # make dead
         if random.random() < 0.01:
             await record.make_dead(reason='alcohol poisoning')
-            await ctx.send(f'\U0001f480 {random.choice(self.ALCOHOL_DEATH_MESSAGES)}')
+            await ctx.maybe_edit(message, f'\U0001f480 {random.choice(self.ALCOHOL_DEATH_MESSAGES)}')
             return
 
         await record.update(last_alcohol_usage=ctx.now)
@@ -323,10 +323,10 @@ class Items:
     async def remove_alcohol(self, ctx: Context, item: Item) -> None:
         record = await ctx.db.get_user_record(ctx.author.id)
         if record.alcohol_expiry is None:
-            await ctx.send('You are not drunk (i.e. you don\'t have alcohol active).')
+            await ctx.reply('You are not drunk (i.e. you don\'t have alcohol active).')
             return
         await record.update(last_alcohol_usage=None)
-        await ctx.send(f'{item.emoji} Removed the effects of alcohol; you are no longer drunk.')
+        await ctx.reply(f'{item.emoji} Removed the effects of alcohol; you are no longer drunk.')
 
     padlock = Item(
         type=ItemType.tool,
@@ -347,7 +347,7 @@ class Items:
 
         await record.update(padlock_active=True)
 
-        await ctx.send(f'{item.emoji} Successfully activated your padlock.')
+        await ctx.reply(f'{item.emoji} Successfully activated your padlock.')
 
     @padlock.to_remove
     async def remove_padlock(self, ctx: Context, item: Item) -> None:
@@ -356,7 +356,7 @@ class Items:
             raise BadArgument('You do not have a padlock active!')
 
         await record.update(padlock_active=False)
-        await ctx.send(f'{item.emoji} Successfully deactivated your padlock.')
+        await ctx.reply(f'{item.emoji} Successfully deactivated your padlock.')
 
     ban_hammer = Item(
         type=ItemType.miscellaneous,
@@ -441,7 +441,7 @@ class Items:
         else:
             readable = f'{quantity:,} slices of {item.name}'
 
-        original = await ctx.send(f'{item.emoji} Eating {readable}...', reference=ctx.message)
+        original = await ctx.reply(f'{item.emoji} Eating {readable}...')
         await asyncio.sleep(random.uniform(2, 4))
 
         chance = 1 - 0.98 ** quantity
