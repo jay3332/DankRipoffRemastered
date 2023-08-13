@@ -579,7 +579,7 @@ class Profit(Cog):
     async def search(self, ctx: Context):
         """Search for coins."""
         view: SearchView[SearchArea] = SearchView(ctx, random.sample(list(self.SEARCH_AREAS), 3), self.SEARCH_AREAS)
-        yield '\U0001f50d Where would you like to search?', view, REPLY
+        yield f'\U0001f50d {ctx.author.mention}, Where would you like to search?', view, REPLY
 
         await view.wait()
         if not view.choice:
@@ -764,7 +764,7 @@ class Profit(Cog):
     async def crime(self, ctx: Context):
         """Commit a crime and hope for profit."""
         view: SearchView[CrimeData] = SearchView(ctx, random.sample(list(self.CRIMES), 3), self.CRIMES)
-        yield 'Which crime would you like to commit?', view, REPLY
+        yield f'\U0001f92b {ctx.author.mention}, Which crime would you like to commit?', view, REPLY
 
         await view.wait()
         if not view.choice:
