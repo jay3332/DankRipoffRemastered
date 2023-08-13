@@ -140,7 +140,7 @@ class JobsCog(Cog, name='Jobs'):
             return str(exc), REPLY
 
         message = message or ctx._message
-        raise_amount = 0 if not record.job.hours or record.job.hours % 5 else info.base_salary // 10
+        raise_amount = 0 if (record.job.hours + 1) % 5 else info.base_salary // 10
 
         async with ctx.db.acquire() as conn:
             await record.add(job_hours=1, work_experience=1, job_salary=raise_amount, connection=conn)
