@@ -49,18 +49,21 @@ async def unscramble(ctx: Context, embed: discord.Embed, job: Job) -> discord.Me
     await ctx.maybe_edit(embed=embed)
 
     def check(m: discord.Message) -> bool:
-        return m.author == ctx.author and m.channel == ctx.channel
+        return (
+            m.author == ctx.author
+            and m.channel == ctx.channel
+            and m.content.lower().replace(' ', '') == word.replace(' ', '')
+        )
 
     try:
         response = await ctx.bot.wait_for('message', check=check, timeout=20)
     except TimeoutError:
-        raise MinigameFailure("where'd you go buddy?")
+        raise MinigameFailure(
+            f'You didn\'t get the word in time, the correct word was **{word}**. You failed work today.',
+        )
+    ctx.bot.loop.create_task(ctx.thumbs(response))
+    return response
 
-    if response.content.lower().replace(' ', '') == word.replace(' ', ''):
-        ctx.bot.loop.create_task(ctx.thumbs(response))
-        return response
-
-    raise MinigameFailure(f'Incorrect, the correct word was **{word}**. You failed work today.')
 
 
 STYLES = {
@@ -530,7 +533,7 @@ class Jobs:
             'i got demonetized again',
             'hey guys, welcome back to another vlog',
         ],
-        minigames=[unscramble, retype, tic_tac_toe],
+        minigames=[unscramble, retype, tic_tac_toe, logic_game],
         base_salary=800,
         cooldown=datetime.timedelta(minutes=30),
         work_experience_required=0,
