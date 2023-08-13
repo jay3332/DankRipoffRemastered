@@ -193,7 +193,7 @@ class JobsCog(Cog, name='Jobs'):
                     f'{record.job.fails:,} failed attempt{s} (out of {total:,})\n'
                     f'**{1 - record.job.fails / total:.2%} success rate**'
                 )
-                if not total else 'No attempts yet...\nWork to get started!'
+                if total else 'No attempts yet...\nWork to get started!'
             )
         )
 
