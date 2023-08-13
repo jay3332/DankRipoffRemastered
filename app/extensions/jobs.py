@@ -263,6 +263,7 @@ class JobsCog(Cog, name='Jobs'):
             job=job.key,
             job_salary=job.base_salary,
             job_hours=0,
+            job_fails=0,
             job_cooldown_expires_at=None,
             job_switch_cooldown_expires_at=ctx.now + datetime.timedelta(hours=6),
         )
@@ -295,7 +296,7 @@ class JobsCog(Cog, name='Jobs'):
             return 'Alright, we will resign another day then', REPLY, EPHEMERAL
 
         display = record.job.job.chunk_display
-        await record.update(job=None, job_salary=None, job_cooldown_expires_at=None, job_hours=None)
+        await record.update(job=None, job_salary=None, job_cooldown_expires_at=None, job_hours=None, job_fails=None)
         return f'You have resigned from your job as {display}.', REPLY
 
 
