@@ -875,7 +875,6 @@ class Transactions(Cog):
 
     @command(aliases={'recipes', 'exchange', 'recipe', 'rc'}, hybrid=True)
     @simple_cooldown(1, 4)
-    @user_max_concurrency(1)
     async def craft(self, ctx: Context, *, recipe: query_recipe = None):
         """Craft items from your inventory to make new ones!"""
         record = await ctx.db.get_user_record(ctx.author.id)
