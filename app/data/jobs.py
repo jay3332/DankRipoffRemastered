@@ -205,7 +205,7 @@ def generate_random_constraint() -> LogicConstraint:
 class LogicGameView(UserView):
     def __init__(self, ctx: Context) -> None:
         super().__init__(ctx.author, timeout=60)
-        for i in range(12):
+        for i in range(9):
             style = random.choice(list(STYLES))
             self.add_item(LogicGameButton(style=style, label=random.choice('123'), row=i // 3))
 
@@ -214,7 +214,7 @@ class LogicGameView(UserView):
         self.failed: bool = False
         self.message: str = "buddy wya you failed work today because you're slow"
 
-    @discord.ui.button(label='Submit', row=4)
+    @discord.ui.button(label='Submit', row=3)
     async def submit(self, interaction: TypedInteraction, _) -> None:
         for child in self.children:
             if not isinstance(child, LogicGameButton):
@@ -230,9 +230,8 @@ class LogicGameView(UserView):
 
         self.stop()
         await interaction.response.edit_message(view=self)
-        await interaction.followup.send(f'failed: {self.failed}')
 
-    @discord.ui.button(label='Clear', row=4)
+    @discord.ui.button(label='Clear', row=3)
     async def clear(self, interaction: TypedInteraction, _) -> None:
         for child in self.children:
             child.disabled = False
