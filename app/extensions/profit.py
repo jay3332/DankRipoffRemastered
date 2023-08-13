@@ -1469,10 +1469,17 @@ class Profit(Cog):
             yield f"The person you're trying to rob is pretty poor, try robbing people with more than {Emojis.coin} 500 next time.", BAD_ARGUMENT
             return
 
-        record = await ctx.db.get_user_record(ctx.author.id)
+        if their_record.level < 5:
+            yield 'You cannot rob people under level 5, that\'s just cruel.', BAD_ARGUMENT
+            return
 
+        record = await ctx.db.get_user_record(ctx.author.id)
         if record.wallet < 500:
             yield f'You must have {Emojis.coin} 500 in your wallet in order to rob someone.', BAD_ARGUMENT
+            return
+
+        if record.level < 5:
+            yield 'You must be at least level 5 to rob others.', BAD_ARGUMENT
             return
 
         skills = await record.skill_manager.wait()
@@ -1652,8 +1659,13 @@ class Profit(Cog):
             if random.random() < success_chance:
                 payout_percent = min(
                     random.uniform(.3, .8) + min(skills.points_in('robbery') * .02, .5), 1,
-                    )
+                )
                 payout = round(their_record.wallet * payout_percent)
+                max_payout = record.wallet * 3
+                if payout > max_payout:
+                    payout = max_payout
+                    payout_percent = payout / their_record.wallet
+
                 await record.add(wallet=payout)
                 await their_record.add(wallet=-payout)
 
