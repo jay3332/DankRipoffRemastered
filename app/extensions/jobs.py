@@ -184,7 +184,7 @@ class JobsCog(Cog, name='Jobs'):
             name='Work Hours',
             value=(
                 f'Successful: **{record.job.hours:,}** (Total: {record.work_experience:,})\n'
-                f'{record.job.fails:,} failed attempts ({record.job.fails / record.job.hours + record.job.fails:.2%} success rate)'
+                f'{record.job.fails:,} failed attempts ({record.job.fails / (record.job.hours + record.job.fails):.2%} success rate)'
             ),
         )
 
