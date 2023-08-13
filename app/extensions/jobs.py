@@ -101,7 +101,10 @@ class JobsCog(Cog, name='Jobs'):
         mention = ctx.bot.tree.get_app_command('work list').mention
         return mention, view
 
-    @group(aliases={'job', 'jobs', 'j', 'occupation', 'jo'}, hybrid=True, fallback='start', expand_subcommands=True)
+    @group(
+        aliases={'wo', 'job', 'jobs', 'j', 'occupation', 'jo'},
+        hybrid=True, fallback='start', expand_subcommands=True,
+    )
     @user_max_concurrency(1)
     async def work(self, ctx: Context) -> CommandResponse:
         """Work your job and earn some money."""

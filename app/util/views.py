@@ -84,7 +84,7 @@ async def invoke_command(
     ctx.args = [ctx.cog, ctx, *args]
     ctx.kwargs = kwargs
 
-    with TemporaryAttribute(command, '_parse_arguments', _dummy_parse_arguments):
+    with TemporaryAttribute(ctx.command, '_parse_arguments', _dummy_parse_arguments):
         await ctx.bot.invoke(ctx)
 
 
