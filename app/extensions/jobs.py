@@ -136,7 +136,9 @@ class JobsCog(Cog, name='Jobs'):
         try:
             message = await minigame.callback(ctx, embed, info)
         except MinigameFailure as exc:
-            await record.update(job_cooldown_expires_at=expiry)
+            async with ctx.db.acquire() as conn:
+                await record.add(job_fails=1, connection=conn)
+                await record.update(job_cooldown_expires_at=expiry, connection=conn)
             return str(exc), REPLY
 
         message = message or ctx._message
