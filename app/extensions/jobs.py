@@ -8,6 +8,7 @@ from typing import Annotated
 
 import discord
 from discord import app_commands
+from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
 from app.core import ERROR, Cog, Context, REPLY, group, user_max_concurrency
@@ -29,7 +30,9 @@ from config import Colors, Emojis
 
 
 def query_job(query: str) -> Job:
-    return query_collection(Jobs, Job, query)
+    if job := query_collection(Jobs, Job, query):
+        return job
+    raise BadArgument(f'Job {query!r} not found.')
 
 
 class JobTransformer(app_commands.Transformer):
