@@ -65,9 +65,7 @@ async def _dummy_parse_arguments(_ctx: Context) -> None:
 
 
 async def _get_context(command: HybridCommand | HybridGroupCommand, interaction: discord.Interaction) -> Context:
-    cog = command.cog
-    interaction._cs_command = injected = command.copy()
-    injected.cog = cog
+    interaction._cs_command = command
     interaction.message = None
     return await interaction.client.get_context(interaction)
 
@@ -79,6 +77,9 @@ async def invoke_command(
     args: Any,
     kwargs: Any,
 ) -> None:
+    cog = command.cog
+    command = command.copy()
+    command.cog = cog
     ctx = await _get_context(command, source) if isinstance(source, discord.Interaction) else source
     ctx.args = [ctx.cog, ctx, *args]
     ctx.kwargs = kwargs
