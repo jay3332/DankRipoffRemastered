@@ -129,9 +129,11 @@ class JobsCog(Cog, name='Jobs'):
 
         await ctx.reply(f'{Emojis.loading} Working as {info.chunk}...')
         await asyncio.sleep(random.uniform(2.0, 4.0))
+        expiry = ctx.now + info.cooldown
         try:
             message = await minigame.callback(ctx, embed, info)
         except MinigameFailure as exc:
+            await record.update(job_cooldown_expires_at=expiry)
             return str(exc), REPLY
 
         message = message or ctx._message
@@ -139,7 +141,7 @@ class JobsCog(Cog, name='Jobs'):
 
         async with ctx.db.acquire() as conn:
             await record.add(job_hours=1, work_experience=1, job_salary=raise_amount, connection=conn)
-            await record.update(job_cooldown_expires_at=ctx.now + info.cooldown, connection=conn)
+            await record.update(job_cooldown_expires_at=expiry, connection=conn)
             raise_text = (
                 f'\n\u2934\ufe0f **You got a raise!** Your salary is now {Emojis.coin} **{record.job.salary:,}**.'
                 if raise_amount else ''

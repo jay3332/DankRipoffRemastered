@@ -1219,10 +1219,6 @@ class UserRecord(BaseRecord):
         return self.data['weekly_streak']
 
     @property
-    def discovered_recipes(self) -> list[str]:
-        return self.data['discovered_recipes']
-
-    @property
     def dm_notifications(self) -> bool:
         return self.data['dm_notifications']
 

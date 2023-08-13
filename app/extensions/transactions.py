@@ -145,8 +145,6 @@ class RecipeSelect(discord.ui.Select['RecipeView']):
 
 
 class RecipeView(UserView):
-    REPLACE_REGEX: re.Pattern[str] = re.compile(r'\S')
-
     def __init__(self, ctx: Context, record: UserRecord, default: Recipe | None = None) -> None:
         self.ctx: Context = ctx
         self.record: UserRecord = record
@@ -159,19 +157,12 @@ class RecipeView(UserView):
 
         self.update()
 
-    @property
-    def discovered(self) -> bool:
-        return self.current.key in self.record.discovered_recipes
-
     def build_embed(self) -> discord.Embed:
         embed = discord.Embed(
             title=self.current.name, description=self.current.description, color=Colors.primary, timestamp=self.ctx.now,
         )
         embed.set_author(name='Recipes', icon_url=self.ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(self.current.emoji))
-
-        if not self.discovered:
-            embed.set_footer(text='You have not discovered this recipe yet!')
 
         embed.add_field(name='General', value=dedent(f"""
             **Name:**: {self.current.name}
@@ -181,37 +172,25 @@ class RecipeView(UserView):
 
         embed.add_field(name='Ingredients', value='\n'.join(
             (f'{item.display_name} x{quantity}' for item, quantity in self.current.ingredients.items())
-            if self.discovered
-            else (
-                f'{self.REPLACE_REGEX.sub("?", item.name)} x{quantity}' for item, quantity in self.current.ingredients.items()
-            )
         ))
-
         return embed
 
     def update(self) -> None:
         amount = self._get_max()
-        toggle = self.discovered and amount > 0
+        toggle = amount > 0
 
         for child in self.children:
             if child is self.stop_button or not isinstance(child, discord.ui.Button):
                 continue
 
             child.disabled = not toggle
-            child.style = discord.ButtonStyle.primary if self.discovered else discord.ButtonStyle.secondary
+            child.style = discord.ButtonStyle.primary
 
-        if self.discovered:
-            self.craft_max.label = f'Craft Max ({amount:,})'
-        else:
-            self.craft_max.label = 'Craft Max'
+        self.craft_max.label = f'Craft Max ({amount:,})' if amount > 0 else 'Craft Max'
 
     async def _craft(self, amount: int = 1, *, interaction: TypedInteraction = None) -> Any:
         respond_error = partial(interaction.response.send_message, ephemeral=True) if interaction else self.ctx.reply
         respond = interaction.response.send_message if interaction else self.ctx.reply
-
-        if not self.discovered:  # Just in case the user somehow manages to click the button
-            return await respond_error('You have not discovered this recipe yet!')
-
         extra = f' ({Emojis.coin} **{self.current.price * amount:,}** for {amount})' if amount > 1 else ''
 
         if self.record.wallet < self.current.price * amount:
@@ -894,11 +873,11 @@ class Transactions(Cog):
 
         yield embed, view, EDIT
 
-    @command(aliases={'recipe', 'rc'}, hybrid=True)
+    @command(aliases={'recipes', 'exchange', 'recipe', 'rc'}, hybrid=True)
     @simple_cooldown(1, 4)
     @user_max_concurrency(1)
-    async def recipes(self, ctx: Context, *, recipe: query_recipe = None):
-        """View recipes and craft those you have already discovered."""
+    async def craft(self, ctx: Context, *, recipe: query_recipe = None):
+        """Craft items from your inventory to make new ones!"""
         record = await ctx.db.get_user_record(ctx.author.id)
         await record.inventory_manager.wait()
 
@@ -907,72 +886,12 @@ class Transactions(Cog):
 
         await view.wait()
 
-    @recipes.autocomplete('recipe')
+    @craft.autocomplete('recipe')
     async def recipe_autocomplete(self, _, current: str) -> list[app_commands.Choice]:
         return [
             app_commands.Choice(name=recipe.name, value=recipe.key)
             for recipe in query_collection_many(Recipes, Recipe, current)
         ]
-
-    @command(aliases={'cr', 'make'})
-    @simple_cooldown(1, 10)
-    @user_max_concurrency(1)
-    async def craft(self, ctx: Context, *, recipe: RecipeConverter = None):
-        """Craft items from your inventory to make new ones!
-
-        If you craft an undiscovered recipe, it will be added to your discovered recipes.
-        Note that you can quickly craft already discovered recipes by using the `recipes` command.
-        """
-        if recipe is None:
-            return await ctx.invoke(self.recipes)
-
-        record = await ctx.db.get_user_record(ctx.author.id)
-        inventory = await record.inventory_manager.wait()
-
-        if any(inventory.cached.quantity_of(item) < required for item, required in recipe.ingredients.items()):
-            return "That's a valid recipe, but you don't have the required items in order to craft it.", BAD_ARGUMENT
-
-        if record.wallet < recipe.price:
-            return f"That's a valid recipe, but you don't have enough coins ({Emojis.coin} {recipe.price:,}) to craft it.", BAD_ARGUMENT
-
-        already_discovered = recipe.key in record.discovered_recipes
-        if not already_discovered:
-            await record.append(discovered_recipes=recipe.key)
-            message = f'{ctx.author.name} has crafted something new!'
-        else:
-            message = "You've already discovered this recipe!"
-
-        async with ctx.db.acquire() as conn:
-            await record.add(wallet=-recipe.price, connection=conn)
-
-            for item, quantity in recipe.ingredients.items():
-                await inventory.add_item(item, -quantity, connection=conn)
-
-            for item, quantity in recipe.result.items():
-                await inventory.add_item(item, quantity, connection=conn)
-
-        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
-        embed.set_author(name=message, icon_url=ctx.author.avatar.url)
-        if already_discovered:
-            embed.description = f'You crafted the {recipe.emoji} **{recipe.name}** recipe, which you have already discovered.'
-        else:
-            embed.description = f'You have discovered the {recipe.emoji} **{recipe.name}** recipe.'
-
-        embed.add_field(
-            name='Crafted',
-            value='\n'.join(f'{item.display_name} x{quantity:,}' for item, quantity in recipe.result.items()),
-            inline=False
-        )
-
-        embed.add_field(
-            name='Ingredients Used',
-            value=f'{Emojis.coin} {recipe.price:,}\n' + '\n'.join(
-                f'{item.display_name} x{quantity:,}' for item, quantity in recipe.ingredients.items()
-            ),
-            inline=False,
-        )
-
-        return embed, REPLY
 
     PRESTIGE_WHAT_DO_I_LOSE = (
         '- Your wallet, bank, and bank space will be wiped.\n'
