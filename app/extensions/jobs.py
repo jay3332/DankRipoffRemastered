@@ -189,7 +189,7 @@ class JobsCog(Cog, name='Jobs'):
             name='Failed Attempts',
             value=pluralize(
                 f'{record.job.fails:,} failed attempt(s) (out of {total:,})\n'
-                f'**{record.job.fails / total:.2%} success rate**'
+                f'**{1 - record.job.fails / total:.2%} success rate**'
             )
         )
 
