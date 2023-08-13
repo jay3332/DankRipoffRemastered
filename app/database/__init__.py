@@ -904,6 +904,10 @@ class JobProvider(NamedTuple):
     def hours(self) -> int:
         return self.record.data['job_hours']
 
+    @property
+    def fails(self) -> int:
+        return self.record.data['job_fails']
+
     def __repr__(self) -> str:
         return f'<JobProvider job={self.job!r} salary={self.salary} hours={self.hours}>'
 

@@ -178,9 +178,15 @@ class JobsCog(Cog, name='Jobs'):
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f'{ctx.author.name}: Job', icon_url=ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(job.emoji))
-        embed.description = f'You currently work as {job.chunk_display}.'
+        embed.description = f'You currently work as {job.chunk_display}.\n*{job.description}*'
         embed.add_field(name='Salary', value=f'{Emojis.coin} **{record.job.salary:,}**')
-        embed.add_field(name='Work Hours', value=f'**{record.job.hours:,}** (Total: {record.work_experience:,})')
+        embed.add_field(
+            name='Work Hours',
+            value=(
+                f'Successful: **{record.job.hours:,}** (Total: {record.work_experience:,})\n'
+                f'{record.job.fails:,} failed attempts ({record.job.fails / record.job.hours + record.job.fails:.2%} success rate)'
+            ),
+        )
 
         available = record.job.cooldown_expires_at is None or record.job.cooldown_expires_at <= ctx.now
         mention = ctx.bot.tree.get_app_command('work').mention
