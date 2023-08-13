@@ -182,10 +182,15 @@ class JobsCog(Cog, name='Jobs'):
         embed.add_field(name='Salary', value=f'{Emojis.coin} **{record.job.salary:,}**')
         embed.add_field(
             name='Work Hours',
-            value=(
-                f'Successful: **{record.job.hours:,}** (Total: {record.work_experience:,})\n'
-                f'{record.job.fails:,} failed attempts ({record.job.fails / (record.job.hours + record.job.fails):.2%} success rate)'
-            ),
+            value=f'**{record.job.hours:,}** (Total: {record.work_experience:,})',
+        )
+        total = record.job.hours + record.job.fails
+        embed.add_field(
+            name='Failed Attempts',
+            value=pluralize(
+                f'{record.job.fails:,} failed attempt(s) (out of {total:,})\n'
+                f'**{record.job.fails / total:.2%} success rate**'
+            )
         )
 
         available = record.job.cooldown_expires_at is None or record.job.cooldown_expires_at <= ctx.now
