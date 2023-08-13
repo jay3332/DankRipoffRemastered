@@ -207,7 +207,7 @@ class JobsCog(Cog, name='Jobs'):
         embed.add_field(
             name='Work Cooldown',
             value=(
-                  f'\N{ALARM CLOCK} You can work now! {mention}' if available
+                  f'\N{ALARM CLOCK} You can work now!\nRun {mention} to work' if available
                   else (
                       f'\N{ALARM CLOCK} Work again {format_dt(record.job.cooldown_expires_at, "R")}\n'
                       f'{Emojis.Expansion.standalone} Cooldown: {humanize_duration(job.cooldown.total_seconds())}'
