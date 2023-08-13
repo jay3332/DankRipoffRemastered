@@ -185,11 +185,12 @@ class JobsCog(Cog, name='Jobs'):
             value=f'**{record.job.hours:,}** (Total: {record.work_experience:,})',
         )
         total = record.job.hours + record.job.fails
+        s = '' if record.job.fails == 1 else 's'
         embed.add_field(
             name='Failed Attempts',
             value=(
-                pluralize(
-                    f'{record.job.fails:,} failed attempt(s) (out of {total:,})\n'
+                (
+                    f'{record.job.fails:,} failed attempt{s} (out of {total:,})\n'
                     f'**{1 - record.job.fails / total:.2%} success rate**'
                 )
                 if not total else 'No attempts yet...\nWork to get started!'
