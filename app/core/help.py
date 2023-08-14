@@ -46,8 +46,7 @@ class CogSelect(discord.ui.Select[PaginatorView]):
 
     @staticmethod
     def get_base_cog_embed(ctx: Context, cog: Cog) -> discord.Embed:
-        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.description = f'There are {len(cog.get_commands())} root commands in this category.'
+        embed = discord.Embed(color=Colors.primary, description=cog.description, timestamp=ctx.now)
         embed.set_author(name=f'Help ({cog.qualified_name}): {ctx.author.name}', icon_url=ctx.author.avatar.url)
         embed.set_footer(text=f'Run `{ctx.clean_prefix}help <command>` to get help on a specific command.')
         if emoji := getattr(cog, 'emoji', None):
