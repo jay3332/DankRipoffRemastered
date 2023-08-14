@@ -1658,13 +1658,11 @@ class Profit(Cog):
 
             if random.random() < success_chance:
                 payout_percent = min(
-                    random.uniform(.3, .8) + min(skills.points_in('robbery') * .02, .5), 1,
+                    random.uniform(.3, .8) + min(skills.points_in('robbery') * .02, .5),
+                    record.wallet * 3 / their_record.wallet,
+                    1,
                 )
                 payout = round(their_record.wallet * payout_percent)
-                max_payout = record.wallet * 3
-                if payout > max_payout:
-                    payout = max_payout
-                    payout_percent = payout / their_record.wallet
 
                 await record.add(wallet=payout)
                 await their_record.add(wallet=-payout)
