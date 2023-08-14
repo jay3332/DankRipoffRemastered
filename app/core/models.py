@@ -541,7 +541,6 @@ class _AppCommandOverride(discord.app_commands.Command):
         if self.wrapped.checks and not await async_all(f(ctx) for f in self.wrapped.checks):
             return False
 
-        print('baherhj')
         return True
 
     async def _invoke_with_namespace(self, interaction: discord.Interaction, namespace: app_commands.Namespace) -> Any:
