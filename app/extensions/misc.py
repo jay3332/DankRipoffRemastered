@@ -187,7 +187,7 @@ class Miscellaneous(Cog):
 
     @help.define_app_command(name='guide', parent=help_app_command)
     async def help_guide(self, ctx: HybridContext) -> None:
-        await ctx.full_invoke()
+        await ctx.invoke(ctx.command)
 
     @help_app_command.command(name='commands')
     @app_commands.describe(category='The category to view commands from.')
@@ -447,7 +447,7 @@ class Miscellaneous(Cog):
     @prefix_add.define_app_command()
     @app_commands.describe(prefix='The prefix to add.')
     async def prefix_add_app_command(self, ctx, prefix: str) -> None:
-        await ctx.full_invoke(prefix)
+        await ctx.invoke(ctx.command, prefix)
 
     @prefix.command(
         'remove',
@@ -488,7 +488,7 @@ class Miscellaneous(Cog):
     @prefix_remove.define_app_command()
     @app_commands.describe(prefix='The prefix to remove.')
     async def prefix_remove_app_command(self, ctx, prefix: str) -> None:
-        await ctx.full_invoke(prefix)
+        await ctx.invoke(ctx.command, prefix)
 
     @prefix_remove.autocomplete('prefix')
     async def prefix_remove_autocomplete(self, itx: TypedInteraction, current: str) -> list[app_commands.Choice]:
@@ -562,7 +562,7 @@ class Miscellaneous(Cog):
     @prefix_overwrite.define_app_command()
     @app_commands.describe(prefix='The new prefix.')
     async def prefix_overwrite_app_command(self, ctx, prefix: str) -> None:
-        await ctx.full_invoke(prefix)
+        await ctx.invoke(ctx.command, prefix)
 
     @group(aliases={'cd', 'cds', 'cooldown'}, hybrid=True, fallback='list', expand_subcommands=True)
     @simple_cooldown(2, 3)
@@ -633,7 +633,7 @@ class Miscellaneous(Cog):
     @app_commands.describe(cmd='The command to remind you about.')
     async def cooldowns_remind_app_command(self, ctx: HybridContext, cmd: str):
         if cmd := ctx.bot.get_command(cmd):
-            return await ctx.full_invoke(command=cmd)  # type: ignore
+            return await ctx.invoke(ctx.command, command=cmd)  # type: ignore
 
         await ctx.reply(f'Unknown command {cmd!r}.', ephemeral=True)
 

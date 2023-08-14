@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 import datetime
-import functools
 from collections import OrderedDict
 from functools import wraps
 from typing import Any, Awaitable, Callable, NamedTuple, Literal, TYPE_CHECKING, Union, Self
 
 import discord
+from discord import app_commands
 from discord.ext import commands
-from discord.utils import MISSING, maybe_coroutine as maybe_coro
+from discord.ext.commands import CommandError, HybridCommandError
+from discord.utils import MISSING, async_all, maybe_coroutine as maybe_coro, maybe_coroutine
 
 from app.core.flags import ConsumeUntilFlag, FlagMeta, Flags
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.structures import TemporaryAttribute
 from app.util.types import TypedContext
-from app.util.views import AnyUser, ConfirmationView, _dummy_parse_arguments
+from app.util.views import AnyUser, ConfirmationView
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -482,75 +483,140 @@ class Command(commands.Command):
 
 
 class _AppCommandOverride(discord.app_commands.Command):
+    def __init__(self, source: HybridCommand | HybridGroupCommand, *args: Any, **kwargs: Any):
+        self.wrapped = source
+        self.binding = source.cog
+        super().__init__(*args, **kwargs)
+
+    def _copy_with(self, **kwargs) -> Self:
+        copy: Self = super()._copy_with(**kwargs)  # type: ignore
+        copy.wrapped = self.wrapped
+        return copy
+
     def copy(self) -> Self:
         bindings = {
             self.binding: self.binding,
         }
-        return self._copy_with(
-            parent=self.parent, binding=self.binding, bindings=bindings,
-            set_on_binding=False,
-        )
+        return self._copy_with(parent=self.parent, binding=self.binding, bindings=bindings)
+
+    async def _check_can_run(self, interaction: TypedInteraction) -> bool:
+        bot: Bot = interaction.client  # type: ignore
+        ctx: Context = interaction._baton
+
+        if not await bot.can_run(ctx, call_once=True):
+            return False
+
+        if not await bot.can_run(ctx):
+            return False
+
+        if self.parent is not None and self.parent is not self.binding:
+            # For commands with a parent which isn't the binding, i.e.
+            # <binding>
+            #     <parent>
+            #         <command>
+            # The parent check needs to be called first
+            if not await maybe_coroutine(self.parent.interaction_check, interaction):  # type: ignore
+                return False
+
+        if self.binding is not None:
+            try:
+                # Type checker does not like runtime attribute retrieval
+                check = self.binding.interaction_check  # type: ignore
+            except AttributeError:
+                pass
+            else:
+                ret = await maybe_coroutine(check, interaction)
+                if not ret:
+                    return False
+
+            local_check = Cog._get_overridden_method(self.binding.cog_check)
+            if local_check is not None:
+                ret = await maybe_coroutine(local_check, ctx)
+                if not ret:
+                    return False
+
+        if self.checks and not await async_all(f(interaction) for f in self.checks):
+            return False
+
+        if self.wrapped.checks and not await async_all(f(ctx) for f in self.wrapped.checks):
+            return False
+
+        print('baherhj')
+        return True
+
+    async def _invoke_with_namespace(self, interaction: discord.Interaction, namespace: app_commands.Namespace) -> Any:
+        # Wrap the interaction into a Context
+        bot: Bot = interaction.client  # type: ignore
+
+        # Unfortunately, `get_context` has to be called for this to work.
+        # If someone doesn't inherit this to replace it with their custom class
+        # then this doesn't work.
+        interaction._baton = ctx = await bot.get_context(interaction)
+        command = self.wrapped
+        command.cog = self.binding
+        bot.dispatch('command', ctx)
+        value = None
+        callback_completed = False
+        try:
+            await command.prepare(ctx)
+            # This lies and just always passes a Context instead of an Interaction.
+            value = await self._do_call(ctx, ctx.kwargs)  # type: ignore
+            callback_completed = True
+        except app_commands.CommandSignatureMismatch:
+            raise
+        except (app_commands.TransformerError, app_commands.CommandInvokeError) as e:
+            if isinstance(e.__cause__, CommandError):
+                exc = e.__cause__
+            else:
+                exc = HybridCommandError(e)
+                exc.__cause__ = e
+            await command.dispatch_error(ctx, exc.with_traceback(e.__traceback__))
+        except app_commands.AppCommandError as e:
+            exc = HybridCommandError(e)
+            exc.__cause__ = e
+            await command.dispatch_error(ctx, exc.with_traceback(e.__traceback__))
+        except CommandError as e:
+            await command.dispatch_error(ctx, e)
+        finally:
+            if command._max_concurrency is not None:
+                await command._max_concurrency.release(ctx.message)
+
+            if callback_completed:
+                await command.call_after_hooks(ctx)
+
+        if not ctx.command_failed:
+            bot.dispatch('command_completion', ctx)
+
+        interaction.command_failed = ctx.command_failed
+        return value
 
 
 class HybridContext(Context):
     full_invoke: AsyncCallable[..., Any]
 
 
-def define_app_command_impl(
-    source: HybridCommand | HybridGroupCommand,
-    cls: type[discord.app_commands.Command | discord.app_commands.Group],
-    **kwargs: Any,
-) -> Callable[[AsyncCallable[..., Any]], None]:
-    def decorator(func: AsyncCallable[..., Any]) -> None:
-        @functools.wraps(func)
-        async def wrapper(slf: Cog, itx: TypedInteraction, *args: Any, **kwds: Any) -> Any:
-            # TODO: call full hooks?
-            # FIXME: this is a bit hacky
-
-            # this is especially hacky
-            source.cog = slf
-            ctx = await slf.bot.get_context(itx)
-            ctx.command = source.copy()
-            ctx.command.cog = slf
-
-            async def invoker(*iargs: Any, **ikwargs: Any) -> Any:
-                ctx.args = [ctx.cog, ctx, *iargs]
-                ctx.kwargs = ikwargs
-
-                with TemporaryAttribute(ctx.command, '_parse_arguments', _dummy_parse_arguments):
-                    return await ctx.bot.invoke(ctx)
-
-            ctx.full_invoke = invoker
-            return await func(slf, ctx, *args, **kwds)
-
-        wrapper.__globals__.update(func.__globals__)  # type: ignore
-        parent = kwargs.pop('parent', False)
-        command = cls(
-            name=kwargs.pop('name', source.name),
-            description=source.short_doc,
-            parent=parent or (
-                source.parent.app_command if isinstance(source.parent, HybridGroupCommand) else None
-            ),
-            callback=wrapper,
-            **kwargs,
-        )
-        if parent:
-            parent.add_command(command)  # type: ignore
-            source.app_command_name = command.qualified_name
-        else:
-            source.app_command = command
-
-        @command.error
-        async def on_error(_, interaction: TypedInteraction, error: BaseException) -> None:
-            interaction.client.dispatch('command_error', interaction._baton, error)
-
-    return decorator
-
-
 @discord.utils.copy_doc(commands.HybridCommand)
 class HybridCommand(Command, commands.HybridCommand):
     def define_app_command(self, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], None]:
-        return define_app_command_impl(self, _AppCommandOverride, **kwargs)
+        def decorator(func: AsyncCallable[..., Any]) -> None:
+            parent = kwargs.pop('parent', False)
+            command = _AppCommandOverride(
+                self,
+                name=kwargs.pop('name', self.name),
+                description=self.short_doc,
+                parent=parent or (
+                    self.parent.app_command if isinstance(self.parent, HybridGroupCommand) else None
+                ),
+                callback=func,  # type: ignore
+                **kwargs,
+            )
+            if parent:
+                parent.add_command(command)  # type: ignore
+                self.app_command_name = command.qualified_name
+            else:
+                self.app_command = command
+
+        return decorator
 
 
 @discord.utils.copy_doc(commands.Group)
@@ -585,17 +651,41 @@ class GroupCommand(commands.Group, Command):
 @discord.utils.copy_doc(commands.HybridGroup)
 class HybridGroupCommand(GroupCommand, commands.HybridGroup):
     def define_app_command(self, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], None]:
-        return define_app_command_impl(self, discord.app_commands.Group, **kwargs)
+        def decorator(func: AsyncCallable[..., Any]) -> None:
+            guild_ids = kwargs.pop('guild_ids', None) or getattr(
+                self.callback, '__discord_app_commands_default_guilds__', None
+            )
+            guild_only = getattr(self.callback, '__discord_app_commands_guild_only__', False)
+            default_permissions = getattr(self.callback, '__discord_app_commands_default_permissions__', None)
+            nsfw = getattr(self.callback, '__discord_app_commands_is_nsfw__', False)
+            self.app_command = app_commands.Group(
+                name=self._locale_name or self.name,
+                description=self._locale_description or self.description or self.short_doc or '…',
+                guild_ids=guild_ids,
+                guild_only=guild_only,
+                default_permissions=default_permissions,
+                nsfw=nsfw,
+            )
 
-    def copy(self) -> Self:
-        copy = super().copy()
-        # Ensure app commands are properly copied over
-        if self.app_command is not None:
-            children = copy.app_command._children
-            for key, command in self.app_command._children.items():
-                if key in children:
-                    continue
-                # FIXME: should this deepcopy?
-                children[key] = command
+            parent = kwargs.pop('parent', None)
+            if self.parent is not None:
+                if isinstance(self.parent, commands.HybridGroup):
+                    parent = self.parent.app_command
 
-        return copy
+            # This prevents the group from re-adding the command at __init__
+            self.app_command.parent = parent
+            self.app_command.module = self.module
+
+            if self.fallback is not None:
+                command = _AppCommandOverride(
+                    self,
+                    name=self.fallback,
+                    description=self.app_command.description,
+                    parent=self.app_command,
+                    callback=func,  # type: ignore
+                    **kwargs,
+                )
+                self.app_command.add_command(command)
+                self.app_command_name = command.qualified_name
+
+        return decorator

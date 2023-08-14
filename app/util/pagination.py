@@ -157,8 +157,7 @@ class PaginatorView(UserView):
         return await self.paginator.formatter.format_page(self.paginator, entries)
 
     async def _finish(self, interaction: TypedInteraction) -> None:
-        self._update_view()
-        entity = await self.paginator.get_page(self.paginator.current_page)
+        entity = await self.update()
         if isinstance(entity, Embed):
             await interaction.response.edit_message(embed=entity, view=self)
         elif isinstance(entity, File):

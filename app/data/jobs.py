@@ -541,3 +541,123 @@ class Jobs:
             Items.camera: 0.02,
         },
     )
+
+    garbage_collector = Job(
+        name='Garbage Collector',
+        key='garbage_collector',
+        description='~~A form of automatic memory management.~~ Get paid for collecting garbage',
+        emoji='<:garbage_collector:1140651089314725970>',
+        keywords=[
+            'trash',
+            'garbage',
+            'stinky',
+            'waste',
+            'recycle',
+            'garbage truck',
+            'garbage collector',
+            'smelly',
+            'dumpster',
+            'landfill',
+        ],
+        phrases=[
+            'i love the smell of garbage in the morning',
+            'another day, another truckload of trash',
+            'one person\'s trash is another person\'s headache',
+            'bag it, tag it, and toss it in',
+            'keeping the city clean, one street at a time',
+            'a clean environment starts with us. and then we dump the trash in a landfill',
+            'gotta hustle to stay on schedule',
+            'is there broken glass in this bag?',
+            'this bag absolutely stinks',
+        ],
+        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        base_salary=850,
+        cooldown=datetime.timedelta(minutes=30),
+        work_experience_required=0,
+        items={
+            None: 1,  # todo
+        },
+    )
+
+    fast_food_worker = Job(
+        name='Fast Food Worker',
+        key='fast_food_worker',
+        description='Get paid for serving fast food',
+        emoji='\U0001f354',
+        keywords=[
+            'fast food',
+            'hamburger',
+            'burger',
+            'fries',
+            'french fries',
+            'soda',
+            'soft drink',
+            'chicken nuggets',
+            'order',
+            'drive thru',
+            'receipt',
+            'cash register',
+        ],
+        phrases=[
+            'welcome, what can i get for you today?',
+            'would you like fries with that?',
+            'would you like to make that a combo?',
+            'just a moment, i\'ll have your order ready soon',
+            'is that for here or to go?',
+            'please pull up to the second window to pay',
+            'why is the ice cream machine always broken?',
+            'ice cream machine\'s broken again buddy',
+            'number 15: burger king foot lettuce',
+            'we\'ll have a number 9 large coming right up',
+        ],
+        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        base_salary=900,
+        cooldown=datetime.timedelta(minutes=30),
+        work_experience_required=0,
+        items={
+            None: 1,  # todo
+            Items.cheese: 0.05,
+            Items.milk: 0.05,
+        },
+    )
+
+    mechanic = Job(
+        name='Mechanic',
+        key='mechanic',
+        description='Get paid for fixing cars',
+        emoji='\U0001f9d1\u200d\U0001f527',
+        keywords=[
+            'mechanic',
+            'wrench',
+            'engine',
+            'ignition',
+            'brake fluid',
+            'maintenance',
+            'suspension',
+            'transmission fluid',
+            'oil change',
+            'tire',
+            'fuel injector',
+            'emissions',
+        ],
+        phrases=[
+            'i\'ll have this fixed in no time',
+            'i\'ll have to order a new part for this',
+            'i\'m gonna need a bigger wrench',
+            'your car is a piece of junk',
+            'i\'m gonna need to take a look under the hood',
+            'looks like your brakes are wearing thin',
+            'just need to tighten a few bolts',
+            'the spark plugs could use some cleaning',
+            'i\'m gonna need to take a look at the transmission',
+            'looks like a coolant leak. i\'ll patch it up',
+            'the check engine light is on, what could be the problem?'
+        ],
+        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        base_salary=1000,
+        cooldown=datetime.timedelta(minutes=28),
+        work_experience_required=5,
+        items={
+            None: 1,  # todo
+        }
+    )

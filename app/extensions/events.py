@@ -35,14 +35,17 @@ class Events(Cog):
         if isinstance(error, commands.BadUnionArgument):
             error = error.errors[0]
 
+        respond = functools.partial(ctx.send, reference=ctx.message, delete_after=30, ephemeral=True)
+
+        if isinstance(error, (commands.MissingPermissions, commands.BotMissingPermissions)):
+            return await respond(error)
+
         blacklist = (
             commands.CommandNotFound,
             commands.CheckFailure,
         )
         if isinstance(error, blacklist):
             return
-
-        respond = functools.partial(ctx.send, reference=ctx.message, delete_after=30, ephemeral=True)
 
         if isinstance(error, commands.BadArgument):
             view = None

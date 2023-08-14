@@ -398,7 +398,7 @@ class Farming(Cog):
             coordinate_or_crop = parse_coordinate(coordinate_or_crop)
         except BadArgument:
             coordinate_or_crop = query_crop(coordinate_or_crop)
-        await ctx.full_invoke(coordinate_or_crop=coordinate_or_crop)  # type: ignore
+        await ctx.invoke(ctx.command, coordinate_or_crop=coordinate_or_crop)  # type: ignore
 
     @info.autocomplete('coordinate_or_crop')
     async def into_autocomplete(self, _: TypedInteraction, current: str):
@@ -526,7 +526,7 @@ class Farming(Cog):
 
     @harvest.define_app_command()
     async def harvest_app_command(self, ctx: HybridContext):
-        await ctx.full_invoke()
+        await ctx.invoke(ctx.command)
 
     @command(aliases={'wat', 'flourish'})
     @simple_cooldown(2, 4)

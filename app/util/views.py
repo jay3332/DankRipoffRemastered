@@ -8,7 +8,7 @@ from discord.ext import commands
 from app.util.structures import TemporaryAttribute
 
 if TYPE_CHECKING:
-    from app.core.models import Context, HybridCommand, HybridGroupCommand
+    from app.core.models import Command, Context, GroupCommand, HybridCommand, HybridGroupCommand
     from app.util.types import TypedInteraction
 
 AnyUser: TypeAlias = discord.User | discord.Member
@@ -92,13 +92,13 @@ class StaticCommandButton(discord.ui.Button):
     def __init__(
         self,
         *,
-        command: HybridCommand | HybridGroupCommand,
+        command: Command | GroupCommand,
         command_args: list[Any] = None,
         command_kwargs: dict[str, Any] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
-        self.command = command
+        self.command: HybridCommand | HybridGroupCommand = command  # type: ignore
         self.command_args = command_args or []
         self.command_kwargs = command_kwargs or {}
 

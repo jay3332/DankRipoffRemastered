@@ -1723,7 +1723,7 @@ class Profit(Cog):
     @rob.define_app_command()
     @app_commands.describe(victim='The victim of your robbery.')
     async def rob_app_command(self, ctx: HybridContext, victim: discord.Member) -> None:
-        await ctx.full_invoke(user=victim)
+        await ctx.invoke(ctx.command, user=victim)
 
 
 class ChopView(UserView):

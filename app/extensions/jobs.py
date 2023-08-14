@@ -82,8 +82,14 @@ class JobListFormatter(Formatter):
             if job.intelligence_required:
                 expanded.append(f'\N{BRAIN} Intelligence Required: **{job.intelligence_required:,} IQ*')
 
+            record = await paginator.ctx.db.get_user_record(paginator.ctx.author.id)
+            lock = (
+                '\N{LOCK}'
+                if record.work_experience < job.work_experience_required or record.iq < job.intelligence_required
+                else '\N{OPEN LOCK}'
+            )
             embed.add_field(
-                name=f'**{job.display}** \u2014 {Emojis.coin} **{job.base_salary:,}** per shift',
+                name=f'**{job.display}** \u2014 {Emojis.coin} **{job.base_salary:,}** per shift {lock}',
                 value=expansion_list(expanded),
                 inline=False,
             )
@@ -228,10 +234,19 @@ class JobsCog(Cog, name='Jobs'):
     @work.command('list', aliases={'l', 'ls', 'offers', 'offerings', 'find'}, hybrid=True)
     async def job_list(self, ctx: Context) -> CommandResponse:
         """View available job offerings."""
-        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+        record = await ctx.db.get_user_record(ctx.author.id)
+        embed = discord.Embed(
+            color=Colors.primary,
+            timestamp=ctx.now,
+            description=f'You have worked **{record.work_experience:,}** total shifts.',
+        )
         embed.set_author(name=f'{ctx.author.name}: Job Offerings', icon_url=ctx.author.display_avatar)
 
-        formatter = JobListFormatter(embed, list(walk_collection(Jobs, Job)), per_page=3)
+        formatter = JobListFormatter(
+            embed,
+            list(sorted(walk_collection(Jobs, Job), key=lambda job: job.base_salary)),
+            per_page=3,
+        )
         return Paginator(ctx, formatter, other_components=[ActiveJobSelect(ctx)]), REPLY
 
     @work.command('info', aliases={'i', 'details'}, hybrid=True)

@@ -643,7 +643,7 @@ class Transactions(Cog):
         quantity: str = '1',
     ) -> None:
         transformed = await transform_item_and_quantity(ctx, BUY, item, quantity)
-        await ctx.full_invoke(item_and_quantity=transformed)
+        await ctx.invoke(ctx.command, item_and_quantity=transformed)
 
     @command(alias='s', hybrid=True, with_app_command=False)
     @simple_cooldown(3, 8)
@@ -690,7 +690,7 @@ class Transactions(Cog):
         quantity: str = '1',
     ) -> None:
         transformed = await transform_item_and_quantity(ctx, SELL, item, quantity)
-        await ctx.full_invoke(item_and_quantity=transformed)
+        await ctx.invoke(ctx.command, item_and_quantity=transformed)
 
     @command(aliases={'u', 'consume', 'activate', 'open'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 10)
@@ -724,7 +724,7 @@ class Transactions(Cog):
         quantity: str = '1',
     ) -> None:
         transformed = await transform_item_and_quantity(ctx, USE, item, quantity)
-        await ctx.full_invoke(item_and_quantity=transformed)
+        await ctx.invoke(ctx.command, item_and_quantity=transformed)
 
     @command(aliases={'rm', 'dispose', 'deactivate', 'discard'}, hybrid=True)
     @simple_cooldown(2, 10)

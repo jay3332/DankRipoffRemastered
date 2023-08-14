@@ -128,7 +128,7 @@ class Stats(Cog):
     @balance.define_app_command()
     @app_commands.describe(user='The user to view the balance of.')
     async def balance_app_command(self, ctx: HybridContext, user: discord.Member = None) -> None:
-        await ctx.full_invoke(user=user)
+        await ctx.invoke(ctx.command, user=user)
 
     @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
@@ -151,7 +151,7 @@ class Stats(Cog):
     @level.define_app_command()
     @app_commands.describe(user='The user to view the level of.')
     async def level_app_command(self, ctx: HybridContext, user: discord.Member = None) -> None:
-        await ctx.full_invoke(user=user)
+        await ctx.invoke(ctx.command, user=user)
 
     @staticmethod
     def _deconstruct(multipliers: Iterable[Multiplier]) -> tuple[str, float]:
@@ -262,7 +262,7 @@ class Stats(Cog):
     @inventory.define_app_command()
     @app_commands.describe(user='The user to view the inventory of.')
     async def inventory_app_command(self, ctx: HybridContext, user: discord.Member = None):
-        await ctx.full_invoke(user=user)
+        await ctx.invoke(ctx.command, user=user)
 
     @command(aliases={"itembook", "uniqueitems", "discovered", "ib"}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 6)
@@ -310,7 +310,7 @@ class Stats(Cog):
         rarity: Literal['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'] = None,
         category: str = None,
     ):
-        await ctx.full_invoke(rarity=(rarity or 'all').lower(), category=category and query_item_type(category))
+        await ctx.invoke(ctx.command, rarity=(rarity or 'all').lower(), category=category and query_item_type(category))
 
     @group(aliases={"notifs", "notification", "notif", "nt"}, hybrid=True, fallback='list')
     @simple_cooldown(1, 6)

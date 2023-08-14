@@ -107,7 +107,7 @@ def image_url_from_emoji(emoji: str) -> str:
         extension = 'gif' if animated else 'png'
         return f'https://cdn.discordapp.com/emojis/{id}.{extension}?v=1'
     else:
-        code = format(ord(emoji[0]), 'x')
+        code = '-'.join(format(ord(c), 'x') for c in emoji)
         return f'https://twemoji.maxcdn.com/v/latest/72x72/{code}.png'
 
 
