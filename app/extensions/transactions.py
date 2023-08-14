@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from functools import partial
 from textwrap import dedent
 from typing import Any, Callable, Literal, TYPE_CHECKING, TypeAlias
@@ -11,7 +10,6 @@ from discord import app_commands
 from discord.ext import commands
 
 from app.core import (
-    BAD_ARGUMENT,
     Cog,
     Command,
     Context,
@@ -44,7 +42,6 @@ from app.util.converters import (
     DROP,
     DropAmount,
     ItemAndQuantityConverter,
-    RecipeConverter,
     SELL,
     USE,
     WITHDRAW,
@@ -84,16 +81,7 @@ class DropView(discord.ui.View):
 
         self.ctx: Context = ctx
         self.winner: discord.Member | None = None
-
         self._lock: asyncio.Lock = asyncio.Lock()
-
-    async def interaction_check(self, interaction: TypedInteraction) -> bool:
-        if interaction.user == self.ctx.author:
-            await interaction.response.send_message("You cannot claim your own drop, it's too late now!", ephemeral=True)
-
-            return False
-
-        return True
 
     @discord.ui.button(label='Claim!', style=discord.ButtonStyle.success)
     async def claim(self, interaction: TypedInteraction, button: discord.ui.Button) -> None:
@@ -750,7 +738,7 @@ class Transactions(Cog):
             for item in query_collection_many(Items, Item, current)
         ]
 
-    @command(aliases={'give', 'gift', 'donate', 'pay'})
+    @command(aliases={'give', 'gift', 'donate', 'pay'}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 30)
     @user_max_concurrency(1)
     @lock_transactions
@@ -810,7 +798,26 @@ class Transactions(Cog):
 
         return embed, REPLY
 
-    @command(aliases={'giveaway'})
+    @share.define_app_command()
+    @app_commands.describe(
+        user='The user to give coins or items to.',
+        quantity='How many coins or how many of the item to share',
+        item='The item to share. If not provided, will share coins.',
+    )
+    async def share_app_command(
+        self,
+        ctx: Context,
+        user: discord.Member,
+        quantity: str,
+        item: app_commands.Transform[Item, ItemTransformer] = None,
+    ) -> None:
+        if item is None:
+            entity = await DropAmount().convert(ctx, quantity)
+        else:
+            entity = await transform_item_and_quantity(ctx, DROP, item, quantity)
+        await ctx.invoke(ctx.command, user, entity=entity)
+
+    @command(aliases={'giveaway'}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 30)
     @user_max_concurrency(1)
     @lock_transactions
@@ -868,10 +875,31 @@ class Transactions(Cog):
             await winner_record.inventory_manager.add_item(item, quantity)
 
         embed.colour = Colors.success
-        embed.description = f'{view.winner.mention} was the first one to click the button! They have received {entity_human}.'
+        embed.description = (
+            f'{ctx.author.mention} reclaimed their own drop of {entity_human}.'
+            if view.winner == ctx.author
+            else f'{view.winner.mention} was the first one to click the button! They have received {entity_human}.'
+        )
         embed.set_author(name=f'Winner: {view.winner}', icon_url=view.winner.avatar.url)
 
         yield embed, view, EDIT
+
+    @drop.define_app_command()
+    @app_commands.describe(
+        quantity='How many coins or how many of the item to drop',
+        item='The item to drop. If not provided, will drop coins.',
+    )
+    async def drop_app_command(
+        self,
+        ctx: Context,
+        quantity: str,
+        item: app_commands.Transform[Item, ItemTransformer] = None,
+    ) -> None:
+        if item is None:
+            entity = await DropAmount().convert(ctx, quantity)
+        else:
+            entity = await transform_item_and_quantity(ctx, DROP, item, quantity)
+        await ctx.invoke(ctx.command, entity=entity)
 
     @command(aliases={'recipes', 'exchange', 'recipe', 'rc'}, hybrid=True)
     @simple_cooldown(1, 4)

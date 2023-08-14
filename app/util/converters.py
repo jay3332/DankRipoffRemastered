@@ -449,7 +449,7 @@ async def DropAmount(ctx: Context, arg: str) -> int:
     try:
         return get_amount(_all, 1, _all, arg)
     except ZeroQuantity:
-        raise BadArgument("You don't have any coins in your wallet to drop, pooron")
+        raise BadArgument("You don't have any coins in your wallet, pooron")
     except NotAnInteger:
         raise BadArgument("Entity must be a positive integer or a valid item with an optional quantity.")
     except NotEnough:
