@@ -241,11 +241,12 @@ class JobsCog(Cog, name='Jobs'):
             description=f'You have worked **{record.work_experience:,}** total shifts.',
         )
         embed.set_author(name=f'{ctx.author.name}: Job Offerings', icon_url=ctx.author.display_avatar)
+        embed.set_thumbnail(url=image_url_from_emoji(self.emoji))
 
         formatter = JobListFormatter(
             embed,
             list(sorted(walk_collection(Jobs, Job), key=lambda job: job.base_salary)),
-            per_page=3,
+            per_page=5,
         )
         return Paginator(ctx, formatter, other_components=[ActiveJobSelect(ctx)]), REPLY
 
