@@ -923,16 +923,13 @@ class Profit(Cog):
             )
 
             try:
-                response = await ctx.bot.wait_for(
-                    'message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=14,
+                await ctx.bot.wait_for(
+                    'message',
+                    check=lambda m: m.author == ctx.author and m.channel == ctx.channel and m.content.lower() == message,
+                    timeout=20,
                 )
-                initial = "You failed to wind up your fishing pole"
-
             except asyncio.TimeoutError:
-                response = ctx.message  # guaranteed that this wont equal the message
                 initial = "You couldn't wind up your fishing pole in time"
-
-            if response.content.lower() != message:
                 await inventory.add_item('fishing_pole', -1)
 
                 if random.random() < 0.15:
@@ -957,11 +954,8 @@ class Profit(Cog):
         embed.set_author(name=f'Fishing: {ctx.author}', icon_url=ctx.author.avatar.url)
         if used_bait:
             embed.add_field(
-                name=f'{Items.fish_bait.emoji} Fish Bait',
-                value=(
-                    f'Consumed {Items.fish_bait.get_sentence_chunk()}, which increased the chance of catching better fish.\n'
-                    f'You now have {Items.fish_bait.get_sentence_chunk(used_bait - 1)} left.'
-                ),
+                name=f'{Items.fish_bait.emoji} Fish Bait \u2014 **{used_bait - 1:,}** remaining',
+                value='*Bait increased the chance of catching better fish.*',
                 inline=False,
             )
 
