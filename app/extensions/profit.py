@@ -1169,8 +1169,9 @@ class Profit(Cog):
 
         view = ChopView(ctx)
         yield (
-            "Choose a forest to chop trees from. Abundance Forest has a lower chance of getting rarer wood, while Exotic Forest has a higher chance.\n"
-            "However, there is a chance that you could die by chopping down a tree in the Exotic Forest.",
+            "Choose a forest to chop trees from:\n"
+            "- **Abundance Forest**: lower chance of getting rarer wood, zero risk of dying\n"
+            "- **Exotic Forest**: higher chance of getting rarer wood, but you have a chance of dying",
             view,
             REPLY,
         )
