@@ -8,12 +8,12 @@ routes = web.RouteTableDef()
 ipc = Client(secret_key=ipc_secret)
 
 
-@routes.get('/api')
+@routes.get('/')
 async def hello(_request: web.Request) -> web.Response:
     return web.Response(text='Hello, world!')
 
 
-@routes.post('/api/dbl')
+@routes.post('/dbl')
 async def dbl(request: web.Request) -> web.Response:
     if request.headers.get('Authorization') != dbl_secret:
         raise web.HTTPUnauthorized()
