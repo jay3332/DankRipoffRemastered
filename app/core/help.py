@@ -11,7 +11,7 @@ from app.util.common import cutoff, humanize_duration, image_url_from_emoji, plu
 from app.util.pagination import Paginator, PaginatorView, FieldBasedFormatter
 from app.util.types import TypedInteraction
 from app.util.views import UserView
-from config import Colors, default_permissions, support_server
+from config import Colors, default_permissions, support_server, website
 
 if TYPE_CHECKING:
     from app.core import Cog, Context, GroupCommand
@@ -134,6 +134,7 @@ LINKS = lambda bot: (
         permissions=discord.Permissions(default_permissions),
     )),
     discord.ui.Button(label='Support Server', row=2, url=support_server),
+    discord.ui.Button(label='Website', row=2, url=website),
 )
 
 
