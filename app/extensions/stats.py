@@ -22,12 +22,12 @@ from app.util.common import cutoff, humanize_duration, image_url_from_emoji, pro
 from app.util.converters import CaseInsensitiveMemberConverter, IntervalConverter
 from app.util.graphs import send_graph_to
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
-from app.util.views import ModalButton
+from app.util.views import ModalButton, invoke_command
 from config import Colors, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
     from app.extensions.transactions import Transactions
-    from app.util.types import CommandResponse
+    from app.util.types import CommandResponse, TypedInteraction
 
 
 class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
@@ -85,7 +85,7 @@ class Stats(Cog):
         super().__init__(bot)
 
         self._balance_context_menu = app_commands.ContextMenu(
-            name='View Balance', callback=self.balance.app_command.callback.__get__(self, self.__class__),  # type: ignore
+            name='View Balance', callback=self._balance_context_menu_callback,
         )
         bot.tree.add_command(self._balance_context_menu)
 
@@ -129,6 +129,9 @@ class Stats(Cog):
     @app_commands.describe(user='The user to view the balance of.')
     async def balance_app_command(self, ctx: HybridContext, user: discord.Member = None) -> None:
         await ctx.invoke(ctx.command, user=user)
+
+    async def _balance_context_menu_callback(self, interaction: TypedInteraction, user: discord.Member) -> None:
+        await invoke_command(self.balance, interaction, args=(), kwargs={'user': user})
 
     @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
