@@ -23,7 +23,7 @@ from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginat
 from app.util.structures import Timer as PingTimer
 from app.util.types import CommandResponse, TypedInteraction
 from app.util.views import UserView
-from config import Colors, Emojis, default_permissions, support_server
+from config import Colors, Emojis, default_permissions, support_server, website
 
 if TYPE_CHECKING:
     from typing import Self
@@ -110,6 +110,9 @@ class Guide:
         )
         view.add_item(
             discord.ui.Button(label='Support Server', url=support_server),
+        )
+        view.add_item(
+            discord.ui.Button(label='Website', url=website),
         )
         return view
 
@@ -258,6 +261,7 @@ class Miscellaneous(Cog):
         view = discord.ui.View()
         view.add_item(discord.ui.Button(label='Invite me to your server!', url=link))
         view.add_item(discord.ui.Button(label='Join our offical Discord server!', url=support_server))
+        view.add_item(discord.ui.Button(label='Visit our website!', url=website))
         view.add_item(discord.ui.Button(
             label='Vote for Coined to earn free crates!', url=f'https://top.gg/bot/{ctx.bot.user.id}',
         ))

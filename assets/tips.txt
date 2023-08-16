@@ -5,3 +5,4 @@ Vote for Coined to get free crates! {{/vote}}
 Run {{/cooldowns remind}} to be reminded when a cooldown is over.
 View your cumulative multipliers with {{/multiplier}}.
 There are {{/hourly}}, {{/daily}}, and {{/weekly}} rewards.
+Did you know we have a website? https://coined.jay3332.tech
