@@ -1,5 +1,6 @@
 import discord.utils
 from aiohttp import web
+from aiohttp_cors import setup as setup_cors
 from discord.ext.ipc import Client
 
 from config import dbl_secret, ipc_secret
@@ -34,4 +35,6 @@ async def dbl(request: web.Request) -> web.Response:
 if __name__ == '__main__':
     app = web.Application()
     app.add_routes(routes)
+
+    cors = setup_cors()
     web.run_app(app, port=8090)

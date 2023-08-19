@@ -10,3 +10,4 @@ scipy
 numpy
 Pillow
 better-ipc
+aiohttp_cors

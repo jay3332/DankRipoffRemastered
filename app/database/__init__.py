@@ -1261,6 +1261,14 @@ class UserRecord(BaseRecord):
         return self.data['iq']
 
     @property
+    def battle_hp(self) -> int:
+        return self.data['battle_hp']
+
+    @property
+    def battle_stamina(self) -> int:
+        return self.data['battle_stamina']
+
+    @property
     def inventory_manager(self) -> InventoryManager:
         if not self.__inventory_manager:
             self.__inventory_manager = InventoryManager(self)

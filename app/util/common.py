@@ -20,6 +20,7 @@ from typing import (
     overload,
 )
 
+import discord
 from discord.ext.commands import Converter
 
 from config import Emojis, support_server
@@ -101,7 +102,10 @@ def calculate_level(exp: int, *, base: int = 1000, factor: float = 1.45, precisi
     return level, exp, requirement
 
 
-def image_url_from_emoji(emoji: str) -> str:
+def image_url_from_emoji(emoji: str | discord.PartialEmoji) -> str:
+    if isinstance(emoji, discord.PartialEmoji):
+        return emoji.url
+
     if match := EMOJI_REGEX.match(emoji):
         animated, _, id = match.groups()
         extension = 'gif' if animated else 'png'
