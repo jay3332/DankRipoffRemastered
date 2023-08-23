@@ -1415,7 +1415,7 @@ class Items:
 
     jar_of_honey = Item(
         type=ItemType.miscellaneous,
-        key='jar_or_honey',
+        key='jar_of_honey',
         name='Jar of Honey',
         plural='Jars of Honey',
         emoji='\U0001f36f',
