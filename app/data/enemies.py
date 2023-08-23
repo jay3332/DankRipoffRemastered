@@ -45,3 +45,16 @@ class Enemies:
         },
         spawn_in_events=True,
     )
+
+    cop = Enemy(
+        key='cop',
+        name='Cop',
+        description="A cop who's had a bad day. He'll be there to arrest you if you don't watch out.",
+        emoji='<:cop:1142668034373341268>',
+        base_hp=100,
+        abilities={
+            Abilities.punch: 1.0,
+            Abilities.taser: 0.3,
+            Abilities.handcuffs: 0.3,
+        },
+    )

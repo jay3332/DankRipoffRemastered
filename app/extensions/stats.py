@@ -16,7 +16,7 @@ from app import Bot
 from app.core import BAD_ARGUMENT, Cog, Context, HybridContext, NO_EXTRA, REPLY, command, group, simple_cooldown
 from app.core.flags import Flags, flag, store_true
 from app.data.items import ItemType, Items
-from app.database import Multiplier, UserHistoryEntry, UserRecord
+from app.database import InventoryManager, Multiplier, UserHistoryEntry, UserRecord
 from app.extensions.transactions import query_item_type
 from app.util.common import cutoff, humanize_duration, image_url_from_emoji, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, IntervalConverter
@@ -76,6 +76,33 @@ class GuildGraphFlags(GraphFlags):
     )
 
 
+class RefreshBalanceButton(discord.ui.Button):
+    def __init__(self, cog: Stats, *, user: discord.User, record: UserRecord, color: int) -> None:
+        super().__init__(style=discord.ButtonStyle.secondary, label='Refresh')
+        self.cog = cog
+        self.user = user
+        self.record = record
+        self.color = color
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        embed, view = self.cog._generate_balance_stats(self.user, self.record, self.color)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class RefreshInventoryButton(discord.ui.Button):
+    def __init__(self, ctx: Context, user: discord.User, inventory: InventoryManager, color: int) -> None:
+        super().__init__(style=discord.ButtonStyle.secondary, label='Refresh', row=1)
+        self.cog: Stats = ctx.cog  # type: ignore
+        self.ctx = ctx
+        self.user = user
+        self.inventory = inventory
+        self.color = color
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        paginator = self.cog._refresh_inventory_paginator(self.ctx, self.user, self.inventory, self.color)
+        await paginator.start(edit=True, interaction=interaction)
+
+
 class Stats(Cog):
     """Useful statistical commands. These commands do not have any action behind them."""
 
@@ -92,15 +119,10 @@ class Stats(Cog):
     async def cog_unload(self) -> None:
         self.bot.tree.remove_command(self._balance_context_menu.name, type=self._balance_context_menu.type)
 
-    # noinspection PyTypeChecker
-    @command(aliases={"bal", "coins", "stats", "b", "wallet"}, hybrid=True, with_app_command=False)
-    @simple_cooldown(2, 5)
-    async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> CommandResponse:
-        """View your wallet and bank balance, or optionally, someone elses."""
-        user = user or ctx.author
-        data = await ctx.db.get_user_record(user.id)
-
-        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
+    def _generate_balance_stats(
+        self, user: discord.User, data: UserRecord, color: int,
+    ) -> tuple[discord.Embed, discord.ui.View]:
+        embed = discord.Embed(color=color, timestamp=discord.utils.utcnow())
         prestige_text = (
             f'{Emojis.get_prestige_emoji(data.prestige)} Prestige {data.prestige}' if data.prestige else 'Coins'
         )
@@ -112,7 +134,7 @@ class Stats(Cog):
         """))
         embed.set_thumbnail(url=user.avatar)
 
-        transactions: Transactions = ctx.bot.get_cog('Transactions')
+        transactions: Transactions = self.bot.get_cog('Transactions')  # type: ignore
         view = discord.ui.View(timeout=60)
         view.add_item(ModalButton(
             modal=transactions.withdraw_modal, label='Withdraw Coins', style=discord.ButtonStyle.primary,
@@ -122,7 +144,18 @@ class Stats(Cog):
             modal=transactions.deposit_modal, label='Deposit Coins', style=discord.ButtonStyle.primary,
             disabled=not data.wallet,
         ))
+        view.add_item(RefreshBalanceButton(self, user=user, record=data, color=color))
+        return embed, view
 
+    # noinspection PyTypeChecker
+    @command(aliases={"bal", "coins", "stats", "b", "wallet"}, hybrid=True, with_app_command=False)
+    @simple_cooldown(2, 5)
+    async def balance(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> CommandResponse:
+        """View your wallet and bank balance, or optionally, someone elses."""
+        user = user or ctx.author
+        data = await ctx.db.get_user_record(user.id)
+
+        embed, view = self._generate_balance_stats(user, data, Colors.primary)
         return embed, view, REPLY, NO_EXTRA if ctx.author != user else None
 
     @balance.define_app_command()
@@ -233,6 +266,28 @@ class Stats(Cog):
 
         return Paginator(ctx, LeaderboardFormatter(records, per_page=10), timeout=120), REPLY
 
+    @staticmethod
+    def _refresh_inventory_paginator(
+        ctx: Context, user: discord.User, inventory: InventoryManager, color: int,
+    ) -> Paginator:
+        fields = [{
+            'name': f'{item.display_name} — **{quantity:,}**',
+            'value': f'Worth {Emojis.coin} **{item.price * quantity:,}**',
+            'inline': False,
+        } for item, quantity in inventory.cached.items() if quantity]
+
+        worth = sum(item.price * quantity for item, quantity in inventory.cached.items())
+
+        embed = discord.Embed(color=color, timestamp=ctx.now)
+        embed.description = dedent(f"""
+            {'Your' if user == ctx.author else f"{user.name}'s"} inventory is worth {Emojis.coin} **{worth:,}**.
+            Additionally, you own **{len(fields):,}** out of {len(list(Items.all())):,} unique items.
+        """)
+        embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.avatar.url)
+
+        button = RefreshInventoryButton(ctx, user, inventory, color)
+        return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), other_components=[button], timeout=120)
+
     @command(aliases={"inv", "backpack", "items"}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 6)
     async def inventory(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None):
@@ -242,25 +297,11 @@ class Stats(Cog):
         record = await ctx.db.get_user_record(user.id)
         inventory = await record.inventory_manager.wait()
 
-        fields = [{
-            'name': f'{item.display_name} — **{quantity:,}**',
-            'value': f'Worth {Emojis.coin} **{item.price * quantity:,}**',
-            'inline': False,
-        } for item, quantity in inventory.cached.items() if quantity]
-
-        worth = sum(item.price * quantity for item, quantity in inventory.cached.items())
-
-        if not len(fields):
+        if all(not quantity for item, quantity in inventory.cached.items()):
             return f'{"You currently do" if user == ctx.author else f"{user.name} currently does"} not own any items.', REPLY
 
-        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.description = dedent(f"""
-            {'Your' if user == ctx.author else f"{user.name}'s"} inventory is worth {Emojis.coin} **{worth:,}**.
-            Additionally, you own **{len(fields):,}** out of {len(list(Items.all())):,} unique items.
-        """)
-        embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.avatar.url)
-
-        return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY, NO_EXTRA if ctx.author != user else None
+        paginator = self._refresh_inventory_paginator(ctx, user, inventory, Colors.primary)
+        return paginator, REPLY, NO_EXTRA if ctx.author != user else None
 
     @inventory.define_app_command()
     @app_commands.describe(user='The user to view the inventory of.')

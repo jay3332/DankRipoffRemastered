@@ -315,6 +315,8 @@ class Bot(commands.Bot):
         self.loop.create_task(self._dispatch_first_ready())
         await self.ipc.start()
         await self._load_extensions()
+        if beta:
+            self.tree.clear_commands(guild=None)
         await self.tree.fetch_commands()  # populate cache
         self.backup.start()
 

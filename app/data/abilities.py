@@ -241,5 +241,44 @@ class Abilities:
             buff=f'**Next attack taken:** -{1 - buff:.1%} damage',
         )
 
+    handcuffs = Ability(
+        key='handcuffs',
+        name='Handcuffs',
+        type=AbilityType.attack,
+        description='Handcuffs the opponent, preventing them from attacking for the next turn.',
+        effect='Prevents the opponent from attacking for the next turn.',
+        emoji='<:handcuffs:1142670902199341056>',
+    )
+
+    @handcuffs.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        ctx.target.attack_stack.append(0, 1)
+        ctx.add_buff_commentary(
+            player=ctx.player,
+            text=f'{ctx.player.user} **handcuffs** {ctx.target.user}.',
+            buff='**Next move:** ATK suppressed to zero',
+        )
+
+    taser = Ability(
+        key='taser',
+        name='Taser',
+        type=AbilityType.attack,
+        description='Tases the opponent, dealing damage and lowering their defense.',
+        effect='Deals a small amount of damage and applies a 50% defense debuff for the next 2 moves from the opponent.',
+        emoji='<:taser:1142672274487529473>',
+    )
+
+    @taser.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        damage = ctx.deal_attack(round(random.uniform(4, 9) * ctx.level ** 1.2))
+        ctx.target.defense_stack.append(1.5, 2, types={AbilityType.attack})
+        ctx.player.tick_offensive(AbilityType.attack)
+
+        ctx.add_attack_commentary(
+            damage=damage,
+            text=f'{ctx.player.user} **tases** {ctx.target.user} and deals **{damage} HP**',
+            buff=f'**Defense Debuff:** -50% for 2 attacks',
+        )
+
 
 _ABILITIES_INST = Abilities()

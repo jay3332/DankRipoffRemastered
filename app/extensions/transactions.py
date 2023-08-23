@@ -22,11 +22,12 @@ from app.core import (
     simple_cooldown,
     user_max_concurrency,
 )
+from app.core.flags import Flags, store_true
 from app.data.items import Item, ItemRarity, ItemType, Items
 from app.data.pets import Pets
 from app.data.recipes import Recipe, Recipes
 from app.util.common import (
-    cutoff,
+    converter, cutoff,
     get_by_key,
     image_url_from_emoji,
     progress_bar,
@@ -52,7 +53,7 @@ from app.util.converters import (
 )
 from app.util.pagination import FieldBasedFormatter, Paginator
 from app.util.structures import LockWithReason
-from app.util.views import CommandInvocableModal, ConfirmationView, ModalButton, UserView
+from app.util.views import CommandInvocableModal, ConfirmationView, ModalButton, StaticCommandButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -73,6 +74,28 @@ class ItemTransformer(app_commands.Transformer):
             app_commands.Choice(name=item.name, value=item.key)
             for item in query_collection_many(Items, Item, value)
         ]
+
+
+@converter
+async def RarityConverter(_, value: str) -> ItemRarity:
+    try:
+        return ItemRarity[value.lower()]
+    except KeyError:
+        raise commands.BadArgument(f'Invalid rarity {value!r}')
+
+
+@converter
+async def ItemTypeConverter(_, value: str) -> ItemType:
+    if result := query_collection(ItemType, ItemType, value, get_key=lambda v: v.name):
+        return result
+    raise commands.BadArgument(f'Invalid item category {value!r}')
+
+
+@converter
+async def _SellBulkInvalidCatcher(_, value: str) -> commands.BadArgument:
+    if value.startswith('-'):
+        raise commands.BadArgument('flag starter')
+    return commands.BadArgument(f'Invalid rarity or category {value!r}')
 
 
 class DropView(discord.ui.View):
@@ -439,6 +462,15 @@ class BankTransactionModal(CommandInvocableModal):
             await self.invoke(ctx, amount=value)
 
 
+class SellBulkFlags(Flags):
+    all_rarities = store_true(name='all-rarities', aliases=('ar', 'allrarities', 'all-rarity', 'rarity'), short='r')
+    all_categories = store_true(
+        name='all-categories', aliases=('ac', 'allcategories', 'all-category', 'category'), short='c',
+    )
+    all = store_true(short='a')
+    keep_one = store_true(name='keep-one', aliases=('ko', 'keepone', 'keep-1', 'keep1', 'k1'), short='k')
+
+
 class Transactions(Cog):
     """Commands that handle transactions between the bank or other users."""
 
@@ -566,7 +598,28 @@ class Transactions(Cog):
             Removable? **{self._bool_to_human(item.removable)}**
         """), inline=False)
 
-        return embed, REPLY
+        view = discord.ui.View(timeout=120)
+        check = lambda itx: itx.user == ctx.author
+        if item.sellable:
+            view.add_item(button := StaticCommandButton(
+                command=self.sell, command_kwargs=dict(item_and_quantity=(item, 1)), check=check,
+                label='Sell One', style=discord.ButtonStyle.primary, disabled=not owned,
+            ))
+            if owned > 1:
+                view.add_item(StaticCommandButton(
+                    command=self.sell, command_kwargs=dict(item_and_quantity=(item, owned)), check=check,
+                    label='Sell All', style=discord.ButtonStyle.primary,
+                ))
+            else:
+                button.label = 'Sell'
+
+        if item.usable:
+            view.add_item(StaticCommandButton(
+                command=self.use, command_kwargs=dict(item_and_quantity=(item, 1)), check=check,
+                label='Use', style=discord.ButtonStyle.primary, disabled=not owned,
+            ))
+
+        return embed, view, REPLY
 
     @staticmethod
     def _bool_to_human(b: bool) -> str:
@@ -679,6 +732,106 @@ class Transactions(Cog):
     ) -> None:
         transformed = await transform_item_and_quantity(ctx, SELL, item, quantity)
         await ctx.invoke(ctx.command, item_and_quantity=transformed)
+
+    @command(
+        'sell-bulk', aliases={'sellall', 'sell-all', 'sa', 'sb', 'sellbulk', 'bulksell', 'bulk-sell'},
+        hybrid=True, with_app_command=False,
+    )
+    @simple_cooldown(2, 10)
+    @user_max_concurrency(1)
+    @lock_transactions
+    async def sell_bulk(
+        self,
+        ctx: Context,
+        entities: commands.Greedy[RarityConverter | ItemTypeConverter | _SellBulkInvalidCatcher],
+        *,
+        flags: SellBulkFlags,
+    ) -> CommandResponse:
+        """Sell items in your inventory in bulk by rarity and/or category.
+
+        By default, this command will sell all items that meet the following constraints:
+        - the item has a rarity below epic (common, uncommon, or rare)
+        - the item is not a crop, collectible, tool, net, or crate
+
+        Likewise, the first constraint above is the default rarity constraint if none is provided, and the second
+        constraint is the default category constraint if none is provided.
+
+        When using this command via slash commands, you may only explicitly specify one single rarity and one single
+        category at a time due to Discord limitations. This is subject to change in the future.
+
+        Flags:
+        - `--all-rarities`: Sell items of all rarities, overriding the rarity constraint (`-r`)
+        - `--all-categories`: Sell items of all categories, overriding the category constraint (`-c`)
+        - `--all`: Sell all items, overriding both the rarity and category constraints (`-a`)
+        - `--keep-one`: Keep one of every item that would otherwise be sold (`-k`)
+
+        Examples:
+        - `{PREFIX}sell-bulk`: Sell by default constraints
+        - `{PREFIX}sell-bulk common`: Sell only common items that are not crops, collectibles, tools, or crates
+        - `{PREFIX}sell-bulk common uncommon tool`: Sell only common and uncommon tools
+        - `{PREFIX}sell-bulk crop -r`: Sell all crops, regardless of rarity
+        - `{PREFIX}sell-bulk --all`: Sell all items that can possibly be sold
+        - `{PREFIX}sell-bulk --all --keep-one`: Sell all items except for one of every item that would otherwise be sold
+        """
+        record = await ctx.db.get_user_record(ctx.author.id)
+        inventory = await record.inventory_manager.wait()
+
+        if all(not quantity for quantity in inventory.cached.values()):
+            return 'You don\'t have any items to sell.', REPLY
+
+        if error := discord.utils.find(lambda e: isinstance(e, commands.BadArgument), entities):
+            raise error
+        rarities: set[ItemRarity] = set(r for r in entities if isinstance(r, ItemRarity))
+        categories: set[ItemType] = set(c for c in entities if isinstance(c, ItemType))
+
+        if flags.all or flags.all_rarities:
+            rarities = set(ItemRarity)
+        elif flags.all or flags.all_categories:
+            categories = set(ItemType)
+
+        rarities = rarities or {ItemRarity.common, ItemRarity.uncommon, ItemRarity.rare}
+        categories = categories or (
+            set(ItemType) - {ItemType.crop, ItemType.collectible, ItemType.tool, ItemType.net, ItemType.crate}
+        )
+        keep = 1 if flags.keep_one else 0
+
+        items = {
+            item: quantity - keep
+            for item, quantity in inventory.cached.items()
+            if item.sellable and quantity > keep and item.rarity in rarities and item.type in categories
+        }
+        if not items:
+            return 'You do not have any sellable items in your inventory that match the provided constraints.', REPLY
+
+        total = sum(item.sell * quantity for item, quantity in items.items())
+        count = sum(items.values())
+
+        embed = discord.Embed(color=Colors.warning, timestamp=ctx.now)
+        embed.set_author(name=f'Confirm Bulk Sell: {ctx.author}', icon_url=ctx.author.display_avatar)
+
+        friendly = '\n'.join(
+            f'- {item.get_sentence_chunk(quantity)} worth {Emojis.coin} **{item.sell * quantity:,}**'
+            for item, quantity in items.items()
+        )
+        s = 's' if count != 1 else ''
+        embed.description = (
+            f'You are about to sell **{count:,}** item{s} in bulk:\n{friendly}\nTotal: {Emojis.coin} **{total:,}**'
+        )
+
+        if not await ctx.confirm(embed=embed, delete_after=True, true='Confirm Bulk Sell'):
+            return 'Alright, looks like we won\'t bulk sell today.', REPLY
+
+        async with ctx.db.acquire() as conn:
+            payload = {item.key: -quantity for item, quantity in items.items()}
+            await record.inventory_manager.add_bulk(**payload, connection=conn)
+            await record.add(wallet=total, connection=conn)
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+        embed.set_author(name=f'Successful Transaction: {ctx.author}', icon_url=ctx.author.display_avatar)
+        embed.description = (
+            f'Successfully sold **{count:,}** item{s} for {Emojis.coin} **{total:,}**:\n{friendly}'
+        )
+        return embed, REPLY
 
     @command(aliases={'u', 'consume', 'activate', 'open'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 10)
@@ -820,7 +973,6 @@ class Transactions(Cog):
     @command(aliases={'giveaway'}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 30)
     @user_max_concurrency(1)
-    @lock_transactions
     async def drop(self, ctx: Context, *, entity: DropAmount | ItemAndQuantityConverter(DROP)):
         """Drop coins or items from your inventory into the chat.
 
@@ -833,17 +985,23 @@ class Transactions(Cog):
             await record.add(wallet=-entity)
         else:
             item, quantity = entity
-
             inventory = await record.inventory_manager.wait()
             await inventory.add_item(item, -quantity)
 
+        # noinspection PyUnboundLocalVariable
+        entity_human = f"{Emojis.coin} **{entity:,}**" if isinstance(entity, int) else item.get_sentence_chunk(quantity)
         entity_type = 'coins' if isinstance(entity, int) else 'items'
+
+        if not await ctx.confirm(
+            f'Are you sure you want to drop {entity_human}?\n'
+            f'This will make the {entity_type} available for anyone in this channel to claim.',
+            delete_after=True,
+        ):
+            yield 'I guess we aren\'t dropping anything today then', REPLY
+            return
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_author(name=f'{ctx.author.name} has dropped {entity_type}!', icon_url=ctx.author.avatar.url)
-
-        # noinspection PyUnboundLocalVariable
-        entity_human = f"{Emojis.coin} {entity:,}" if isinstance(entity, int) else item.get_sentence_chunk(quantity)
         embed.description = f'{ctx.author.mention} has dropped {entity_human}!'
 
         embed.set_footer(text=f'Click the button below to retrieve your {entity_type}!')

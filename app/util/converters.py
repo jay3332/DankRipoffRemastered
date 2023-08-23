@@ -179,12 +179,12 @@ async def CaseInsensitiveMemberConverter(ctx: Context, argument: str) -> discord
     except MemberNotFound:
         argument = argument.lower()
 
-        def check(member):
+        def check(member: discord.Member):
             return (
                 member.name.lower() == argument
+                or member.global_name.lower() == argument
                 or member.display_name.lower() == argument
-                or str(member).lower() == argument
-                or str(member.id) == argument
+                or str(member).lower() == argument  # legacy discriminators support
             )
 
         if found := discord.utils.find(check, ctx.guild.members):

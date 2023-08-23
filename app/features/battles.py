@@ -19,6 +19,8 @@ from app.util.common import image_url_from_emoji, progress_bar
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
+    from typing import Self
+
     from app.data.enemies import Enemy
     from app.util.types import TypedInteraction
 
@@ -118,6 +120,19 @@ class Player:
         self.hp += hp
         return hp
 
+    @classmethod
+    def from_record(cls, member: discord.Member, record: UserRecord) -> Self:
+        return cls(
+            member,
+            hp=record.battle_hp,
+            stamina=record.battle_stamina,
+            abilities={
+                Abilities.punch: 1,
+                Abilities.kick: 1,
+                Abilities.block: 1,
+            },  # TODO this is just a test
+        )
+
 
 class BattleContext(NamedTuple):
     battle: BattleView  # the battle view
@@ -133,11 +148,19 @@ class BattleContext(NamedTuple):
     def _transform(self, text: str) -> str:
         return f'{self.ability.emoji} {text}'
 
-    def add_attack_commentary(self, *, text: str, damage: int | None = None, critical: bool = False) -> None:
+    def add_attack_commentary(
+        self,
+        *,
+        text: str,
+        buff: str | None = None,
+        damage: int | None = None,
+        critical: bool = False,
+    ) -> None:
         self.battle.add_attack_commentary(
             author=self.player,
             victim=self.target,
             text=self._transform(text),
+            buff=buff,
             damage=damage,
             critical=critical,
         )
@@ -157,6 +180,7 @@ class AttackCommentaryEntry(NamedTuple):
     author: Player
     victim: Player
     text: str
+    buff: str | None = None
     damage: int | None = None
     critical: bool = False
 
@@ -195,6 +219,9 @@ class AbilityButton(discord.ui.Button):
         self.level = level
 
     async def callback(self, interaction: TypedInteraction) -> None:
+        if not await self.parent.ability_check(interaction):
+            return
+
         ctx = BattleContext(
             battle=self.parent, player=self.player, target=self.target, ability=self.ability, level=self.level,
         )
@@ -210,7 +237,7 @@ class AbilityButton(discord.ui.Button):
                     button.disabled = True
 
         embeds = self.parent.get_player_embeds(self.player)
-        await interaction.response.edit_message(embeds=embeds, view=self.view)
+        await interaction.response.edit_message(content=self.parent.content, embeds=embeds, view=self.view)
 
 
 class BattleView(discord.ui.View):
@@ -243,6 +270,9 @@ class BattleView(discord.ui.View):
         self._embed_color = Colors.primary
         self._initially_solo = self.team and len(self.team) == 1
 
+    async def ability_check(self, interaction: TypedInteraction) -> bool:
+        return True
+
     @staticmethod
     def deal_attack(author: Player, target: Player, hp: int, *, stamina: int, tick: bool = True) -> int:
         hp = max(0, round(hp * author.attack_buff * target.defense_buff))
@@ -260,10 +290,11 @@ class BattleView(discord.ui.View):
         author: Player,
         victim: Player,
         text: str,
+        buff: str | None = None,
         damage: int | None = None,
         critical: bool = False,
     ) -> None:
-        self.commentary.append(AttackCommentaryEntry(perf_counter_ns(), author, victim, text, damage, critical))
+        self.commentary.append(AttackCommentaryEntry(perf_counter_ns(), author, victim, text, buff, damage, critical))
 
     def add_simple_commentary(self, text: str) -> None:
         self.commentary.append(SimpleCommentaryEntry(perf_counter_ns(), text))
@@ -276,16 +307,38 @@ class BattleView(discord.ui.View):
 
     @staticmethod
     def format_commentary_entry(entry: CommentaryEntry) -> str:
-        if isinstance(entry, (AttackCommentaryEntry, HealCommentaryEntry, SimpleCommentaryEntry)):
+        if isinstance(entry, AttackCommentaryEntry) and not entry.buff:
             return entry.text
 
-        if isinstance(entry, BuffCommentaryEntry):
+        if isinstance(entry, (HealCommentaryEntry, SimpleCommentaryEntry)):
+            return entry.text
+
+        if isinstance(entry, (AttackCommentaryEntry, BuffCommentaryEntry)):
             return f'{entry.text}\n{Emojis.space}{Emojis.Expansion.standalone} {entry.buff}'
+
+    @property
+    def formatted_commentary(self) -> str:
+        return (
+            '\n'.join('- ' + self.format_commentary_entry(entry) for entry in self.commentary[-4:])
+            or 'Make a move to start the battle!'
+        )
 
     @property
     def base_embed(self) -> discord.Embed:
         ctx = self.ctx
         return discord.Embed(color=self._embed_color, timestamp=ctx.now)
+
+    @classmethod
+    def format_player_buffs(cls, player: Player) -> str:
+        buff_text = []
+        if player.attack_buff != 1:
+            buff_text.append(f'- **ATK** {player.attack_buff - 1:+.1%}')
+        if player.defense_buff != 1:
+            buff_text.append(f'- **DEF** {-player.defense_buff + 1:+.1%}')
+        if player.accuracy != 1:
+            buff_text.append(f'- **ACC** {player.accuracy - 1:+.1%}')
+
+        return '\n'.join(buff_text)
 
     def make_player_embed(self, player: Player) -> discord.Embed:
         embed = self.base_embed
@@ -305,21 +358,14 @@ class BattleView(discord.ui.View):
         if player.stamina <= 0:
             embed.description = "**You ran out of stamina!** Better rest for a while."
 
-        buff_text = []
-        if player.attack_buff != 1:
-            buff_text.append(f'- **ATK** {player.attack_buff - 1:+.1%}')
-        if player.defense_buff != 1:
-            buff_text.append(f'- **DEF** {-player.defense_buff + 1:+.1%}')
-        if player.accuracy != 1:
-            buff_text.append(f'- **ACC** {player.accuracy - 1:+.1%}')
-
-        if buff_text:
-            embed.add_field(
-                name='\U0001fa84 Buffs & Debuffs',
-                value='\n'.join(buff_text),
-            )
+        if buff_text := self.format_player_buffs(player):
+            embed.add_field(name='\U0001fa84 Buffs & Debuffs', value=buff_text)
 
         return embed
+
+    @property
+    def content(self) -> str | None:
+        return discord.utils.MISSING
 
     def get_player_embeds(self, player: Player) -> list[discord.Embed]:
         raise NotImplementedError
@@ -359,17 +405,7 @@ class PvEBattleView(BattleView):
         super().__init__(ctx, records, team=team, opponent=opponent, **kwargs)
 
         self.players: dict[discord.Member, Player] = {
-            member: Player(
-                member,
-                hp=records[member].battle_hp,
-                stamina=records[member].battle_stamina,
-                abilities={
-                    Abilities.punch: 1,
-                    Abilities.kick: 1,
-                    Abilities.block: 1,
-                },  # TODO this is just a test
-            )
-            for member in self.team
+            member: Player.from_record(member, records[member]) for member in self.team
         } if self.team else {}
 
         self.opponent_level: int = level
@@ -428,18 +464,9 @@ class PvEBattleView(BattleView):
             if interaction.user not in self.records:
                 self.records[interaction.user] = await self.ctx.db.get_user_record(interaction.user.id)
 
-            record = self.records[interaction.user]
             if interaction.user not in self.players:
-                self.players[interaction.user] = Player(
-                    interaction.user,
-                    hp=record.battle_hp,
-                    stamina=record.battle_stamina,
-                    abilities={
-                        Abilities.punch: 1,
-                        Abilities.kick: 1,
-                        Abilities.block: 1,
-                    },  # TODO this is just a test
-                )
+                record = self.records[interaction.user]
+                self.players[interaction.user] = Player.from_record(interaction.user, record)
             return True
 
         if interaction.user in self.team:
@@ -474,14 +501,7 @@ class PvEBattleView(BattleView):
             value=progress_bar(ratio, length=8),
             inline=False,
         )
-        embed.add_field(
-            name='\U0001f4e3 Commentary',
-            value=(
-                '\n'.join('- ' + self.format_commentary_entry(entry) for entry in self.commentary[-4:])
-                or 'Make a move to start the battle!'
-            ),
-            inline=False,
-        )
+        embed.add_field(name='\U0001f4e3 Commentary', value=self.formatted_commentary, inline=False)
         return embed
 
     def make_public_embeds(self) -> list[discord.Embed]:
@@ -570,3 +590,117 @@ class PvEBattleView(BattleView):
         self.players.pop(player.user, None)
         self.check_winner()
         await interaction.response.edit_message(embeds=self.make_public_embeds(), view=self)
+
+
+class PvPBattleView(BattleView):
+    opponent: discord.Member
+
+    def __init__(
+        self,
+        ctx: Context,
+        *,
+        record: UserRecord,
+        challenger: discord.Member,
+        challenger_record: UserRecord,
+    ) -> None:
+        records = {ctx.author: record, challenger: challenger_record}
+        super().__init__(ctx, opponent=challenger, records=records)
+        self._turn = random.random() < 0.5  # True if player turn, False if opponent turn
+
+        self.winner: discord.Member | None = None
+        self.author_player = Player.from_record(ctx.author, record)
+        self.opponent_player = Player.from_record(challenger, challenger_record)
+        self._update_view()
+
+    async def interaction_check(self, interaction: TypedInteraction, /) -> bool:
+        if interaction.user == self.ctx.author or interaction.user == self.opponent:
+            return True
+
+        await interaction.response.send_message('go away', ephemeral=True)
+
+    async def ability_check(self, interaction: TypedInteraction) -> bool:
+        if interaction.user == self.current_player.user:
+            return True
+
+        await interaction.response.send_message('It is not your turn to make a move.', ephemeral=True)
+        return False
+
+    @property
+    def current_player(self) -> Player:
+        return self.author_player if self._turn else self.opponent_player
+
+    def _update_view(self) -> None:
+        player = self.current_player
+        opponent = self.opponent_player if self._turn else self.author_player
+        self.clear_items()
+        for ability, level in player.abilities.items():
+            self.add_item(
+                AbilityButton(self, player=player, target=opponent, ability=ability, level=level),
+            )
+        self.add_item(self.surrender)
+
+    def check_winner(self) -> int:
+        if self.author_player.hp <= 0 or self.author_player.stamina <= 0:
+            self.winner = self.opponent
+            self._embed_color = Colors.error
+            self.stop()
+            return self.ENEMY_WON
+
+        if self.opponent_player.hp <= 0 or self.opponent_player.stamina <= 0:
+            self.winner = self.ctx.author
+            self._embed_color = Colors.success
+            self.stop()
+            return self.TEAM_WON
+
+        return self.NO_WINNER
+
+    async def advance(self, player: Player) -> None:
+        self._turn = not self._turn
+        self._update_view()
+
+    @property
+    def content(self) -> str:
+        if winner := self.winner:
+            return f'\N{CROWN} **{winner.mention} has won the battle!**'
+        return f'**{self.current_player.user.mention}, make a move!**'
+
+    @classmethod
+    def _format_player(cls, player: Player) -> str:
+        hp_ratio = player.hp / player.max_hp
+        stamina_ratio = player.stamina / player.max_stamina
+        base = (
+            f'{Emojis.hp} {progress_bar(hp_ratio, length=6)} **{player.hp:,}**/{player.max_hp:,} HP\n'
+            f'{Emojis.bolt} {progress_bar(stamina_ratio, length=6)} **{player.stamina:,}**/{player.max_stamina:,} Stamina\n'
+        )
+        if buff_text := cls.format_player_buffs(player):
+            base += '**\U0001fa84 Buffs & Debuffs**\n' + buff_text
+
+        return base
+
+    def get_player_embeds(self, _player: Any) -> list[discord.Embed]:
+        embed = self.base_embed
+        embed.set_author(name=f'{self.ctx.author} vs. {self.opponent}')
+        embed.set_thumbnail(url=self.current_player.user.display_avatar)
+        embed.description = f'Waiting for {self.current_player.user.mention} to make a move...'
+        embed.add_field(
+            name=self.ctx.author.name,
+            value=self._format_player(self.author_player),
+            inline=False,
+        )
+        embed.add_field(
+            name=self.opponent.name,
+            value=self._format_player(self.opponent_player),
+            inline=False,
+        )
+        embed.add_field(name='\U0001f4e3 Commentary', value=self.formatted_commentary, inline=False)
+        return [embed]
+
+    @discord.ui.button(label='Surrender', style=discord.ButtonStyle.danger)
+    async def surrender(self, interaction: TypedInteraction, _button: discord.ui.Button) -> Any:
+        self.stop()
+        self._embed_color = Colors.error
+        self.winner = self.opponent if interaction.user == self.ctx.author else self.ctx.author
+        self.add_simple_commentary(f'\U0001f3f3\ufe0f **{interaction.user} surrendered!** What a coward.')
+        return await interaction.response.edit_message(
+            content=self.content, embeds=self.get_player_embeds(None), view=self,
+        )

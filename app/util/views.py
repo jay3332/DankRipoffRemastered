@@ -95,14 +95,21 @@ class StaticCommandButton(discord.ui.Button):
         command: Command | GroupCommand,
         command_args: list[Any] = None,
         command_kwargs: dict[str, Any] = None,
+        check: Callable[[TypedInteraction], bool] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.command: HybridCommand | HybridGroupCommand = command  # type: ignore
         self.command_args = command_args or []
         self.command_kwargs = command_kwargs or {}
+        self.check = check
 
-    async def callback(self, interaction: discord.Interaction) -> None:
+    async def callback(self, interaction: TypedInteraction) -> None:
+        if self.check is not None and not self.check(interaction):
+            return await interaction.response.send_message(
+                f'You can\'t use this button, run `{self.command.qualified_name}` instead to use this command',
+                ephemeral=True,
+            )
         await invoke_command(self.command, interaction, args=self.command_args, kwargs=self.command_kwargs)
 
 
