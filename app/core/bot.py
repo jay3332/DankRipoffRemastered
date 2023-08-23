@@ -342,15 +342,32 @@ class Bot(commands.Bot):
         print(format(center, f'=^{len(text)}'))
         print(text)
 
+    async def _get_display_prefix(self, message: discord.Message) -> str:
+        prefix = await self.get_prefix(message)
+        if prefix is None:
+            prefix = default_prefix
+
+        if isinstance(prefix, list):
+            prefix = discord.utils.find(lambda p: p not in {f'<@{self.user.id}> ', f'<@!{self.user.id}> '}, prefix)
+            if prefix is None:
+                return f'@{self.user.display_name} '
+
+        return prefix
+
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:
             return
 
         if message.content in {f'<@{self.user.id}>', f'<@!{self.user.id}>'}:
+            prefix = await self._get_display_prefix(message)
             await message.reply(
-                f"Hey, I'm {self.user.name}. My prefix here is **`{default_prefix}`**\nAdditionally, "
-                f"most of my commands are available as slash commands.\n\nFor more help, run `{default_prefix}help`."
+                f"Hey, I'm {self.user.name}. My prefix here is **`{prefix}`**\n"
+                f"Additionally, most of my commands are available as slash commands.\n\n"
+                f"For more help, run `{prefix}help`."
             )
+
+        if discord.PartialEmoji.from_str(message.content).id == 1140424004407144538:
+            message.content = f'{self.user.mention} harvest'  # Easter egg
 
         await self.process_commands(message)
 
