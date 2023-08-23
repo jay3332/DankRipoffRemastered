@@ -52,7 +52,7 @@ from app.util.converters import (
     transform_item_and_quantity,
 )
 from app.util.pagination import FieldBasedFormatter, Paginator
-from app.util.structures import LockWithReason
+from app.util.structures import DottedDict, LockWithReason
 from app.util.views import CommandInvocableModal, ConfirmationView, ModalButton, StaticCommandButton, UserView
 from config import Colors, Emojis
 
@@ -832,6 +832,32 @@ class Transactions(Cog):
             f'Successfully sold **{count:,}** item{s} for {Emojis.coin} **{total:,}**:\n{friendly}'
         )
         return embed, REPLY
+
+    @sell_bulk.define_app_command()
+    @app_commands.describe(
+        rarity='The rarity of the items to sell. Defaults to common/uncommon/rare.',
+        category='The category of items to sell. See /help command sell-bulk for more information on defaults.',
+        keep_one='Whether to keep one of every item that would otherwise be sold.',
+    )
+    @app_commands.choices(
+        rarity=[app_commands.Choice(name=rarity.name.title(), value=rarity.name) for rarity in list(ItemRarity)],
+        category=[app_commands.Choice(name=cat.name.title(), value=cat.name) for cat in list(ItemType)],
+    )
+    @app_commands.rename(keep_one='keep-one')
+    async def sell_bulk_app_command(
+        self,
+        ctx: HybridContext,
+        rarity: str = None,
+        category: str = None,
+        keep_one: bool = False,
+    ):
+        if rarity:
+            rarity = ItemRarity[rarity.lower()]
+        if category:
+            category = ItemType[category.lower()]
+
+        flags = DottedDict(all_rarities=False, all_categories=False, all=False, keep_one=keep_one)
+        await ctx.invoke(ctx.command, rarity, category, flags=flags)  # type: ignore
 
     @command(aliases={'u', 'consume', 'activate', 'open'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 10)
