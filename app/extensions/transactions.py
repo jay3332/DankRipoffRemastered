@@ -857,7 +857,7 @@ class Transactions(Cog):
             category = ItemType[category.lower()]
 
         flags = DottedDict(all_rarities=False, all_categories=False, all=False, keep_one=keep_one)
-        await ctx.invoke(ctx.command, rarity, category, flags=flags)  # type: ignore
+        await ctx.invoke(ctx.command, (rarity, category), flags=flags)  # type: ignore
 
     @command(aliases={'u', 'consume', 'activate', 'open'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 10)
