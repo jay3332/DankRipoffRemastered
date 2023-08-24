@@ -266,7 +266,7 @@ class Events(Cog):
 
     @Cog.listener()
     async def on_command_completion(self, ctx: Context) -> Any:
-        if ctx.cog.qualified_name in CURRENCY_COGS or random.random() > 0.04:
+        if not ctx.cog or ctx.cog.qualified_name in CURRENCY_COGS or random.random() > 0.04:
             return
 
         lock = self._channel_event_locks[ctx.channel.id]
