@@ -585,12 +585,12 @@ class Transactions(Cog):
             Rarity: **{item.rarity.name.title()}**
         """))
 
-        em_dash = '\u2014'
+        then = '\n' + Emojis.Expansion.standalone
         embed.add_field(name='Pricing', value=dedent(f"""
             {'Buy Price' if item.buyable else 'Reference Value'}: {Emojis.coin} **{item.price:,}** per unit \
-            {f'{em_dash} Total {Emojis.coin} **{item.price * owned}** for the {owned:,} you own' if owned else ''}
+            {f'{then} Total {Emojis.coin} **{item.price * owned}** for the {owned:,} you own' if owned else ''}
             {f'Sell Value: {Emojis.coin} **{item.sell:,}** per unit' if item.sellable else ''} \
-            {f'{em_dash} Total {Emojis.coin} **{item.sell * owned}** for the {owned:,} you own' if owned else ''}
+            {f'{then} Total {Emojis.coin} **{item.sell * owned}** for the {owned:,} you own' if owned else ''}
         """), inline=False)
 
         allowed = []
@@ -609,7 +609,7 @@ class Transactions(Cog):
         if allowed:
             flexibility.append(f'You can {humanize_list([f"**{verb}**" for verb in allowed])} this item.')
         if forbidden:
-            flexibility.append(f'You __cannot__ {humanize_list(forbidden)} this item.')
+            flexibility.append(f'You *cannot* {humanize_list(forbidden, joiner="or")} this item.')
         embed.add_field(name='Flexibility', value='\n'.join(flexibility), inline=False)
 
         view = discord.ui.View(timeout=120)
