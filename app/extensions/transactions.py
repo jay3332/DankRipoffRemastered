@@ -574,7 +574,7 @@ class Transactions(Cog):
         item: Item
         owned = inventory.cached.quantity_of(item)
 
-        embed.title = f'{item.display_name} ({owned} owned)'
+        embed.title = f'{item.display_name} ({owned:,} owned)'
         embed.description = item.description
         embed.set_thumbnail(url=image_url_from_emoji(item.emoji))
 
