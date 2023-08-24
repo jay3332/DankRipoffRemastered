@@ -586,9 +586,12 @@ class Transactions(Cog):
         """))
 
         then = '\n' + Emojis.Expansion.standalone
-        embed.add_field(name='Pricing', value=dedent(f"""
+        buy_text = f"""\
             {'Buy Price' if item.buyable else 'Reference Value'}: {Emojis.coin} **{item.price:,}** per unit \
-            {f'{then} Total {Emojis.coin} **{item.price * owned:,}** for the {owned:,} you own' if owned else ''}
+            {f'{then} Total {Emojis.coin} **{item.price * owned:,}** for the {owned:,} you own' if owned else ''}\
+        """ if not item.sellable or item.price != item.sell else ''
+        embed.add_field(name='Pricing', value=dedent(f"""
+            {buy_text}
             {f'Sell Value: {Emojis.coin} **{item.sell:,}** per unit' if item.sellable else ''} \
             {f'{then} Total {Emojis.coin} **{item.sell * owned:,}** for the {owned:,} you own' if owned else ''}
         """), inline=False)
