@@ -43,6 +43,7 @@ class Ability:
     effect: str
     emoji: str
     stamina: int = 0
+    curve: tuple[int, int] = (100, 1.22)
     exclusive_to: list[Ref] | None = None
     _callback: AbilityCallback = MISSING
 

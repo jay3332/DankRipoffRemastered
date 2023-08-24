@@ -13,6 +13,7 @@ import asyncpg
 import discord.utils
 from discord.utils import cached_property, format_dt
 
+from app.data.abilities import Ability, Abilities
 from app.data.items import CropMetadata, Item, Items
 from app.data.jobs import Job, Jobs
 from app.data.pets import Pet, Pets
@@ -817,6 +818,103 @@ class PetManager:
         self.cached[pet] = PetRecord.from_record(manager=self, record=record)
 
 
+@dataclass
+class AbilityRecord:
+    manager: AbilityManager
+    ability: Ability
+    total_exp: int
+    equipped: bool
+
+    @property
+    def level_data(self) -> tuple[int, int, int]:
+        base, factor = self.ability.curve
+        return calculate_level(self.total_exp, base=base, factor=factor, precision=10)
+
+    @property
+    def level(self) -> int:
+        return self.level_data[0]
+
+    @property
+    def exp(self) -> int:
+        return self.level_data[1]
+
+    @property
+    def exp_requirement(self) -> int:
+        return self.level_data[2]
+
+    @property
+    def user_id(self) -> int:
+        return self.manager._record.user_id
+
+    @property
+    def db(self) -> Database:
+        return self.manager._record.db
+
+    @staticmethod
+    def _transform_record(record: asyncpg.Record) -> dict[str, Any]:
+        return pick(record, 'equipped', exp='total_exp')
+
+    @classmethod
+    def from_record(cls, manager: AbilityManager, record: asyncpg.Record) -> Self:
+        return cls(manager=manager, ability=get_by_key(Abilities, record['ability']), **cls._transform_record(record))
+
+    async def update_with(self, query: str, *, connection: asyncpg.Connection | None = None, **kwargs: Any) -> None:
+        record = await (self.db or connection).fetchrow(query, self.user_id, self.ability.key, *kwargs.values())
+        self.__dict__.update(**self._transform_record(record))
+
+    async def update(self, *, connection: asyncpg.Connection | None = None, **kwargs: Any) -> None:
+        query = 'UPDATE abilities SET {0} WHERE user_id = $1 AND ability = $2 RETURNING *'.format(
+            ', '.join(f'{k} = ${i}' for i, k in enumerate(kwargs, start=3))
+        )
+        await self.update_with(query, connection=connection, **kwargs)
+
+    async def add(self, *, connection: asyncpg.Connection | None = None, **kwargs: Any) -> None:
+        query = 'UPDATE abilities SET {0} WHERE user_id = $1 AND ability = $2 RETURNING *'.format(
+            ', '.join(f'{k} = {k} + ${i}' for i, k in enumerate(kwargs, start=3))
+        )
+        await self.update_with(query, connection=connection, **kwargs)
+
+
+class AbilityManager:
+    def __init__(self, record: UserRecord) -> None:
+        self._record = record
+        self.cached: dict[Ability, AbilityRecord] = {}
+        self.__fetch_task = asyncio.create_task(self.fetch())
+
+    async def wait(self) -> Self:
+        await self.__fetch_task
+        return self
+
+    async def fetch(self) -> None:
+        await self._record.db.wait()
+
+        async with self._record.db.acquire() as conn:
+            query = """
+                INSERT INTO abilities (user_id, ability, equipped)
+                VALUES 
+                    ($1, 'punch', true),
+                    ($1, 'kick', true),
+                    ($1, 'block', true) -- default abilities
+                ON CONFLICT (user_id, ability) DO NOTHING
+            """
+            await conn.execute(query, self._record.user_id)
+
+            query = 'SELECT * FROM abilities WHERE user_id = $1'
+            records = await conn.fetch(query, self._record.user_id)
+
+        records = (AbilityRecord.from_record(manager=self, record=r) for r in records)
+        self.cached = {r.ability: r for r in records}
+
+    @property
+    def equipped_count(self) -> int:
+        return sum(r.equipped for r in self.cached.values())
+
+    async def add_ability(self, ability: Ability, *, connection: asyncpg.Connection | None = None) -> None:
+        query = 'INSERT INTO abilities (user_id, ability) VALUES ($1, $2) RETURNING *'
+        record = await (connection or self._record.db).fetchrow(query, self._record.user_id, ability.key)
+        self.cached[ability] = AbilityRecord.from_record(manager=self, record=record)
+
+
 class UserHistoryEntry(NamedTuple):
     wallet: int
     total: int
@@ -1127,6 +1225,10 @@ class UserRecord(BaseRecord):
     @property
     def exp_requirement(self) -> int:
         return self.level_data[2]
+
+    @property
+    def orbs(self) -> int:
+        return self.data['orbs']
 
     @property
     def base_exp_multiplier(self) -> float:

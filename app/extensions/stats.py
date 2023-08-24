@@ -99,6 +99,10 @@ class RefreshInventoryButton(discord.ui.Button):
         self.color = color
 
     async def callback(self, interaction: TypedInteraction) -> None:
+        if interaction.user != self.ctx.author:
+            return await interaction.response.send_message(
+                'You cannot refresh someone else\'s inventory view.', ephemeral=True,
+            )
         paginator = self.cog._refresh_inventory_paginator(self.ctx, self.user, self.inventory, self.color)
         await paginator.start(edit=True, interaction=interaction)
 
