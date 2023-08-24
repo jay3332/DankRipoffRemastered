@@ -124,7 +124,7 @@ class Events:
         attacks = (
             (view.format_commentary_entry(c), c.damage) for c in view.commentary if isinstance(c, AttackCommentaryEntry)
         )
-        best_attacks = '\n'.join(f'{i}. {text}' for i, (text, _) in nlargest(3, attacks, key=lambda x: x[1]))
+        best_attacks = '\n'.join(f'{i}. {text}' for i, (text, _) in nlargest(3, attacks, key=lambda x: x[1] or 0))
         profits = {}
 
         async with ctx.db.acquire() as conn:  # TODO: artifacts
