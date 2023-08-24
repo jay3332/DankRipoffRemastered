@@ -237,7 +237,7 @@ class AbilityButton(discord.ui.Button):
         if not self.parent.is_finished():
             await self.parent.advance(self.player)
 
-        if self.parent.is_finished():
+        if self.parent.is_finished() or self.player.hp <= 0 or self.player.stamina <= 0:
             for button in self.view.children:
                 if isinstance(button, AbilityButton):
                     button.disabled = True
@@ -363,6 +363,8 @@ class BattleView(discord.ui.View):
             inline=False,
         )
 
+        if player.hp <= 0 or player.stamina <= 0:
+            embed.colour = Colors.error
         if player.stamina <= 0:
             embed.description = "**You ran out of stamina!** Better rest for a while."
 
@@ -443,6 +445,7 @@ class PvEBattleView(BattleView):
             self.ctx.bot.loop.create_task(self._update_loop())
 
         self.won: bool = False
+        self._lost: set[discord.Member] = set()
 
     @classmethod
     def public(
@@ -492,6 +495,13 @@ class PvEBattleView(BattleView):
             await self.ctx.maybe_edit(embeds=self.make_public_embeds(), view=self)
 
     async def interaction_check(self, interaction: TypedInteraction) -> bool:
+        if interaction.user in self._lost:
+            await interaction.response.send_message(
+                "You've already been defeated and cannot participate in this battle anymore.",
+                ephemeral=True,
+            )
+            return False
+
         if self.team is None:
             if interaction.user not in self.records:
                 self.records[interaction.user] = await self.ctx.db.get_user_record(interaction.user.id)
@@ -571,6 +581,13 @@ class PvEBattleView(BattleView):
             )
             self._embed_color = Colors.error
             return self.ENEMY_WON
+
+        for player in self.players.values():
+            if (player.hp <= 0 or player.stamina <= 0) and player.user not in self._lost:
+                self._lost.add(player.user)
+                self.add_simple_commentary(
+                    f'\N{SKULL} **{player.user}** has been defeated by **{self.opponent.display}**!',
+                )
 
         return self.NO_WINNER
 
