@@ -198,12 +198,12 @@ def pluralize(text: str, /) -> str:
     return PLURALIZE_REGEX.sub(callback, text)
 
 
-def humanize_list(li: list[Any]) -> str:
+def humanize_list(li: list[Any], *, joiner: str = 'and') -> str:
     """Takes a list and returns it joined."""
     if len(li) <= 2:
         return " and ".join(li)
 
-    return ", ".join(li[:-1]) + f", and {li[-1]}"
+    return ", ".join(li[:-1]) + f", {joiner} {li[-1]}"
 
 
 def humanize_small_duration(seconds: float, /) -> str:
