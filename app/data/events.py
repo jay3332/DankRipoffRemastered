@@ -101,6 +101,7 @@ class Events:
             time_limit=180,
         )
         original = await ctx.send(embeds=view.make_public_embeds(), view=view)
+        view._original_message = original
         await view.wait()
 
         if not view.won:

@@ -446,6 +446,7 @@ class PvEBattleView(BattleView):
 
         self.won: bool = False
         self._lost: set[discord.Member] = set()
+        self._original_message: discord.Message | None = None
 
     @classmethod
     def public(
@@ -471,6 +472,13 @@ class PvEBattleView(BattleView):
             **kwargs,
         )
 
+    @property
+    def _maybe_edit_message(self) -> discord.Message:
+        return self._original_message or self.ctx._message
+
+    async def _update_message(self) -> None:
+        await self.ctx.maybe_edit(self._maybe_edit_message, embeds=self.make_public_embeds(), view=self)
+
     async def _exhaust(self, time_limit: float) -> None:
         await asyncio.sleep(time_limit)
         if not self.is_finished():
@@ -479,7 +487,7 @@ class PvEBattleView(BattleView):
             self.add_simple_commentary(
                 f'\u23f1\ufe0f **Time\'s up!** You couldn\'t defeat {self.opponent.display} in time.',
             )
-            await self.ctx.maybe_edit(embeds=self.make_public_embeds(), view=self)
+            await self._update_message()
 
     async def _update_loop(self) -> None:
         prev_hp = self.opponent_player.hp
@@ -492,7 +500,7 @@ class PvEBattleView(BattleView):
 
             prev_hp = self.opponent_player.hp
             prev_commentary_len = len(self.commentary)
-            await self.ctx.maybe_edit(embeds=self.make_public_embeds(), view=self)
+            await self._update_message()
 
     async def interaction_check(self, interaction: TypedInteraction) -> bool:
         if self.team is None:
