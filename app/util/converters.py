@@ -182,7 +182,7 @@ async def CaseInsensitiveMemberConverter(ctx: Context, argument: str) -> discord
         def check(member: discord.Member):
             return (
                 member.name.lower() == argument
-                or member.global_name.lower() == argument
+                or member.global_name and member.global_name.lower() == argument
                 or member.display_name.lower() == argument
                 or str(member).lower() == argument  # legacy discriminators support
             )
