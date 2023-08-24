@@ -518,6 +518,8 @@ class PvEBattleView(BattleView):
             )
             return False
 
+        return True
+
     @property
     def solo(self) -> discord.Member | None:
         if self._initially_solo:

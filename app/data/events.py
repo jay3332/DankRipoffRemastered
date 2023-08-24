@@ -98,7 +98,7 @@ class Events:
             level=2,
             title='Common Event: Karen',
             description='A wild Karen has appeared! Join in the fight to take her down!',
-            time_limit=120,
+            time_limit=180,
         )
         original = await ctx.send(embeds=view.make_public_embeds(), view=view)
         await view.wait()
@@ -124,7 +124,9 @@ class Events:
         attacks = (
             (view.format_commentary_entry(c), c.damage) for c in view.commentary if isinstance(c, AttackCommentaryEntry)
         )
-        best_attacks = '\n'.join(f'{i}. {text}' for i, (text, _) in nlargest(3, attacks, key=lambda x: x[1] or 0))
+        best_attacks = '\n'.join(
+            f'{i}. {text}' for i, (text, _) in enumerate(nlargest(3, attacks, key=lambda x: x[1] or 0), start=1)
+        )
         profits = {}
 
         async with ctx.db.acquire() as conn:  # TODO: artifacts
