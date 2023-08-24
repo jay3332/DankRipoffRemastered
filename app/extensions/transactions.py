@@ -27,9 +27,11 @@ from app.data.items import Item, ItemRarity, ItemType, Items
 from app.data.pets import Pets
 from app.data.recipes import Recipe, Recipes
 from app.util.common import (
-    converter, cutoff,
+    converter,
+    cutoff,
     get_by_key,
     image_url_from_emoji,
+    humanize_list,
     progress_bar,
     query_collection,
     query_collection_many,
@@ -574,7 +576,6 @@ class Transactions(Cog):
 
         embed.title = f'{item.display_name} ({owned} owned)'
         embed.description = item.description
-
         embed.set_thumbnail(url=image_url_from_emoji(item.emoji))
 
         embed.add_field(name='General', value=dedent(f"""
@@ -584,19 +585,32 @@ class Transactions(Cog):
             Rarity: **{item.rarity.name.title()}**
         """))
 
+        em_dash = '\u2014'
         embed.add_field(name='Pricing', value=dedent(f"""
-            Buy Price: {Emojis.coin} **{item.price:,}**
-            {
-                f'Sell Value: {Emojis.coin} **{item.sell:,}**' if item.sellable else ''
-            }
-        """))
-
-        embed.add_field(name='Flexibility', value=dedent(f"""
-            Buyable? **{self._bool_to_human(item.buyable)}**
-            Sellable? **{self._bool_to_human(item.sellable)}**
-            Usable? **{self._bool_to_human(item.usable)}**
-            Removable? **{self._bool_to_human(item.removable)}**
+            {'Buy Price' if item.buyable else 'Reference Value'}: {Emojis.coin} **{item.price:,}** per unit \
+            {f'{em_dash} Total {Emojis.coin} **{item.price * owned}** for the {owned:,} you own' if owned else ''}
+            {f'Sell Value: {Emojis.coin} **{item.sell:,}** per unit' if item.sellable else ''} \
+            {f'{em_dash} Total {Emojis.coin} **{item.sell * owned}** for the {owned:,} you own' if owned else ''}
         """), inline=False)
+
+        allowed = []
+        forbidden = []
+        for verb, value in (
+            ('buy', item.buyable),
+            ('sell', item.sellable),
+            ('use', item.usable),
+            ('remove', item.removable),
+            ('gift', item.giftable),
+        ):
+            target = allowed if value else forbidden
+            target.append(verb)
+
+        flexibility = []
+        if allowed:
+            flexibility.append(f'You can {humanize_list([f"**{verb}**" for verb in allowed])} this item.')
+        if forbidden:
+            flexibility.append(f'You __cannot__ {humanize_list(forbidden)} this item.')
+        embed.add_field(name='Flexibility', value='\n'.join(flexibility), inline=False)
 
         view = discord.ui.View(timeout=120)
         check = lambda itx: itx.user == ctx.author
