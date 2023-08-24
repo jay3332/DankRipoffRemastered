@@ -400,7 +400,7 @@ class Miscellaneous(Cog):
             ), REPLY
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.description = '\n'.join(map(discord.utils.escape_mentions, prefixes))
+        embed.description = '\n'.join('- ' + discord.utils.escape_mentions(pf) for pf in prefixes)
 
         embed.set_author(name=f'Prefixes for {ctx.guild.name}', icon_url=ctx.guild.icon)
         embed.set_footer(text=pluralize(f'{len(prefixes)} prefix(es)'))
@@ -420,9 +420,9 @@ class Miscellaneous(Cog):
         You cannot have over 25 prefixes at once.
 
         Examples:
-        - {PREFIX}prefix add !
-        - {PREFIX}prefix add "hey "
-        - {PREFIX}prefix add ! ? "hey "
+        - `{PREFIX}prefix add !`
+        - `{PREFIX}prefix add "hey "`
+        - `{PREFIX}prefix add ! ? "hey "`
 
         Arguments:
         - `prefixes`: A list of prefixes to add, separated by space. If you want a space in your prefix surround it with quotes.
@@ -465,9 +465,9 @@ class Miscellaneous(Cog):
         You can separate prefixes by space to remove multiple prefixes at once.
 
         Examples:
-        - {PREFIX}prefix remove !
-        - {PREFIX}prefix remove "lambda "
-        - {PREFIX}prefix remove ! ? "lambda "
+        - `{PREFIX}prefix remove !`
+        - `{PREFIX}prefix remove "hey "`
+        - `{PREFIX}prefix remove ! ? "hey "`
 
         Arguments:
         - `prefixes`: A list of prefixes to remove, separated by space. If there is a space in a prefix surround it with quotes.
@@ -534,9 +534,9 @@ class Miscellaneous(Cog):
         You can separate prefixes by space to set multiple prefixes at once.
 
         Examples:
-        - {PREFIX}prefix overwrite !
-        - {PREFIX}prefix overwrite "lambda "
-        - {PREFIX}prefix overwrite ! ? "lambda "
+        - `{PREFIX}prefix overwrite !`
+        - `{PREFIX}prefix overwrite "hey "`
+        - `{PREFIX}prefix overwrite ! ? "hey "`
 
         Arguments:
         - `prefixes`: A list of prefixes to set, separated by space. If there is a space in a prefix surround it with quotes.

@@ -130,7 +130,15 @@ class Context(TypedContext):
             await self.maybe_edit(self._message, content, **kwargs)
             return self._message
 
-        self._message = result = await super().send(content, **kwargs)
+        try:
+            result = await super().send(content, **kwargs)
+        except discord.NotFound:
+            if kwargs.pop('reference', False):
+                result = await super().send(content, **kwargs)
+            else:
+                raise
+
+        self._message = result
         return result
 
 

@@ -96,6 +96,9 @@ class Player:
     def __eq__(self, other: Player) -> bool:
         return self.user == other.user
 
+    def __hash__(self) -> int:
+        return hash(self.user)
+
     @property
     def attack_buff(self) -> float:
         return self.attack_stack.product
@@ -269,6 +272,7 @@ class BattleView(discord.ui.View):
         self.team = [ctx.author] if team is MISSING else team
         self.opponent = opponent
         self.commentary: list[CommentaryEntry] = []
+        self.damage_dealt: dict[Player, int] = defaultdict(int)
 
         self._embed_color = Colors.primary
         self._initially_solo = self.team and len(self.team) == 1
@@ -276,8 +280,7 @@ class BattleView(discord.ui.View):
     async def ability_check(self, interaction: TypedInteraction) -> bool:
         return True
 
-    @staticmethod
-    def deal_attack(author: Player, target: Player, hp: int, *, stamina: int, tick: bool = True) -> int:
+    def deal_attack(self, author: Player, target: Player, hp: int, *, stamina: int, tick: bool = True) -> int:
         hp = max(0, round(hp * author.attack_buff * target.defense_buff))
         target.hp = max(0, target.hp - hp)
         author.stamina = max(0, author.stamina - stamina)
@@ -285,6 +288,8 @@ class BattleView(discord.ui.View):
         if tick:
             author.tick_offensive(AbilityType.attack)
             target.tick_defensive(AbilityType.attack)
+
+        self.damage_dealt[author] += hp
         return hp
 
     def add_attack_commentary(
@@ -438,6 +443,30 @@ class PvEBattleView(BattleView):
             self.ctx.bot.loop.create_task(self._update_loop())
 
         self.won: bool = False
+
+    @classmethod
+    def public(
+        cls,
+        ctx: Context,
+        *,
+        opponent: Enemy,
+        level: int,
+        title: str | None = None,
+        description: str | None = None,
+        time_limit: float | None = None,
+        **kwargs: Any,
+    ) -> Self:
+        return cls(
+            ctx,
+            records={},
+            team=None,
+            opponent=opponent,
+            level=level,
+            title=title,
+            description=description,
+            time_limit=time_limit,
+            **kwargs,
+        )
 
     async def _exhaust(self, time_limit: float) -> None:
         await asyncio.sleep(time_limit)

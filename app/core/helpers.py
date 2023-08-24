@@ -42,6 +42,7 @@ MISSING = sentinel('MISSING', bool=False, repr='MISSING')
 
 CURRENCY_COGS: Final[frozenset[str]] = frozenset({
     'Casino',
+    'Combat',
     'Farming',
     'Jobs',
     'Pets',

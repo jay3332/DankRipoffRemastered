@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import functools
+import random
 import re
+from collections import defaultdict
 from typing import Any
 
 import discord
@@ -12,16 +15,20 @@ from discord.utils import format_dt
 
 from app.core import Cog, Command, Context
 from app.core.flags import FlagMeta
-from app.core.helpers import ActiveTransactionLock, GenericError
+from app.core.helpers import ActiveTransactionLock, CURRENCY_COGS, GenericError
+from app.data.events import EVENT_RARITY_WEIGHTS, Event
 from app.data.items import Items
 from app.util.ansi import AnsiColor, AnsiStringBuilder
-from app.util.common import humanize_duration, pluralize
+from app.util.common import humanize_duration, pluralize, walk_collection
 from app.util.views import StaticCommandButton
 from config import Colors, guilds_channel, votes_channel
 
 
 class Events(Cog):
     __hidden__ = True
+
+    def __setup__(self) -> None:
+        self._channel_event_locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     @discord.utils.cached_property
     def _cooldowns_remind_command(self) -> Any:
@@ -256,6 +263,20 @@ class Events(Cog):
             f'They received {item.get_sentence_chunk()} for their vote. Thank you!{weekend}',
             view=view,
         )
+
+    @Cog.listener()
+    async def on_command_completion(self, ctx: Context) -> Any:
+        if ctx.cog.qualified_name in CURRENCY_COGS or random.random() > 0.04:
+            return
+
+        lock = self._channel_event_locks[ctx.channel.id]
+        if lock.locked():
+            return
+
+        async with lock.acquire():
+            rarity = random.choices(list(EVENT_RARITY_WEIGHTS), weights=list(EVENT_RARITY_WEIGHTS.values()))[0]
+            event = random.choice([e for e in walk_collection(Events, Event) if e.rarity is rarity])
+            await event(ctx)
 
 
 setup = Events.simple_setup
