@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from app.core import Cog, Context, REPLY, command, simple_cooldown, user_max_concurrency
+from app.core import BAD_ARGUMENT, Cog, Context, REPLY, command, simple_cooldown, user_max_concurrency
 from app.features.battles import PvPBattleView
 
 if TYPE_CHECKING:
@@ -21,6 +21,11 @@ class Combat(Cog):
     @user_max_concurrency(1)
     async def fight(self, ctx: Context, *, user: discord.Member) -> CommandResponse:
         """Challenge someone to a PvP fight."""
+        if user.bot:
+            return 'You cannot fight bots.', BAD_ARGUMENT
+        if user == ctx.author:
+            return 'You cannot fight yourself, that\'d be REALLY funny', BAD_ARGUMENT
+
         record = await ctx.db.get_user_record(ctx.author.id)
         challenger_record = await ctx.db.get_user_record(user.id)
 

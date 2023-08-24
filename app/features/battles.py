@@ -219,6 +219,9 @@ class AbilityButton(discord.ui.Button):
         self.level = level
 
     async def callback(self, interaction: TypedInteraction) -> None:
+        if not interaction.user == self.player.user:
+            return await interaction.response.send_message('It is not your turn.', ephemeral=True)
+
         if not await self.parent.ability_check(interaction):
             return
 
