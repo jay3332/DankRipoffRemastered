@@ -593,7 +593,7 @@ class Transactions(Cog):
         embed.add_field(name='Pricing', value=dedent(f"""
             {buy_text}
             {f'Sell Value: {Emojis.coin} **{item.sell:,}** per unit' if item.sellable else ''} \
-            {f'{then} Total {Emojis.coin} **{item.sell * owned:,}** for the {owned:,} you own' if owned else ''}
+            {f'{then} Total {Emojis.coin} **{item.sell * owned:,}** for the {owned:,} you own' if item.sellable and owned else ''}
         """), inline=False)
 
         allowed = []
