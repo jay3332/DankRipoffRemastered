@@ -16,7 +16,7 @@ from discord.utils import format_dt
 from app.core import Cog, Command, Context
 from app.core.flags import FlagMeta
 from app.core.helpers import ActiveTransactionLock, CURRENCY_COGS, GenericError
-from app.data.events import EVENT_RARITY_WEIGHTS, Event
+from app.data.events import EVENT_RARITY_WEIGHTS, Event, Events
 from app.data.items import Items
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.common import humanize_duration, pluralize, walk_collection
@@ -24,7 +24,7 @@ from app.util.views import StaticCommandButton
 from config import Colors, guilds_channel, votes_channel
 
 
-class Events(Cog):
+class EventsCog(Cog, name='Events'):
     __hidden__ = True
 
     def __setup__(self) -> None:
@@ -279,4 +279,4 @@ class Events(Cog):
                 await random.choice(choices)(ctx)
 
 
-setup = Events.simple_setup
+setup = EventsCog.simple_setup
