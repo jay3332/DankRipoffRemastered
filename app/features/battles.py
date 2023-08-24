@@ -495,13 +495,6 @@ class PvEBattleView(BattleView):
             await self.ctx.maybe_edit(embeds=self.make_public_embeds(), view=self)
 
     async def interaction_check(self, interaction: TypedInteraction) -> bool:
-        if interaction.user in self._lost:
-            await interaction.response.send_message(
-                "You've already been defeated and cannot participate in this battle anymore.",
-                ephemeral=True,
-            )
-            return False
-
         if self.team is None:
             if interaction.user not in self.records:
                 self.records[interaction.user] = await self.ctx.db.get_user_record(interaction.user.id)
@@ -516,6 +509,14 @@ class PvEBattleView(BattleView):
 
         await interaction.response.send_message('no can do buddy', ephemeral=True)
         return False
+
+    async def ability_check(self, interaction: TypedInteraction) -> bool:
+        if interaction.user in self._lost:
+            await interaction.response.send_message(
+                "You've already been defeated and cannot participate in this battle anymore.",
+                ephemeral=True,
+            )
+            return False
 
     @property
     def solo(self) -> discord.Member | None:
@@ -626,6 +627,12 @@ class PvEBattleView(BattleView):
 
     @discord.ui.button(label='Surrender', style=discord.ButtonStyle.danger)
     async def surrender(self, interaction: TypedInteraction, _button: discord.ui.Button) -> Any:
+        if interaction.user in self._lost:
+            return await interaction.response.send_message(
+                'You\'re already out of the battle, there is no point in surrendering',
+                ephemeral=True,
+            )
+
         if self.solo:
             self.stop()
             self._embed_color = Colors.error
@@ -636,6 +643,7 @@ class PvEBattleView(BattleView):
         self.add_simple_commentary(
             text=f'\U0001f3f3\ufe0f **{player.user} surrenders** and leaves the battle in shame.',
         )
+        self._lost.add(player.user)
         self.players.pop(player.user, None)
         self.check_winner()
         await interaction.response.edit_message(embeds=self.make_public_embeds(), view=self)
