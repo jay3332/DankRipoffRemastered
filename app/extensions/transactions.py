@@ -338,8 +338,11 @@ def shop_paginator(
             else:
                 continue
 
-        embed.title = 'Item Shop'
-        embed.description = f'To buy an item, see `{ctx.clean_prefix}buy`.\nTo view information on an item, see `{ctx.clean_prefix}iteminfo`.'
+        embed.set_author(name='Item Shop', icon_url=ctx.author.display_avatar)
+        embed.description = (
+            f'To buy an item, use `{ctx.clean_prefix}buy`.\n'
+            f'To view information on an item, use `{ctx.clean_prefix}shop <item>`.'
+        )
 
         comment = '*You cannot afford this item.*\n' if i.price > record.wallet else ''
         owned = inventory.cached.quantity_of(i)
@@ -356,7 +359,7 @@ def shop_paginator(
             description = f'{description[:loc]}**{description[loc:end]}**{description[end:]}'
 
         fields.append({
-            'name': f'• {i.emoji} {name} — {Emojis.coin} {i.price:,} {owned}',
+            'name': f'{i.emoji} {name} — {Emojis.coin} {i.price:,} {owned}',
             'value': comment + description,
             'inline': False,
         })

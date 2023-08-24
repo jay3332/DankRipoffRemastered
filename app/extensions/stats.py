@@ -22,7 +22,7 @@ from app.util.common import cutoff, humanize_duration, image_url_from_emoji, pro
 from app.util.converters import CaseInsensitiveMemberConverter, IntervalConverter
 from app.util.graphs import send_graph_to
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
-from app.util.views import ModalButton, invoke_command
+from app.util.views import ModalButton, StaticCommandButton, invoke_command
 from config import Colors, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
@@ -289,8 +289,17 @@ class Stats(Cog):
         """)
         embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.avatar.url)
 
-        button = RefreshInventoryButton(ctx, user, inventory, color)
-        return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), other_components=[button], timeout=120)
+        go_shopping = StaticCommandButton(
+            command=ctx.bot.get_command('shop'),
+            label='Go Shopping', style=discord.ButtonStyle.primary, emoji='\U0001f6d2', row=1,
+        )
+        refresh = RefreshInventoryButton(ctx, user, inventory, color)
+        return Paginator(
+            ctx,
+            FieldBasedFormatter(embed, fields, per_page=5),
+            other_components=[go_shopping, refresh],
+            timeout=120,
+        )
 
     @command(aliases={"inv", "backpack", "items"}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 6)
