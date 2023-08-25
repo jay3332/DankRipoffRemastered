@@ -1044,6 +1044,11 @@ class Transactions(Cog):
             f'This will make the {entity_type} available for anyone in this channel to claim.',
             delete_after=True,
         ):
+            if isinstance(entity, int):
+                await record.add(wallet=entity)
+            else:
+                # noinspection PyUnboundLocalVariable
+                await inventory.add_item(item, quantity)
             yield 'I guess we aren\'t dropping anything today then', REPLY
             return
 
