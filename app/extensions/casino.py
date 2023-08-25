@@ -13,11 +13,11 @@ import discord
 from discord import app_commands
 from discord.utils import format_dt
 
-from app.core import Cog, Context, EDIT, REPLY, command, group, lock_transactions, simple_cooldown, user_max_concurrency
+from app.core import Cog, Context, EDIT, REPLY, command, lock_transactions, simple_cooldown, user_max_concurrency
 from app.data.items import Items
 from app.util.common import pluralize
 from app.util.converters import CasinoBet
-from app.util.types import TypedInteraction
+from app.util.types import CommandResponse, TypedInteraction
 from app.util.views import UserView
 from config import Colors, Emojis
 
@@ -63,14 +63,14 @@ class ScratchButton(discord.ui.Button['ScratchView']):
                 message = f'{self.info.emoji} You scratched a skull and you lose your bet.'
             case _, info:
                 self.view.multiplier += info.profit
-                message = f'[ Scratched {info.emoji} ] {Emojis.coin} **+{self.view.bet * info.profit:,.0f}** (+{info.profit:.0%})'
+                message = f'Scratched {info.emoji} {Emojis.arrow} {Emojis.coin} **+{self.view.bet * info.profit:,.0f}** (+{info.profit:.0%})'
             case _:
                 raise
 
         self.emoji = self.info.emoji
         self.style = self.info.style
 
-        self.view.description.append(f'({5 - self.view.scratches}) {message}')
+        self.view.description.append(f'{5 - self.view.scratches}. {message}')
         self.view.update_embed()
 
         if self.view.scratches <= 0 or self.cell is ScratchCell.lose:
@@ -134,7 +134,6 @@ class ScratchView(UserView):
         self.embed = embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.description = f'Press a button to scratch it off! You have {self.scratches} scratches left.'
         embed.set_author(name=f'{ctx.author.name}: Scratch-off ticket', icon_url=ctx.author.avatar.url)
-        embed.set_footer(text=f'Run "{ctx.clean_prefix}scratch key" to see what the symbols mean.')
 
     def fill_cells(self):
         cells = []
@@ -156,12 +155,29 @@ class ScratchView(UserView):
         cells[random.randint(0, 4)][random.randint(0, 2)] = ScratchCell.lose
         self.cells = cells
 
+    @discord.utils.cached_property
+    def table_text(self) -> str:
+        def emoji_of(cell: ScratchCell) -> str:
+            return self.SCRATCH_CELLS[cell].emoji
+
+        return dedent(f"""
+            {emoji_of(ScratchCell.lose)} = Automatic loss
+            {emoji_of(ScratchCell.coin)} = +30% of bet
+            {emoji_of(ScratchCell.medal)} = +50% of bet
+            {emoji_of(ScratchCell.trophy)} = +80% of bet
+            {emoji_of(ScratchCell.crown)} = +120% of bet
+            {emoji_of(ScratchCell.star)} = +200% (2x) of bet
+            {emoji_of(ScratchCell.spinning_coin)} = +400% (4x) of bet
+        """)
+
     def update_buttons(self) -> None:
         self.clear_items()
 
         for i, row in enumerate(self.cells):
             for cell in row:
                 self.add_item(ScratchButton(cell, self.SCRATCH_CELLS[cell], i))
+
+        self.add_item(FollowUpButton(self.table_text, label='View Scratch Key', style=discord.ButtonStyle.green, row=4))
 
     def update_embed(self) -> None:
         self.embed.description = '\n'.join(self.description)
@@ -174,7 +190,8 @@ class ScratchView(UserView):
 
     def disable_items(self) -> None:
         for child in self.children:
-            assert isinstance(child, ScratchButton)
+            if not isinstance(child, ScratchButton):
+                continue
 
             if not child.disabled:
                 child.disabled = True
@@ -484,6 +501,79 @@ class Blackjack(UserView):
         await self.lose(interaction, 'You surrendered!')
 
 
+class SlotsCell(Enum):
+    coinhead = 0
+    spinning_coin = 1
+    seven = 2
+    bell = 3
+    diamond = 4
+    clover = 5
+    cherry = 6
+    watermelon = 7
+    grape = 8
+
+    @property
+    def emoji(self) -> str:
+        return SLOTS_EMOJI_MAPPING[self]
+
+
+SLOTS_EMOJI_MAPPING: Final[dict[SlotsCell, str]] = {
+    SlotsCell.coinhead: Items.coinhead.emoji,
+    SlotsCell.spinning_coin: Items.spinning_coin.emoji,
+    SlotsCell.seven: '<:slots7:789609731765174322>',
+    SlotsCell.bell: '<:slotsBell:789860588922601523>',
+    SlotsCell.diamond: '<:slotsDiamond:789610008320671765>',
+    SlotsCell.clover: '<:slotsClover:789610044601270302>',
+    SlotsCell.cherry: '<:slotsCherry:789609966062796810>',
+    SlotsCell.watermelon: '<:slotsWatermelon:789610087647936562>',
+    SlotsCell.grape: '<:slotsGrape:789610124116361227>',
+}
+
+SLOTS_SPINNING_EMOJIS: Final[list[str]] = [
+    '<a:slots_spinning_1:1144672133809721476>',
+    '<a:slots_spinning_2:1144672143595012157>',
+    '<a:slots_spinning_3:1144672152944136312>',
+    '<a:slots_spinning_4:1144672162452615218>',
+    '<a:slots_spinning_5:1144672171944316928>',
+    '<a:slots_spinning_6:1144672181146619945>',
+    '<a:slots_spinning_7:1144672190650921000>',
+    '<a:slots_spinning_8:1144672199890964481>',
+]
+
+SLOTS_TRIPLE_MULTIPLIERS: Final[dict[SlotsCell, int | float]] = {
+    SlotsCell.coinhead: 10,
+    SlotsCell.spinning_coin: 8,
+    SlotsCell.seven: 7,
+    SlotsCell.bell: 6,
+    SlotsCell.diamond: 5,
+    SlotsCell.clover: 4,
+    SlotsCell.cherry: 3,
+    SlotsCell.watermelon: 2,
+    SlotsCell.grape: 2,
+}
+
+SLOTS_DOUBLE_MULTIPLIERS: Final[dict[SlotsCell, int | float]] = {
+    SlotsCell.coinhead: 1.8,
+    SlotsCell.spinning_coin: 1.5,
+    SlotsCell.seven: 1.2,
+    SlotsCell.bell: 1,
+    SlotsCell.diamond: 1,
+    SlotsCell.clover: 0.8,
+    SlotsCell.cherry: 0.8,
+    SlotsCell.watermelon: 0.6,
+    SlotsCell.grape: 0.6,
+}
+
+
+class FollowUpButton(discord.ui.Button):
+    def __init__(self, text: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.text = text
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        await interaction.response.send_message(self.text, ephemeral=True)
+
+
 class Casino(Cog):
     """Gamble off all of your coins at the casino!"""
 
@@ -544,7 +634,7 @@ class Casino(Cog):
             profit = await record.add_coins(round(bet * multiplier))
 
             embed.colour = Colors.success
-            embed.set_author(name='Winner!', icon_url=ctx.author.avatar.url)
+            embed.set_author(name='Winner!', icon_url=ctx.author.display_avatar)
 
             embed.add_field(name=f'You won {Emojis.coin} **{profit:,}**!', inline=False, value=dedent(f"""
                 Multiplier: **{multiplier:.1%}**{adjusted_text}
@@ -553,14 +643,14 @@ class Casino(Cog):
 
         elif their_sum == my_sum:
             embed.colour = Colors.warning
-            embed.set_author(name='Tie!', icon_url=ctx.author.avatar.url)
+            embed.set_author(name='Tie!', icon_url=ctx.author.display_avatar)
             embed.add_field(name='**We tied!**', value='You get absolutely nothing, try again next time.', inline=False)
 
         else:
             await record.add(wallet=-bet)
 
             embed.colour = Colors.error
-            embed.set_author(name='Loser!', icon_url=ctx.author.avatar.url)
+            embed.set_author(name='Loser!', icon_url=ctx.author.display_avatar)
 
             embed.add_field(name='**You lost!**', inline=False, value=dedent(f"""
                 You lost {Emojis.coin} **{bet:,}**.
@@ -571,13 +661,67 @@ class Casino(Cog):
 
         yield '', embed, EDIT
 
-    @group(aliases={'scratchticket', 'scratch-ticket', 'scratchoff', 'scr'})
+    @command('slots', aliases={'slot', 'sl'}, hybrid=True)
+    @app_commands.describe(
+        bet='The amount of coins to bet. Must be between 200 and 500,000. Use "max" to bet as many coins as possible.',
+    )
+    @simple_cooldown(1, 30)
+    @user_max_concurrency(1)
+    async def slots(self, ctx: Context, *, bet: CasinoBet()) -> CommandResponse:
+        """Spin the slot machine and earn coins for matching symbols!"""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.add(wallet=-bet)
+
+        embed = discord.Embed(color=Colors.warning, timestamp=ctx.now)
+        embed.set_author(name=f'{ctx.author.display_name}\'s Slot Machine', icon_url=ctx.author.display_avatar)
+        embed.description = f'**\xbb** {" ".join(random.sample(SLOTS_SPINNING_EMOJIS, k=3))} **\xab**'
+        yield embed, REPLY
+
+        slots = [first, second, third] = random.choices(list(SlotsCell), k=3)
+        if first is second is third:
+            match first:
+                case SlotsCell.coinhead: field = '**MEGA MEGA JACKPOT!!!**'
+                case SlotsCell.spinning_coin: field = '**MEGA JACKPOT!!**'
+                case SlotsCell.seven: field = '**JACKPOT!**'
+                case _: field = '**Three in a row!**'
+
+            multiplier = SLOTS_TRIPLE_MULTIPLIERS[first]
+        elif first is second or second is third or first is third:
+            field = 'Two in a row!'
+            multiplier = SLOTS_DOUBLE_MULTIPLIERS[second]
+        else:
+            field = 'Loser!'
+            multiplier = 0
+
+        embed.description = f'**\xbb** {" ".join(s.emoji for s in slots)} **\xab**'
+        embed.colour = Colors.success if multiplier else Colors.error
+
+        if multiplier:
+            profit = round(bet * multiplier)
+            await record.add(wallet=profit + bet)
+            adjustment, adjusted_text = self.adjust_multiplier(record)
+            multiplier += adjustment
+
+            embed.add_field(name=field, value=dedent(f"""
+                You won {Emojis.coin} **{profit:,}**!
+                Multiplier: **{multiplier:.1%}**{adjusted_text}
+                You now have {Emojis.coin} **{record.wallet:,}**.
+            """))
+        else:
+            embed.add_field(
+                name=field,
+                value=f'You lost {Emojis.coin} **{bet:,}**.\nYou now have {Emojis.coin} **{record.wallet:,}**.',
+            )
+
+        await asyncio.sleep(random.uniform(2.5, 4.0))
+        yield embed, EDIT
+
+    @command(aliases={'scratchticket', 'scratch-ticket', 'scratchoff', 'scr'}, hybrid=True)
     @app_commands.describe(
         bet='The amount of coins to bet. Must be between 500 and 500,000. Use "max" to bet as many coins as possible.',
     )
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
-    @lock_transactions
     async def scratch(self, ctx: Context, *, bet: CasinoBet(500)) -> Any:
         """Scratch a scratch-off ticket and hope for profit."""
         record = await ctx.db.get_user_record(ctx.author.id)
@@ -586,25 +730,6 @@ class Casino(Cog):
         view = ScratchView(ctx, bet)
         yield view.embed, view, REPLY
         await view.wait()
-
-    @scratch.command('key', aliases={'table', 'k'})
-    @simple_cooldown(2, 4)
-    async def scratch_key(self, ctx: Context) -> None:
-        """View what emojis correspond to what in scratch-off tickets."""
-        cells = ScratchView.SCRATCH_CELLS
-
-        def emoji_of(cell: ScratchCell) -> str:
-            return cells[cell].emoji
-
-        await ctx.send(dedent(f"""
-            {emoji_of(ScratchCell.lose)} = Automatic loss
-            {emoji_of(ScratchCell.coin)} = +30% of bet
-            {emoji_of(ScratchCell.medal)} = +50% of bet
-            {emoji_of(ScratchCell.trophy)} = +80% of bet
-            {emoji_of(ScratchCell.crown)} = +120% of bet
-            {emoji_of(ScratchCell.star)} = +200% (2x) of bet
-            {emoji_of(ScratchCell.spinning_coin)} = +400% (4x) of bet
-        """))
 
     @command(aliases={'bj', '21'}, hybrid=True)
     @app_commands.describe(

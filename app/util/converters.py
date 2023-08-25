@@ -204,22 +204,29 @@ USE = 'use'
 DROP = 'drop'
 
 
+def _unambiguous_query_item(query: str, /, **kwargs) -> Item | None:
+    if query.lower() in ('all', 'max', 'a', 'm'):
+        return None
+
+    return try_query_item(query, **kwargs)
+
+
 def parse_quantity_and_item(argument: str, **kwargs) -> tuple[Item | None, str]:
     item: Item | None = None
     quantity = '1'
 
-    if result := try_query_item(argument, **kwargs):
+    if result := _unambiguous_query_item(argument, **kwargs):
         item = result
 
     elif len(split := argument.split()) > 1:
         result, quantity = ' '.join(split[:-1]), split[-1]
 
-        if result := try_query_item(result, **kwargs):
+        if result := _unambiguous_query_item(result, **kwargs):
             item = result
 
         if not item:
             result, quantity = ' '.join(split[1:]), split[0]
-            if result := try_query_item(result, **kwargs):
+            if result := _unambiguous_query_item(result, **kwargs):
                 item = result
 
     return item, quantity
