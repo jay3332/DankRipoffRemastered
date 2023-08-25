@@ -88,17 +88,22 @@ class ViewBattleEarningsButton(discord.ui.Button):
 class Events:
     """Collection of randomly spawning events."""
 
-    karen = Event(key='karen', name='Karen', rarity=EventRarity.common)
-
-    @karen.callback
-    async def karen_callback(self, ctx: Context, _event: Event) -> None:
+    @staticmethod
+    async def _battle_event(
+        ctx: Context,
+        event: Event,
+        *,
+        description: str,
+        opponent: Enemy,
+        time_limit: int = 180,
+    ) -> None:
         view = PvEBattleView.public(
             ctx,
-            opponent=Enemies.karen,
+            opponent=opponent,
             level=2,
-            title='Common Event: Karen',
-            description='A wild Karen has appeared! Join in the fight to take her down!',
-            time_limit=180,
+            title=f'{event.rarity.name.title()} Event: {event.name}',
+            description=description,
+            time_limit=time_limit,
         )
         original = await ctx.send(embeds=view.make_public_embeds(), view=view)
         view._original_message = original
@@ -106,9 +111,10 @@ class Events:
 
         if not view.won:
             await ctx.send(
-                'You guys stink, you weren\'t able to take down Karen within 2 minutes. Better luck next time!',
+                f'You guys stink, you weren\'t able to take down {opponent.display} in time. Better luck next time!',
                 reference=original,
             )
+            return
 
         damage_mapping = {
             player.user: hp for player, hp in view.damage_dealt.items()
@@ -139,9 +145,21 @@ class Events:
         finishing_view.add_item(ViewBattleEarningsButton(damage_mapping, profits, view.opponent))
 
         await ctx.send(
-            f'## Karen has been defeated!\n### Top damage dealers:\n{top_damage}\n### Best attacks:\n{best_attacks}',
+            f'## {opponent.display} has been defeated! \N{CROWN}\n'
+            f'### Top damage dealers:\n{top_damage}\n### Best attacks:\n{best_attacks}',
             reference=original,
             view=finishing_view,
+        )
+
+    karen = Event(key='karen', name='Karen', rarity=EventRarity.common)
+
+    @karen.callback
+    async def karen_callback(self, ctx: Context, event: Event) -> None:
+        await self._battle_event(
+            ctx,
+            event,
+            description='A wild Karen has appeared! Join in the fight to take her down!',
+            opponent=Enemies.karen,
         )
 
 
