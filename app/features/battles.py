@@ -502,6 +502,10 @@ class PvEBattleView(BattleView):
             prev_commentary_len = len(self.commentary)
             await self._update_message()
 
+        # update one last time
+        await asyncio.sleep(2)
+        await self._update_message()
+
     async def interaction_check(self, interaction: TypedInteraction) -> bool:
         if self.team is None:
             if interaction.user not in self.records:

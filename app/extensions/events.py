@@ -8,6 +8,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
+import better_exceptions
 import discord
 from discord.ext import commands
 from discord.ext.ipc import ClientPayload, Server
@@ -20,9 +21,9 @@ from app.data.events import EVENT_RARITY_WEIGHTS, Event, Events
 from app.data.items import Items
 from app.database import NotificationData
 from app.util.ansi import AnsiColor, AnsiStringBuilder
-from app.util.common import humanize_duration, pluralize, walk_collection
+from app.util.common import cutoff, humanize_duration, pluralize, walk_collection
 from app.util.views import StaticCommandButton
-from config import Colors, guilds_channel, votes_channel
+from config import Colors, errors_channel, guilds_channel, support_server, votes_channel
 
 
 class EventsCog(Cog, name='Events'):
@@ -34,6 +35,83 @@ class EventsCog(Cog, name='Events'):
     @discord.utils.cached_property
     def _cooldowns_remind_command(self) -> Any:
         return self.bot.get_command('cooldowns remind')
+
+    @staticmethod
+    async def _report_error(ctx: Context, error: Exception) -> None:
+        formatter = better_exceptions.ExceptionFormatter(colored=True)
+        exception = (
+            "".join(formatter.format_exception(type(error), error, error.__traceback__))
+            .replace('\x1b[m', '\x1b[0m')  # hack for platform-specific color codes
+        )
+        report = (
+            f'Uncaught error in command **{ctx.command.qualified_name}** ({format_dt(ctx.now, "R")}):\n'
+            f'```ansi\n{exception}\n```'
+        )
+        embed = discord.Embed(
+            color=Colors.error,
+            description=f'User ID: {ctx.author.id} (account created {format_dt(ctx.author.created_at, "R")})',
+            timestamp=ctx.now,
+        )
+        embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar)
+        if itx := ctx.interaction:
+            app_command_display = (
+                ctx.bot.tree.get_app_command(itx.command.qualified_name).mention
+                if itx.command else 'N/A (invoked via component)'
+            )
+            embed.add_field(
+                name='Invoked via interaction',
+                value=f'Interaction ID: {itx.id}\nApplication Command: {app_command_display}',
+                inline=False,
+            )
+        else:
+            embed.add_field(
+                name=f'Invoked via prefix: `{discord.utils.escape_markdown(ctx.clean_prefix)}`',
+                value=cutoff(ctx.message.content, 512),
+                inline=False,
+            )
+
+        jump = f'Message ID: {ctx.message.id} ([Jump!]({ctx.message.jump_url}))'
+        if ctx.guild:
+            embed.add_field(
+                name='Context',
+                value=(
+                    f'Guild: {ctx.guild.name} ({ctx.guild.id})\n'
+                    f'Channel: {ctx.channel.mention} ({ctx.channel.id})\n{jump}'
+                ),
+                inline=False,
+            )
+        else:
+            embed.add_field(name='Context', value=f'DM Channel ID: {ctx.channel.id}\n{jump}', inline=False)
+
+        if ctx.args:
+            args = '\n'.join(f'- {i}: `{arg!r}`' for i, arg in enumerate(ctx.args))
+            embed.add_field(name='Command Args', value=cutoff(args, 512), inline=False)
+
+        if ctx.kwargs:
+            kwargs = '\n'.join(f'- `{k}`: `{v!r}`' for k, v in ctx.kwargs.items())
+            embed.add_field(name='Command Kwargs', value=cutoff(kwargs, 256), inline=False)
+
+        channel = ctx.bot.get_partial_messageable(errors_channel)
+        heading = (
+            f'\N{WARNING SIGN}\ufe0f **Error!** ({error})\n'
+            'This was likely a bug on our end and usually it\'s not your fault.'
+        )
+        try:
+            await channel.send(report, embed=embed)
+        except discord.HTTPException as exc:
+            await ctx.send(
+                f'{heading}\n\n**Note that an error occured while trying to report this exception!** ({exc})\n'
+                f'Since no one could be notified of this error, please join our **support server** ({support_server}) '
+                'and report this error **with extra context**.',
+                reference=ctx.message,
+            )
+        else:
+            await ctx.send(
+                f'{heading}\n\n**This error has been automatically reported to the developers.**\n'
+                f'*If this error persists, please join our **support server** ({support_server}) and report this error '
+                '**with extra context**!*',
+                reference=ctx.message,
+            )
 
     @Cog.listener()
     async def on_command_error(self, ctx: Context, error: Exception) -> Any:
@@ -110,8 +188,10 @@ class EventsCog(Cog, name='Events'):
         elif isinstance(error, commands.MissingRequiredArgument):
             param = error.param
         else:
-            await ctx.send(f'panic!({error})', reference=ctx.message)
-            raise error
+            try:
+                await self._report_error(ctx, error)
+            finally:
+                raise error
 
         builder = AnsiStringBuilder()
         builder.append('Attempted to parse command signature:').newline(2)
