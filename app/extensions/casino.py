@@ -686,7 +686,10 @@ class Casino(Cog):
                 case _: field = '**Three in a row!**'
 
             multiplier = SLOTS_TRIPLE_MULTIPLIERS[first]
-        elif first is second or second is third or first is third:
+        elif first is second or first is third:
+            field = 'Two in a row!'
+            multiplier = SLOTS_DOUBLE_MULTIPLIERS[first]
+        elif second is third:
             field = 'Two in a row!'
             multiplier = SLOTS_DOUBLE_MULTIPLIERS[second]
         else:
