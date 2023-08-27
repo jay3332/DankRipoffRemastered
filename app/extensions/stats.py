@@ -379,8 +379,11 @@ class Stats(Cog):
         await record.update(unread_notifications=0)
 
         fields = [{
-            'name': f'{idx}. {notification.title} ({discord.utils.format_dt(notification.created_at, "R")})',
-            'value': cutoff(notification.content),
+            'name': (
+                f'{idx}. {notification.data.emoji} **{notification.data.title}** \u2014 '
+                f'{discord.utils.format_dt(notification.created_at, "R")}'
+            ),
+            'value': cutoff(notification.data.describe()),
             'inline': False,
         } for idx, notification in enumerate(notifications.cached, start=1)]
 
@@ -392,7 +395,7 @@ class Stats(Cog):
             f'Run `{ctx.clean_prefix}notifications view <index>` to view a specific notification.\n'
             f'Likewise, run `{ctx.clean_prefix}notifications clear` to clear all notifications.'
         )
-        embed.set_author(name=f'{ctx.author.name}\'s Notifications', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name}\'s Notifications', icon_url=ctx.author.display_avatar)
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=5), timeout=120), REPLY
 
@@ -411,10 +414,14 @@ class Stats(Cog):
         except IndexError:
             return 'Invalid notification index.', BAD_ARGUMENT
 
-        embed = discord.Embed(color=Colors.primary, description=notification.content, timestamp=ctx.now)
-        embed.set_author(name=notification.title, icon_url=ctx.author.avatar.url)
-        embed.add_field(name='Created', value=discord.utils.format_dt(notification.created_at, "R"))
+        embed = discord.Embed(
+            color=notification.data.color, description=notification.data.describe(), timestamp=ctx.now
+        )
+        embed.set_author(name=notification.data.title, icon_url=ctx.author.display_avatar)
+        embed.set_thumbnail(url=image_url_from_emoji(notification.data.emoji))
 
+        fmt = lambda f: discord.utils.format_dt(notification.created_at, f)
+        embed.add_field(name='Created', value=f'{fmt("R")} ({fmt("f")})')
         return embed, REPLY
 
     @notifications.command(name='clear', aliases={"c", "wipe"}, hybrid=True)

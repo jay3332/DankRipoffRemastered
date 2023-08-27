@@ -278,7 +278,6 @@ class NotificationData:
         color = Colors.success
         emoji = '\u23eb'
 
-        @cached_property
         def describe(self) -> str:
             return f'Congratulations on leveling up to **Level {self.level}**!'
 
@@ -291,7 +290,6 @@ class NotificationData:
         color = Colors.warning
         emoji = '\U0001f92b'
 
-        @cached_property
         def describe(self) -> str:
             return f'<@{self.user_id}> is trying to rob you in **{self.guild_name}**!'
 
@@ -306,7 +304,6 @@ class NotificationData:
         color = Colors.error
         emoji = '\U0001f4b0'
 
-        @cached_property
         def describe(self) -> str:
             return (
                 f'<@{self.user_id}> stole {Emojis.coin} **{self.amount:,}** coins ({self.percent:.1%}) '
@@ -324,7 +321,6 @@ class NotificationData:
         color = Colors.error
         emoji = '\U0001f913'
 
-        @cached_property
         def describe(self) -> str:
             match RobFailReason(self.reason):
                 case RobFailReason.code_failure:
@@ -358,7 +354,6 @@ class NotificationData:
         color = Colors.error
         emoji = Items.padlock.emoji
 
-        @cached_property
         def describe(self) -> str:
             return f'<@{self.user_id}> opened your padlock using a **{self.device}** in **{self.guild_name}**!'
 
@@ -371,7 +366,6 @@ class NotificationData:
         color = Colors.success
         emoji = Emojis.coin
 
-        @cached_property
         def describe(self) -> str:
             return f'<@{self.user_id}> gave you {Emojis.coin} **{self.coins:,}**.'
 
@@ -385,7 +379,6 @@ class NotificationData:
         color = Colors.success
         emoji = '\U0001f381'
 
-        @cached_property
         def describe(self) -> str:
             item: Item = get_by_key(Items, self.item)
             return f'<@{self.user_id}> gave you {item.get_sentence_chunk(self.quantity)}.'
@@ -396,9 +389,8 @@ class NotificationData:
         type = 7
         title = 'Thank you for voting!'
         color = Colors.success
-        emoji = '\N{THUMBS UP}'
+        emoji = '\N{THUMBS UP SIGN}'
 
-        @cached_property
         def describe(self) -> str:
             item: Item = get_by_key(Items, self.item)
             return f'Thank you for voting! You received {item.get_sentence_chunk()} for your vote.'
@@ -413,8 +405,7 @@ class NotificationData:
         title = 'You died!'
         color = Colors.error
         emoji = '\N{SKULL}'
-
-        @cached_property
+        
         def describe(self) -> str:
             extra = (
                 f' and {get_by_key(Items, self.item_lost).get_sentence_chunk(self.quantity_lost)}'
@@ -430,8 +421,7 @@ class NotificationData:
         title = 'You almost died!'
         color = Colors.warning
         emoji = '\u26a0\ufe0f'
-
-        @cached_property
+        
         def describe(self) -> str:
             s = '' if self.remaining == 1 else 's'
             remaining = (
@@ -448,12 +438,12 @@ class NotificationData:
 
     @classmethod
     def from_record(cls, record: asyncpg.Record) -> _NotificationData:
-        type = record['type']
+        type_ = record['type']
         for klass in cls.__dict__.values():
-            if isinstance(klass, type) and getattr(klass, 'type', None) == type:
-                return klass(**record)
+            if isinstance(klass, type) and getattr(klass, 'type', None) == type_:
+                return klass(**json.loads(record['data']))
 
-        raise ValueError(f'Unknown notification type {type}')
+        raise ValueError(f'Unknown notification type {type_}')
 
 
 class _NotificationData(Protocol):
@@ -462,8 +452,6 @@ class _NotificationData(Protocol):
     color: int
     emoji: str
 
-    # noinspection PyPropertyDefinition
-    @cached_property
     def describe(self) -> str:
         ...
 
@@ -506,7 +494,7 @@ class NotificationsManager:
             await dm_channel.send(
                 '\N{BELL} **Notification!**',
                 embed=discord.Embed(
-                    color=notification.data.color, description=notification.data.describe,
+                    color=notification.data.color, description=notification.data.describe(),
                     timestamp=notification.created_at,
                 ).set_author(
                     name=notification.data.title, icon_url=image_url_from_emoji(notification.data.emoji),

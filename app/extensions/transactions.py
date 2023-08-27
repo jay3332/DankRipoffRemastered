@@ -26,6 +26,7 @@ from app.core.flags import Flags, store_true
 from app.data.items import Item, ItemRarity, ItemType, Items
 from app.data.pets import Pets
 from app.data.recipes import Recipe, Recipes
+from app.database import InventoryManager, NotificationData, UserRecord
 from app.util.common import (
     converter,
     cutoff,
@@ -59,7 +60,6 @@ from app.util.views import CommandInvocableModal, ConfirmationView, ModalButton,
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.database import InventoryManager, NotificationData, UserRecord
     from app.util.types import CommandResponse, TypedInteraction
 
 
