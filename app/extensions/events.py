@@ -107,19 +107,17 @@ class EventsCog(Cog, name='Events'):
         )
         try:
             await channel.send(report, embed=embed)
-        except discord.HTTPException as exc:
-            await ctx.send(
+        except BaseException as exc:
+            await ctx.reply(
                 f'{heading}\n\n**Note that an error occured while trying to report this exception!** ({exc})\n'
                 f'Since no one could be notified of this error, please join our **support server** ({support_server}) '
                 'and report this error **with extra context**.',
-                reference=ctx.message,
             )
         else:
-            await ctx.send(
+            await ctx.reply(
                 f'{heading}\n\n**This error has been automatically reported to the developers.**\n'
                 f'*If this error persists, please join our **support server** ({support_server}) and report this error '
                 '**with extra context**!*',
-                reference=ctx.message,
             )
 
     @Cog.listener()
