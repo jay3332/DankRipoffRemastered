@@ -38,14 +38,23 @@ class EventsCog(Cog, name='Events'):
 
     @staticmethod
     async def _report_error(ctx: Context, error: Exception) -> None:
-        formatter = better_exceptions.ExceptionFormatter(colored=True)
+        generate = lambda f: "".join(f.format_exception(type(error), error, error.__traceback__))
+
         exception = (
-            "".join(formatter.format_exception(type(error), error, error.__traceback__))
+            generate(better_exceptions.ExceptionFormatter(colored=True))
             .replace('\x1b[m', '\x1b[0m')  # hack for platform-specific color codes
         )
+        if len(exception) > 1800:
+            entry = await ctx.bot.cdn.paste(
+                generate(better_exceptions.ExceptionFormatter(colored=False, pipe_char='|', cap_char='\\')),
+                directory='coined_error_tracebacks',
+            )
+            exception = f'*Exception traceback was uploaded to {entry.paste_url}*'
+        else:
+            exception = f'```ansi\n{exception}\n```'
+
         report = (
-            f'Uncaught error in command **{ctx.command.qualified_name}** ({format_dt(ctx.now, "R")}):\n'
-            f'```ansi\n{exception}\n```'
+            f'Uncaught error in command **{ctx.command.qualified_name}** ({format_dt(ctx.now, "R")}):\n{exception}'
         )
         embed = discord.Embed(
             color=Colors.error,

@@ -18,6 +18,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from discord.ext.ipc import Server
 
+from app.core.cdn import CDNClient
 from app.core.help import HelpCommand
 from app.core.models import Command, Context, GroupCommand
 from app.core.timers import TimerManager
@@ -218,6 +219,7 @@ class Bot(commands.Bot):
     """Dank Ripoff... Remastered."""
 
     bypass_checks: bool
+    cdn: CDNClient
     db: Database
     ipc: Server
     session: ClientSession
@@ -309,6 +311,7 @@ class Bot(commands.Bot):
         self.timers = TimerManager(self)
         self.transaction_locks = {}
         self.session = ClientSession()
+        self.cdn = CDNClient(self)
         self.bypass_checks = False
         self.ipc = Server(self, secret_key=ipc_secret)
 

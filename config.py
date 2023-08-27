@@ -43,6 +43,7 @@ website = 'https://coined.jay3332.tech'
 ipc_secret = env('IPC_SECRET')
 dbl_token: str = env('DBL_TOKEN')
 dbl_secret: str = env('DBL_SECRET')
+cdn_authorization: str = env('CDN_AUTHORIZATION')
 
 allowed_mentions: AllowedMentions = AllowedMentions.none()
 allowed_mentions.users = True

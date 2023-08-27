@@ -242,7 +242,7 @@ class Stats(Cog):
         return embed, REPLY
 
     @command(aliases={"rich", "lb", "top", "richest", "wealthiest"}, hybrid=True)
-    @simple_cooldown(1, 15)
+    @simple_cooldown(2, 5)
     async def leaderboard(self, ctx: Context):
         """View the richest people in terms of coins in your server.
 
