@@ -518,7 +518,9 @@ class HuntBombButton(discord.ui.Button['HuntView']):
         lost = f'lost your {self.net.get_display_name(bold=True)} and ' if self.net else ''
         async with self.view.ctx.db.acquire() as conn:
             await self.view.record.inventory_manager.add_item(self.net, -1, connection=conn)
-            await self.view.record.make_dead(reason='a bomb exploding while hunting', connection=conn)
+            await self.view.record.make_dead(
+                reason='A bomb exploded in your hand while hunting, killing you instantly.', connection=conn,
+            )
 
         await itx.response.edit_message(view=self.view)
         await itx.followup.send(f'{self.emoji} You clicked the bomb and you explode. You {lost}died.')

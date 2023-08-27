@@ -18,6 +18,7 @@ from app.core.flags import FlagMeta
 from app.core.helpers import ActiveTransactionLock, CURRENCY_COGS, GenericError
 from app.data.events import EVENT_RARITY_WEIGHTS, Event, Events
 from app.data.items import Items
+from app.database import NotificationData
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.common import humanize_duration, pluralize, walk_collection
 from app.util.views import StaticCommandButton
@@ -243,11 +244,7 @@ class EventsCog(Cog, name='Events'):
                     connection=conn,
                 )
             await inventory.add_item(item, connection=conn)
-            await record.notifications_manager.add_notification(
-                title='Thank you for voting!',
-                content=f'You received {item.get_sentence_chunk()} for your vote.',
-                connection=conn,
-            )
+            await record.notifications_manager.add_notification(NotificationData.Vote(item=item.key), connection=conn)
 
         view = discord.ui.View()
         view.add_item(discord.ui.Button(label='Vote for Coined', url=f'https://top.gg/bot/{self.bot.user.id}/vote'))

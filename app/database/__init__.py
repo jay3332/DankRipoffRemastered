@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import json
 import random
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
+from enum import IntEnum
 from string import ascii_letters
-from typing import Any, Awaitable, Callable, Generator, Iterable, Literal, NamedTuple, overload, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Generator, Iterable, Literal, NamedTuple, Protocol, overload, TYPE_CHECKING
 
 import asyncpg
 import discord.utils
@@ -19,8 +21,8 @@ from app.data.jobs import Job, Jobs
 from app.data.pets import Pet, Pets
 from app.data.skills import Skill, Skills
 from app.database.migrations import Migrator
-from app.util.common import calculate_level, get_by_key, pick
-from config import DatabaseConfig, Emojis, multiplier_guilds
+from app.util.common import calculate_level, get_by_key, image_url_from_emoji, pick
+from config import Colors, DatabaseConfig, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
     from typing import Self
@@ -260,14 +262,222 @@ class InventoryManager:
         self.cached.clear()
 
 
+class RobFailReason(IntEnum):
+    code_failure = 1
+    spotted_by_police = 2
+    padlock_active = 3
+    bee_sting = 4
+
+
+class NotificationData:
+    class LevelUp(NamedTuple):
+        level: int
+
+        type = 0
+        title = 'You leveled up!'
+        color = Colors.success
+        emoji = '\u23eb'
+
+        @cached_property
+        def describe(self) -> str:
+            return f'Congratulations on leveling up to **Level {self.level}**!'
+
+    class RobInProgress(NamedTuple):
+        user_id: int
+        guild_name: str
+
+        type = 1
+        title = 'You are currently being robbed!'
+        color = Colors.warning
+        emoji = '\U0001f92b'
+
+        @cached_property
+        def describe(self) -> str:
+            return f'<@{self.user_id}> is trying to rob you in **{self.guild_name}**!'
+
+    class RobSuccess(NamedTuple):
+        user_id: int
+        guild_name: str
+        amount: int
+        percent: float
+
+        type = 2
+        title = 'Someone stole coins from you!'
+        color = Colors.error
+        emoji = '\U0001f4b0'
+
+        @cached_property
+        def describe(self) -> str:
+            return (
+                f'<@{self.user_id}> stole {Emojis.coin} **{self.amount:,}** coins ({self.percent:.1%}) '
+                f'from your wallet in **{self.guild_name}**!'
+            )
+
+    class RobFailure(NamedTuple):
+        user_id: int
+        guild_name: str
+        reason: RobFailReason
+        received: int = 0
+
+        type = 3
+        title = 'Someone tried to rob you, but failed!'
+        color = Colors.error
+        emoji = '\U0001f913'
+
+        @cached_property
+        def describe(self) -> str:
+            match RobFailReason(self.reason):
+                case RobFailReason.code_failure:
+                    return f'<@{self.user_id}> tried to rob you in **{self.guild_name}**, but failed to enter in the correct code!'
+                case RobFailReason.spotted_by_police:
+                    end = (
+                        '!' if not self.received
+                        else f', who forced them to pay you {Emojis.coin} **{self.received:,}** in fines.'
+                    )
+                    return (
+                        f'<@{self.user_id}> tried to rob you in **{self.guild_name}**, but was spotted by the police{end}'
+                    )
+                case RobFailReason.padlock_active:
+                    return (
+                        f'<@{self.user_id}> tried to rob you in **{self.guild_name}**, but you had a padlock active! '
+                        f'Your padlock is now deactivated.'
+                    )
+                case RobFailReason.bee_sting:
+                    return (
+                        f'<@{self.user_id}> tried to rob you in **{self.guild_name}**, but was stung by your '
+                        f'**{Pets.bee.display}** while doing so.'
+                    )
+
+    class PadlockOpened(NamedTuple):
+        user_id: int
+        guild_name: str
+        device: str
+
+        type = 4
+        title = 'Someone opened your padlock!'
+        color = Colors.error
+        emoji = Items.padlock.emoji
+
+        @cached_property
+        def describe(self) -> str:
+            return f'<@{self.user_id}> opened your padlock using a **{self.device}** in **{self.guild_name}**!'
+
+    class ReceivedCoins(NamedTuple):
+        user_id: int
+        coins: int
+
+        type = 5
+        title = 'You got coins!'
+        color = Colors.success
+        emoji = Emojis.coin
+
+        @cached_property
+        def describe(self) -> str:
+            return f'<@{self.user_id}> gave you {Emojis.coin} **{self.coins:,}**.'
+
+    class ReceivedItems(NamedTuple):
+        user_id: int
+        item: str
+        quantity: int
+
+        type = 6
+        title = 'You got items!'
+        color = Colors.success
+        emoji = '\U0001f381'
+
+        @cached_property
+        def describe(self) -> str:
+            item: Item = get_by_key(Items, self.item)
+            return f'<@{self.user_id}> gave you {item.get_sentence_chunk(self.quantity)}.'
+
+    class Vote(NamedTuple):
+        item: str
+
+        type = 7
+        title = 'Thank you for voting!'
+        color = Colors.success
+        emoji = '\N{THUMBS UP}'
+
+        @cached_property
+        def describe(self) -> str:
+            item: Item = get_by_key(Items, self.item)
+            return f'Thank you for voting! You received {item.get_sentence_chunk()} for your vote.'
+
+    class Death(NamedTuple):
+        reason: str | None
+        coins_lost: int
+        item_lost: str | None = None
+        quantity_lost: int = 0
+
+        type = 8
+        title = 'You died!'
+        color = Colors.error
+        emoji = '\N{SKULL}'
+
+        @cached_property
+        def describe(self) -> str:
+            extra = (
+                f' and {get_by_key(Items, self.item_lost).get_sentence_chunk(self.quantity_lost)}'
+                if self.item_lost is not None else ''
+            )
+            return f'{self.reason or "You died!"} You lost {Emojis.coin} **{self.coins_lost:,}**{extra}.'
+
+    class NearDeath(NamedTuple):
+        reason: str | None
+        remaining: int
+
+        type = 9
+        title = 'You almost died!'
+        color = Colors.warning
+        emoji = '\u26a0\ufe0f'
+
+        @cached_property
+        def describe(self) -> str:
+            s = '' if self.remaining == 1 else 's'
+            remaining = (
+                f'You have {self.remaining:,} lifesaver{s} remaining.' if self.remaining > 0
+                else (
+                    '**You have no more lifesavers remaining!** You will lose coins and items the next time you die '
+                    'unless you replenish your lifesavers.'
+                )
+            )
+            return (
+                f'{self.reason or "You almost died!"} You had {Items.lifesaver.get_sentence_chunk()} in your inventory, '
+                f'which saved your life and is now consumed. {remaining}'
+            )
+
+    @classmethod
+    def from_record(cls, record: asyncpg.Record) -> _NotificationData:
+        type = record['type']
+        for klass in cls.__dict__.values():
+            if isinstance(klass, type) and getattr(klass, 'type', None) == type:
+                return klass(**record)
+
+        raise ValueError(f'Unknown notification type {type}')
+
+
+class _NotificationData(Protocol):
+    type: int
+    title: str
+    color: int
+    emoji: str
+
+    # noinspection PyPropertyDefinition
+    @cached_property
+    def describe(self) -> str:
+        ...
+
+    def _asdict(self) -> dict[str, Any]:
+        ...
+
+
 class Notification(NamedTuple):
     created_at: datetime.datetime
-    title: str
-    content: str
+    data: _NotificationData
 
     @classmethod
     def from_record(cls, record: asyncpg.Record) -> Notification:
-        return cls(created_at=record['created_at'], title=record['title'], content=record['content'])
+        return cls(created_at=record['created_at'], data=NotificationData.from_record(record))
 
 
 class NotificationsManager:
@@ -287,39 +497,46 @@ class NotificationsManager:
 
         self.cached = [Notification.from_record(record) for record in records]
 
-    async def _dispatch_dm_notification(self, title: str, content: str) -> bool:
+    async def _dispatch_dm_notification(self, notification: Notification) -> bool:
         bot = self._record.db.bot
         await bot.wait_until_ready()
 
         try:
             dm_channel = await bot.create_dm(discord.Object(self._record.user_id))
-            await dm_channel.send(f'\U0001f514 **{title}**\n{content}')
+            await dm_channel.send(
+                '\N{BELL} **Notification!**',
+                embed=discord.Embed(
+                    color=notification.data.color, description=notification.data.describe,
+                    timestamp=notification.created_at,
+                ).set_author(
+                    name=notification.data.title, icon_url=image_url_from_emoji(notification.data.emoji),
+                ),
+            )
         except discord.DiscordException:
             return False
         else:
             return True
 
-    async def add_notification(self, title: str, content: str, *, connection: asyncpg.Connection | None = None) -> None:
+    async def add_notification(self, data: _NotificationData, *, connection: asyncpg.Connection | None = None) -> None:
         await self.wait()
 
         query = """
-                INSERT INTO notifications (user_id, created_at, title, content)
-                VALUES ($1, CURRENT_TIMESTAMP, $2, $3)
+                INSERT INTO notifications (user_id, created_at, type, data)
+                VALUES ($1, CURRENT_TIMESTAMP, $2, $3::JSONB)
                 RETURNING *;
                 """
 
-        args = query, self._record.user_id, title, content
-
+        args = query, self._record.user_id, getattr(data, 'type'), json.dumps(data._asdict())
         try:
             row = await (connection or self._record.db).fetchrow(*args)
         except asyncpg.InterfaceError:
             row = await self._record.db.fetchrow(*args)
 
-        self.cached.insert(0, Notification.from_record(row))
+        self.cached.insert(0, notif := Notification.from_record(row))
 
         result = False
         if self._record.dm_notifications:
-            result = self._record.db.loop.create_task(self._dispatch_dm_notification(title, content))
+            result = self._record.db.loop.create_task(self._dispatch_dm_notification(notif))
 
         if not result:
             await self._record.add(unread_notifications=1, connection=connection)
@@ -1128,8 +1345,7 @@ class UserRecord(BaseRecord):
 
         if self.level > old:
             await self.notifications_manager.add_notification(
-                title='You leveled up!',
-                content=f'Congratulations on leveling up to **Level {self.level}**.',
+                NotificationData.LevelUp(level=self.level),
                 connection=connection,
             )
             return True
@@ -1157,12 +1373,11 @@ class UserRecord(BaseRecord):
 
     async def make_dead(self, *, reason: str | None = None, connection: asyncpg.Connection | None = None) -> None:
         inventory = await self.inventory_manager.wait()
-        if inventory.cached.quantity_of('lifesaver'):
+        if quantity := inventory.cached.quantity_of('lifesaver'):
             await inventory.add_item('lifesaver', -1, connection=connection)
 
             await self.notifications_manager.add_notification(
-                title='You almost died!',
-                content=f"You almost died{' due to ' + reason if reason else ''}, but you had a lifesaver in your inventory, which is now consumed.",
+                NotificationData.NearDeath(reason=reason, remaining=quantity - 1),
                 connection=connection,
             )
             return
@@ -1178,11 +1393,7 @@ class UserRecord(BaseRecord):
             await inventory.add_item(item, -quantity, connection=connection)
 
         await self.notifications_manager.add_notification(
-            title='You died!',
-            content=(
-                f"You died{' due to ' + reason if reason else ''}. "
-                f"You lost {Emojis.coin} **{old:,}**{f' and {item.get_sentence_chunk(quantity)}' if item else ''}."
-            ),
+            NotificationData.Death(reason=reason, coins_lost=old, item_lost=item and item.key, quantity_lost=quantity),
             connection=connection,
         )
 

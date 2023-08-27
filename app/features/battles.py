@@ -736,8 +736,8 @@ class PvPBattleView(BattleView):
         hp_ratio = player.hp / player.max_hp
         stamina_ratio = player.stamina / player.max_stamina
         base = (
-            f'{Emojis.hp} {progress_bar(hp_ratio, length=6)} **{player.hp:,}**/{player.max_hp:,} HP\n'
-            f'{Emojis.bolt} {progress_bar(stamina_ratio, length=6)} **{player.stamina:,}**/{player.max_stamina:,} Stamina\n'
+            f'{Emojis.hp} {progress_bar(hp_ratio, length=5)} {player.hp:,} HP\n'
+            f'{Emojis.bolt} {progress_bar(stamina_ratio, length=5)} {player.stamina:,} Stamina\n'
         )
         if buff_text := cls.format_player_buffs(player):
             base += '**\U0001fa84 Buffs & Debuffs**\n' + buff_text
@@ -749,16 +749,9 @@ class PvPBattleView(BattleView):
         embed.set_author(name=f'{self.ctx.author} vs. {self.opponent}')
         embed.set_thumbnail(url=self.current_player.user.display_avatar)
         embed.description = f'Waiting for {self.current_player.user.mention} to make a move...'
-        embed.add_field(
-            name=self.ctx.author.name,
-            value=self._format_player(self.author_player),
-            inline=False,
-        )
-        embed.add_field(
-            name=self.opponent.name,
-            value=self._format_player(self.opponent_player),
-            inline=False,
-        )
+
+        embed.add_field(name=self.ctx.author.name, value=self._format_player(self.author_player))
+        embed.add_field(name=self.opponent.name, value=self._format_player(self.opponent_player))
         embed.add_field(name='\U0001f4e3 Commentary', value=self.formatted_commentary, inline=False)
         return [embed]
 

@@ -37,7 +37,7 @@ from app.util.views import AnyUser, StaticCommandButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.database import UserRecord
+    from app.database import NotificationData, RobFailReason, UserRecord
     from app.util.types import CommandResponse, TypedInteraction
 
 
@@ -933,7 +933,7 @@ class Profit(Cog):
                 await inventory.add_item('fishing_pole', -1)
 
                 if random.random() < 0.15:
-                    await record.make_dead(reason='a fish biting your head off')
+                    await record.make_dead(reason='A fish bit your head off while fishing!')
 
                     yield (
                         f'{initial}, and the fish jumped out of the water and bit your head off. '
@@ -1031,7 +1031,7 @@ class Profit(Cog):
                 await inventory.add_item(shovel, -1)
 
                 if random.random() < 0.15:
-                    await record.make_dead(reason='being buried alive')
+                    await record.make_dead(reason='You were buried alive while digging.')
 
                     yield (
                         f'{initial}, and the mound of dirt you have dug up beforehand collapses in on you, '
@@ -1121,7 +1121,7 @@ class Profit(Cog):
                 await inventory.add_item(pickaxe, -1)
 
                 if random.random() < 0.15:
-                    await record.make_dead(reason='pickaxe snapping back on you')
+                    await record.make_dead(reason='Your pickaxe snapped back on you, and you died.')
 
                     yield f'{initial}. Your pickaxe snaps and the sharp part comes flying back at you, impaling your chest. You died.', REPLY
                     return
@@ -1199,7 +1199,7 @@ class Profit(Cog):
             return
 
         if random.random() > success_chance:
-            await record.make_dead(reason='a tree falling on your head')
+            await record.make_dead(reason='A tree fell on your head while chopping trees.')
             yield 'How exotic! A tree fell on your head while you were chopping it down, killing you instantly.', EDIT
             return
 
@@ -1403,9 +1403,8 @@ class Profit(Cog):
         """Claim milk from your cow."""
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = await record.inventory_manager.wait()
-        await inventory.add_item(item := Items.milk)
 
-        cow = record.pet_manager.cached[Pets.bee]
+        cow = record.pet_manager.cached[Pets.cow]
         async with ctx.db.acquire() as conn:
             await cow.add_energy(-100, connection=conn)
             await inventory.add_item(item := Items.milk, connection=conn)
@@ -1521,6 +1520,9 @@ class Profit(Cog):
                         f'{Pets.bee.emoji} Ouch! You were stung by {user.name}\'s pet **bee**!\n'
                         f'Stunned, the police caught you and fined you {Emojis.coin} **{fine:,}**.'
                     )
+                    await notify(NotificationData.RobFailure(
+                        user_id=ctx.author.id, guild_name=ctx.guild.name, reason=RobFailReason.bee_sting,
+                    ))
                     return
 
             padlock_worked = False
@@ -1540,10 +1542,9 @@ class Profit(Cog):
                         await their_record.update(padlock_active=False)
                         yield f'{Items.padlock.emoji} Unlocked {user.name}\'s padlock!', REPLY
 
-                        await notify(
-                            title='Someone unlocked your padlock!',
-                            content=f'{ctx.author.mention} used a {Items.key.get_display_name(bold=True)} to unlock your padlock!',
-                        )
+                        await notify(NotificationData.PadlockOpened(
+                            user_id=ctx.author.id, guild_name=ctx.guild.name, device='key',
+                        ))
                     else:
                         yield f'{Items.padlock.emoji} Failed to unlock {user.name}\'s padlock! (You also consumed your key)', REPLY
 
@@ -1561,19 +1562,12 @@ class Profit(Cog):
                 await record.add(wallet=-fine)
                 await their_record.update(padlock_active=False)
 
-                await notify(
-                    title='Someone tried to rob you, but you had a padlock active!',
-                    content=(
-                        f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, '
-                        'but failed due to your padlock being active. Your padlock is now deactivated.'
-                    ),
-                )
+                await notify(NotificationData.RobFailure(
+                    user_id=ctx.author.id, guild_name=ctx.guild.name, reason=RobFailReason.padlock_active,
+                ))
                 return
 
-            await notify(
-                title='You are being robbed!',
-                content=f'{ctx.author.mention} is trying to rob you in **{ctx.guild.name}**!',
-            )
+            await notify(NotificationData.RobInProgress(user_id=ctx.author.id, guild_name=ctx.guild.name))
 
             embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
             embed.set_author(name=f'{ctx.author.name}: Robbing {user.name}', icon_url=ctx.author.avatar.url)
@@ -1606,13 +1600,9 @@ class Profit(Cog):
                 )
                 await record.add(wallet=-fine)
 
-                await notify(
-                    title='Someone tried to rob you, but failed!',
-                    content=(
-                        f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, '
-                        'but failed due to taking too long to enter in the combination.'
-                    ),
-                )
+                await notify(NotificationData.RobFailure(
+                    user_id=ctx.author.id, guild_name=ctx.guild.name, reason=RobFailReason.code_failure,
+                ))
                 return
 
             if view.caught:
@@ -1640,10 +1630,9 @@ class Profit(Cog):
                 )
                 await record.add(wallet=-fine)
 
-                await notify(
-                    title='Someone tried to rob you, but failed!',
-                    content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but failed due to entering in the wrong combination.',
-                )
+                await notify(NotificationData.RobFailure(
+                    user_id=ctx.author.id, guild_name=ctx.guild.name, reason=RobFailReason.code_failure,
+                ))
                 return
 
             embed.colour = Colors.success
@@ -1670,10 +1659,9 @@ class Profit(Cog):
 
                 self.store_rob(ctx, user, payout)
 
-                await notify(
-                    title='Someone stole coins from you!',
-                    content=f'{ctx.author.mention} stole {Emojis.coin} **{payout:,}** ({payout_percent:.1%}) from your wallet in **{ctx.guild.name}**!',
-                )
+                await notify(NotificationData.RobSuccess(
+                    user_id=ctx.author.id, guild_name=ctx.guild.name, percent=payout_percent, amount=payout,
+                ))
                 return
 
             if random.random() < death_chance:
@@ -1684,10 +1672,9 @@ class Profit(Cog):
                     REPLY,
                 )
 
-                await notify(
-                    title='Someone tried to rob you, but died in the process!',
-                    content=f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but died due to being caught by the police.',
-                )
+                await notify(NotificationData.RobFailure(
+                    user_id=ctx.author.id, guild_name=ctx.guild.name, reason=RobFailReason.spotted_by_police,
+                ))
                 return
 
             # highest fines are here
@@ -1704,13 +1691,10 @@ class Profit(Cog):
             await record.add(wallet=-fine)
             await their_record.add(wallet=fine)
 
-            await notify(
-                title='Someone tried to rob you!',
-                content=(
-                    f'{ctx.author.mention} tried robbing you in **{ctx.guild.name}**, but was spotted by police. '
-                    f'They paid you a fine of {Emojis.coin} **{fine:,}**.'
-                ),
-            )
+            await notify(NotificationData.RobFailure(
+                user_id=ctx.author.id, guild_name=ctx.guild.name, reason=RobFailReason.spotted_by_police,
+                received=fine,
+            ))
             return
 
     @rob.define_app_command()

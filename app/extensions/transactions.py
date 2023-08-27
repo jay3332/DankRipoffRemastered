@@ -59,7 +59,7 @@ from app.util.views import CommandInvocableModal, ConfirmationView, ModalButton,
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.database import InventoryManager, UserRecord
+    from app.database import InventoryManager, NotificationData, UserRecord
     from app.util.types import CommandResponse, TypedInteraction
 
 
@@ -984,8 +984,11 @@ class Transactions(Cog):
                 )
 
             await their_record.notifications_manager.add_notification(
-                title='You got coins!' if isinstance(entity, int) else 'You got items!',
-                content=f'{ctx.author.mention} gave you {entity_human}.',
+                (
+                    NotificationData.ReceivedCoins(user_id=ctx.author.id, coins=entity)
+                    if isinstance(entity, int)
+                    else NotificationData.ReceivedItems(user_id=ctx.author.id, item=item.key, quantity=quantity)
+                ),
                 connection=conn,
             )
 

@@ -289,7 +289,10 @@ class Items:
             if record.wallet < 500:
                 msg += ' Since you\'re poor, they kill you instead and take your wallet.'
                 async with ctx.db.acquire() as conn:
-                    await record.make_dead(reason='not being able to afford fines', connection=conn)
+                    await record.make_dead(
+                        reason='The police shot you to death since you couldn\'t afford fines from robbery.',
+                        connection=conn,
+                    )
                     await record.update(wallet=0)
 
                 await ctx.maybe_edit(message, f'\U0001f480 {msg}')
@@ -301,7 +304,7 @@ class Items:
 
         # make dead
         if random.random() < 0.01:
-            await record.make_dead(reason='alcohol poisoning')
+            await record.make_dead(reason='You died of alcohol poisoning.')
             await ctx.maybe_edit(message, f'\U0001f480 {random.choice(self.ALCOHOL_DEATH_MESSAGES)}')
             return
 
@@ -446,7 +449,7 @@ class Items:
 
         chance = 1 - 0.98 ** quantity
         if random.random() < chance:
-            await record.make_dead(reason='lactose intolerance from eating cheese')
+            await record.make_dead(reason='You died due to lactose intolerance from eating cheese.')
             await original.edit(
                 content=f'{item.emoji} You eat the cheese only to find out that you are lactose intolerant, and now you\'re dead.'
             )

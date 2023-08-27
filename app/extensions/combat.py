@@ -26,6 +26,16 @@ class Combat(Cog):
         if user == ctx.author:
             return 'You cannot fight yourself, that\'d be REALLY funny', BAD_ARGUMENT
 
+        if not await ctx.confirm(
+            f'{user.mention}, **{ctx.author.name}** challenges you to a fight!\nDo you accept the challenge?',
+            user=user,
+            timeout=60,
+            true='Accept the Challenge',
+            false='Decline',
+            delete_after=True,
+        ):
+            return f'{ctx.author.mention}, {user.name} declined your fight.', REPLY
+
         record = await ctx.db.get_user_record(ctx.author.id)
         challenger_record = await ctx.db.get_user_record(user.id)
 
