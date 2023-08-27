@@ -30,6 +30,7 @@ from app.core.helpers import cooldown_message
 from app.data.items import Item, Items
 from app.data.pets import Pet, Pets
 from app.data.skills import RobberyTrainingButton
+from app.database import NotificationData, RobFailReason, UserRecord
 from app.util.common import expansion_list, humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
@@ -37,7 +38,6 @@ from app.util.views import AnyUser, StaticCommandButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
-    from app.database import NotificationData, RobFailReason, UserRecord
     from app.util.types import CommandResponse, TypedInteraction
 
 
