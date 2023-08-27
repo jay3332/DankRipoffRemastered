@@ -1433,6 +1433,10 @@ class UserRecord(BaseRecord):
     def base_exp_multiplier(self) -> float:
         return self.data['exp_multiplier']
 
+    @property
+    def _cigarette_active(self) -> bool:
+        return self.cigarette_expiry and self.cigarette_expiry > discord.utils.utcnow()
+
     def walk_exp_multipliers(self, ctx: Context | None = None) -> Generator[Multiplier, Any, Any]:
         yield Multiplier(
             self.base_exp_multiplier,
@@ -1440,6 +1444,9 @@ class UserRecord(BaseRecord):
             description='accumulated from using items like cheese',
         )
         yield Multiplier(self.prestige * 0.25, f'{Emojis.get_prestige_emoji(self.prestige)} Prestige {self.prestige}')
+
+        if self._cigarette_active:
+            yield Multiplier(2, f'{Items.cigarette.emoji} Cigarette', expires_at=self.cigarette_expiry)
 
         pets = self.pet_manager
         if cat := pets.get_active_pet(Pets.cat):
@@ -1470,11 +1477,11 @@ class UserRecord(BaseRecord):
 
     def walk_coin_multipliers(self, _ctx: Context | None = None) -> Generator[Multiplier, Any, Any]:
         yield Multiplier(self.prestige * 0.25, f'{Emojis.get_prestige_emoji(self.prestige)} Prestige {self.prestige}')
-        yield Multiplier(
-            (self.alcohol_expiry is not None) * 0.25,
-            f'{Items.alcohol.emoji} Alcohol',
-            expires_at=self.alcohol_expiry,
-        )
+
+        if self.alcohol_expiry is not None:
+            yield Multiplier(0.25, f'{Items.alcohol.emoji} Alcohol', expires_at=self.alcohol_expiry)
+        if self._cigarette_active:
+            yield Multiplier(0.25, f'{Items.cigarette.emoji} Cigarette', expires_at=self.cigarette_expiry)
 
         pets = self.pet_manager
         if bird := pets.get_active_pet(Pets.bird):
@@ -1571,6 +1578,10 @@ class UserRecord(BaseRecord):
     @property
     def battle_stamina(self) -> int:
         return self.data['battle_stamina']
+
+    @property
+    def cigarette_expiry(self) -> datetime.datetime:
+        return self.data['cigarette_expiry']
 
     @property
     def inventory_manager(self) -> InventoryManager:

@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN cigarette_expiry TIMESTAMP WITH TIME ZONE;

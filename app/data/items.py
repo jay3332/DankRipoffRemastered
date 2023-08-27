@@ -14,7 +14,7 @@ from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
 from app.data.pets import Pet, Pets
-from app.util.common import pluralize
+from app.util.common import humanize_duration, pluralize
 from config import Emojis
 
 if TYPE_CHECKING:
@@ -476,14 +476,55 @@ class Items:
         key='cigarette',
         name='Cigarette',
         emoji='<:cigarette:1133107777359847585>',
+        brief='A standard cigarette. Smoke these to temporarily get huge multipliers.',
         description=(
-            'A standard cigarette. Smoking (using) these will do something beneficial in the future (WIP for now). '
-            'These cannot be bought; you must craft this item.'
+            'A standard cigarette. Smoking (using) these will give you a temporary +200% global EXP multiplier and +25% '
+            'global coin multiplier for a short duration (5-30 minutes). However, there is a 5% chance you could die from '
+            'various causes (e.g. lung cancer, lighting yourself on fire, etc.). You may only smoke one cigarette at a time. '
+            'You cannot directly buy cigarettes; you must craft this item.'
         ),
         rarity=ItemRarity.rare,
         sell=15000,
         dispose=True,
     )
+
+    CIGARETTE_DEATH_REASONS = (
+        'Smoking isn\'t good for your lungs, silly. You died from lung cancer.',
+        'You try lighting the cigarette, but accidentally light your clothes on fire instead \N{FIRE}\N{FIRE}, '
+        'and you burn to death. What a horrible way to go.',
+    )
+
+    @cigarette.to_use
+    async def use_cigarette(self, ctx: Context, item: Item) -> None:
+        record = await ctx.db.get_user_record(ctx.author.id)
+        if record.cigarette_expiry and record.cigarette_expiry > ctx.now:
+            raise ItemUsageError('You are already smoking a cigarette.')
+
+        original = await ctx.reply(f'{item.emoji} You light up a cigarette and start smoking it... {Emojis.loading}')
+        await asyncio.sleep(random.uniform(2, 4))
+
+        if random.random() < 0.05:
+            await ctx.maybe_edit(original, reason := random.choice(self.CIGARETTE_DEATH_REASONS))
+            await record.make_dead(reason=reason)
+            return
+
+        duration = random.randint(300, 1800)
+        expiry = ctx.now + datetime.timedelta(seconds=duration)
+        await record.update(cigarette_expiry=expiry)
+        await ctx.maybe_edit(
+            original,
+            f'{item.emoji} You are now smoking a cigarette. You will have a temporary **+200% XP multiplier** '
+            f'and a **+25% coin multiplier** for the next **{humanize_duration(duration)}** (until {format_dt(expiry, "t")}).',
+        )
+
+    @cigarette.to_remove
+    async def remove_cigarette(self, ctx: Context, item: Item) -> None:
+        record = await ctx.db.get_user_record(ctx.author.id)
+        if not record.cigarette_expiry or record.cigarette_expiry < ctx.now:
+            await ctx.reply('You are not smoking a cigarette.')
+
+        await record.update(cigarette_expiry=None)
+        await ctx.reply(f'{item.emoji} You put out your cigarette.')
 
     spinning_coin = Item(
         type=ItemType.collectible,
