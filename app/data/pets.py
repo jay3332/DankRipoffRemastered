@@ -138,7 +138,7 @@ class Pets:
         energy_per_minute=0.3,
         max_energy=200,
         benefit=lambda level: (
-            f'- +{2 + level * 0.5}% profit from working\n'  # TODO
+            f'- +{2 + level * 0.5}% profit from working\n'
             f'- +{1 + level * 0.25}% chance to get an Uncommon Crate when claiming hourly crates\n'  # TODO
             f'- +{1 + level * 0.3}% global XP multiplier'
         ),

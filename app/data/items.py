@@ -311,7 +311,7 @@ class Items:
         await record.update(last_alcohol_usage=ctx.now)
         await ctx.maybe_edit(message, dedent(f'''
             You drink the {item.emoji} **Alcohol** and for the next two hours you are granted with:
-            - a **+50%** coin multiplier,
+            - a **+25%** coin multiplier,
             - a **+50%** gambling multiplier,
             - a **+15%** chance to successfully rob others, and
             - a **+15%** chance to successfully shoot others.

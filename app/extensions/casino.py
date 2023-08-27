@@ -18,7 +18,7 @@ from app.data.items import Items
 from app.util.common import pluralize
 from app.util.converters import CasinoBet
 from app.util.types import CommandResponse, TypedInteraction
-from app.util.views import UserView
+from app.util.views import FollowUpButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -563,15 +563,6 @@ SLOTS_DOUBLE_MULTIPLIERS: Final[dict[SlotsCell, int | float]] = {
     SlotsCell.watermelon: 0.6,
     SlotsCell.grape: 0.6,
 }
-
-
-class FollowUpButton(discord.ui.Button):
-    def __init__(self, text: str, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self.text = text
-
-    async def callback(self, interaction: TypedInteraction) -> None:
-        await interaction.response.send_message(self.text, ephemeral=True)
 
 
 class Casino(Cog):

@@ -13,7 +13,9 @@ from discord.utils import format_dt
 
 from app.core import ERROR, Cog, Context, REPLY, group, user_max_concurrency
 from app.core.helpers import EPHEMERAL
+from app.data.items import Items
 from app.data.jobs import Job, Jobs, MinigameFailure
+from app.data.pets import Pets
 from app.util.common import (
     expansion_list,
     get_by_key, humanize_duration,
@@ -25,7 +27,7 @@ from app.util.common import (
 )
 from app.util.pagination import ActiveItem, Formatter, Paginator
 from app.util.types import CommandResponse, TypedInteraction
-from app.util.views import StaticCommandButton, invoke_command
+from app.util.views import FollowUpButton, StaticCommandButton, invoke_command
 from config import Colors, Emojis
 
 
@@ -126,6 +128,13 @@ class JobsCog(Cog, name='Jobs'):
         if expires_at and ctx.now < expires_at:
             return f'You recently worked your shift. You can work again {format_dt(expires_at, "R")}.', ERROR
 
+        if record.alcohol_expiry:
+            return (
+                'You are too drunk to work right now. (You can\'t work while you have an active '
+                f'{Items.alcohol.display_name} boost)',
+                ERROR,
+            )
+
         info = record.job.job
         minigame = random.choice(info.minigames)
 
@@ -153,6 +162,7 @@ class JobsCog(Cog, name='Jobs'):
         message = message or ctx._message
         raise_amount = 0 if (record.job.hours + 1) % 5 else info.base_salary // 10
 
+        breakdown = []
         async with ctx.db.acquire() as conn:
             await record.add(job_hours=1, work_experience=1, job_salary=raise_amount, connection=conn)
             await record.update(job_cooldown_expires_at=expiry, connection=conn)
@@ -160,7 +170,23 @@ class JobsCog(Cog, name='Jobs'):
                 f'\n\u2934\ufe0f **You got a raise!** Your salary is now {Emojis.coin} **{record.job.salary:,}**.'
                 if raise_amount else ''
             )
-            profit = await record.add_coins(record.job.salary, connection=conn)
+
+            salary = record.job.salary
+            pets = await record.pet_manager.wait()
+            if duck := pets.get_active_pet(Pets.duck):
+                multiplier = 0.02 + duck.level * 0.005
+                if extra := round(salary * multiplier):
+                    salary += extra
+                    breakdown.append(f'{Pets.duck.display}: {Emojis.coin} **+{extra:,}**')
+
+            profit = await record.add_coins(salary, connection=conn)
+            extra = profit - salary
+            if extra:
+                multiplier = record.coin_multiplier - 1
+                multiplier_mention = ctx.bot.tree.get_app_command('multiplier').mention
+                breakdown.append(
+                    f'+{multiplier:.1%} Coin Multiplier ({multiplier_mention}): {Emojis.coin} **+{extra:,}**',
+                )
 
             item_text = ''
             item = random.choices(list(info.items), weights=list(info.items.values()))[0]
@@ -172,8 +198,13 @@ class JobsCog(Cog, name='Jobs'):
         view.add_item(StaticCommandButton(
             command=self.job_view, label='View Job', style=discord.ButtonStyle.primary, emoji=self.emoji,  # type: ignore
         ))
+        view.add_item(FollowUpButton(
+            f'### {ctx.author.mention}\'s Profit Breakdown from working\n'
+            f'{Emojis.coin} **+{record.job.salary:,}** (base salary)\n{expansion_list(breakdown)}',
+            label='View Breakdown', style=discord.ButtonStyle.primary, emoji='\N{MONEY BAG}',
+        ))
         await message.reply(
-            f'{info.emoji} **SUCCESS!** You work as {info.chunk} and earn {Emojis.coin} **{profit:,}**{item_text}!{raise_text}',
+            f'{info.emoji} **SUCCESS!** You work as {info.chunk} and earn {Emojis.coin} **{profit:,}**{item_text}!' + raise_text,
             view=view,
         )
 

@@ -143,3 +143,12 @@ class ModalButton(discord.ui.Button):
             modal = await discord.utils.maybe_coroutine(modal, interaction)
 
         await interaction.response.send_modal(modal)
+
+
+class FollowUpButton(discord.ui.Button):
+    def __init__(self, text: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.text = text
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        await interaction.response.send_message(self.text, ephemeral=True)
