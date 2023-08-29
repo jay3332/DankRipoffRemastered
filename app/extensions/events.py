@@ -361,9 +361,8 @@ class EventsCog(Cog, name='Events'):
 
             await inventory.add_item(item, connection=conn)
 
-            notification = NotificationData.Vote(
-                item=item.key, milestone=reward and milestone, **reward.to_notification_data_kwargs(),
-            )
+            kwargs = reward.to_notification_data_kwargs() if reward else {}
+            notification = NotificationData.Vote(item=item.key, milestone=reward and milestone, **kwargs)
             await record.notifications_manager.add_notification(notification, connection=conn)
 
         view = discord.ui.View()
