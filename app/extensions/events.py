@@ -356,7 +356,11 @@ class EventsCog(Cog, name='Events'):
             )
             count = 2 if data.is_weekend else 1
             await record.add(votes_this_month=count, total_votes=count, connection=conn)
-            if reward := VOTE_REWARDS.get(milestone := record.votes_this_month - count + 1):
+
+            if reward := (
+                VOTE_REWARDS.get(milestone := record.votes_this_month)  # -> milestone
+                or VOTE_REWARDS.get(milestone := record.votes_this_month - count + 1)  # for weekends: -> milestone + 1
+            ):
                 await reward.apply(record, connection=conn)
 
             await inventory.add_item(item, connection=conn)
