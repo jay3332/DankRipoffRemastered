@@ -274,7 +274,7 @@ class Profit(Cog):
         person = random.choice(self.BEG_PEOPLE)
 
         embed = discord.Embed(timestamp=ctx.now)
-        embed.set_author(name=f"Beg: {ctx.author}", icon_url=ctx.author.avatar)
+        embed.set_author(name=f"Beg: {ctx.author}", icon_url=ctx.author.display_avatar)
 
         view = discord.ui.View(timeout=120)
         view.add_item(StaticCommandButton(label='/search', command=self.search, row=1))
@@ -591,7 +591,7 @@ class Profit(Cog):
 
         name, choice = view.choice
         embed = discord.Embed(timestamp=ctx.now)
-        embed.set_author(name=f'Search: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Search: {ctx.author}', icon_url=ctx.author.display_avatar)
         embed.set_footer(text=f'Search area: {name}')
 
         accumulated = 0
