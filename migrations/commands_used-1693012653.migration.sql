@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS commands_used (
+    user_id BIGINT NOT NULL,
+    command TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, command)
+);
+
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS total_votes INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS votes_this_month INTEGER NOT NULL DEFAULT 0;

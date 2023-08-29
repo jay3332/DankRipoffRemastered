@@ -15,9 +15,10 @@ from app.core import Cog, Context, REPLY, group
 from app.database import Migrator
 from app.util.ansi import AnsiStringBuilder, AnsiColor
 from app.util.common import humanize_small_duration, pluralize
+from app.util.converters import BYPASS, ItemAndQuantityConverter, RichInteger
 from app.util.structures import Timer
 from app.util.views import UserView
-from config import Colors
+from config import Colors, Emojis
 
 if TYPE_CHECKING:
     from jishaku.codeblocks import Codeblock
@@ -225,6 +226,31 @@ class Admin(Cog):
         embed.add_field(name='Modified Files', value=modified if output.modified else 'None')
 
         return embed, GitPullView(ctx, output), REPLY
+
+    @group('dev', aliases={'developer', 'admin', 'adm', 'sudo'})
+    async def developer(self, ctx: Context) -> None:
+        """Developer-only commands."""
+        await ctx.send_help(ctx.command)
+
+    @developer.command('spawn', aliases={'add', '+', 'give'})
+    async def dev_spawn(
+        self,
+        ctx: Context,
+        user: discord.User | None = None,
+        *,
+        entity: RichInteger | ItemAndQuantityConverter(BYPASS),
+    ) -> CommandResponse:
+        """Spawn a few coins or items for a user."""
+        user = user or ctx.author
+        record = await ctx.db.get_user_record(user.id)
+
+        if isinstance(entity, int):
+            await record.add(wallet=entity)
+            return f'Spawned {Emojis.coin} **{entity:,}** in {user.mention}\'s wallet.', REPLY
+
+        item, quantity = entity
+        await record.inventory_manager.add_item(item, quantity)
+        return f'Spawned {item.get_sentence_chunk(quantity)} in {user.mention}\'s inventory.', REPLY
 
 
 setup = Admin.simple_setup

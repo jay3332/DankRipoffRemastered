@@ -98,6 +98,11 @@ def get_number(argument: str) -> int:
     return round(float(argument))
 
 
+@converter
+async def RichInteger(_, argument: str) -> int:
+    return get_number(argument)
+
+
 class NotAnInteger(Exception):
     pass
 
@@ -202,6 +207,7 @@ BUY = 'buy'
 SELL = 'sell'
 USE = 'use'
 DROP = 'drop'
+BYPASS = 'spawn'
 
 
 def _unambiguous_query_item(query: str, /, **kwargs) -> Item | None:
@@ -249,15 +255,19 @@ async def transform_item_and_quantity(
         raise BadArgument(f'{plural} are not giftable.')
 
     record = await ctx.db.get_user_record(ctx.author.id)
+    minimum = 1
 
     if method == BUY:
         maximum = record.wallet // item.price
+    elif method == BYPASS:
+        maximum = 2 ** 63  # bigint max
+        minimum = -maximum
     else:
         inventory = await record.inventory_manager.wait()
         maximum = inventory.cached.quantity_of(item)
 
     try:
-        quantity = get_amount(maximum, 1, maximum, quantity)
+        quantity = get_amount(maximum, minimum, maximum, quantity)
     except PastMinimum:
         raise BadArgument(f'You must {method} at least one of that item.')
     except ZeroQuantity:

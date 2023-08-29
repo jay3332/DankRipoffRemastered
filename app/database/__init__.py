@@ -16,7 +16,7 @@ import discord.utils
 from discord.utils import cached_property, format_dt
 
 from app.data.abilities import Ability, Abilities
-from app.data.items import CropMetadata, Item, Items
+from app.data.items import CropMetadata, Item, Items, Reward
 from app.data.jobs import Job, Jobs
 from app.data.pets import Pet, Pets
 from app.data.skills import Skill, Skills
@@ -278,7 +278,7 @@ class NotificationData:
         color = Colors.success
         emoji = '\u23eb'
 
-        def describe(self) -> str:
+        def describe(self, _: Bot) -> str:
             return f'Congratulations on leveling up to **Level {self.level}**!'
 
     class RobInProgress(NamedTuple):
@@ -290,7 +290,7 @@ class NotificationData:
         color = Colors.warning
         emoji = '\U0001f92b'
 
-        def describe(self) -> str:
+        def describe(self, _: Bot) -> str:
             return f'<@{self.user_id}> is trying to rob you in **{self.guild_name}**!'
 
     class RobSuccess(NamedTuple):
@@ -304,7 +304,7 @@ class NotificationData:
         color = Colors.error
         emoji = '\U0001f4b0'
 
-        def describe(self) -> str:
+        def describe(self, _: Bot) -> str:
             return (
                 f'<@{self.user_id}> stole {Emojis.coin} **{self.amount:,}** coins ({self.percent:.1%}) '
                 f'from your wallet in **{self.guild_name}**!'
@@ -321,7 +321,7 @@ class NotificationData:
         color = Colors.error
         emoji = '\U0001f913'
 
-        def describe(self) -> str:
+        def describe(self, _: Bot) -> str:
             match RobFailReason(self.reason):
                 case RobFailReason.code_failure:
                     return f'<@{self.user_id}> tried to rob you in **{self.guild_name}**, but failed to enter in the correct code!'
@@ -354,7 +354,7 @@ class NotificationData:
         color = Colors.error
         emoji = Items.padlock.emoji
 
-        def describe(self) -> str:
+        def describe(self, _: Bot) -> str:
             return f'<@{self.user_id}> opened your padlock using a **{self.device}** in **{self.guild_name}**!'
 
     class ReceivedCoins(NamedTuple):
@@ -366,7 +366,7 @@ class NotificationData:
         color = Colors.success
         emoji = Emojis.coin
 
-        def describe(self) -> str:
+        def describe(self, _: Bot) -> str:
             return f'<@{self.user_id}> gave you {Emojis.coin} **{self.coins:,}**.'
 
     class ReceivedItems(NamedTuple):
@@ -379,21 +379,34 @@ class NotificationData:
         color = Colors.success
         emoji = '\U0001f381'
 
-        def describe(self) -> str:
+        def describe(self, _: Bot) -> str:
             item: Item = get_by_key(Items, self.item)
             return f'<@{self.user_id}> gave you {item.get_sentence_chunk(self.quantity)}.'
 
     class Vote(NamedTuple):
         item: str
+        milestone: int | None = None
+        rcoins: int = 0
+        ritems: dict[str, int] = {}
 
         type = 7
         title = 'Thank you for voting!'
         color = Colors.success
         emoji = '\N{THUMBS UP SIGN}'
 
-        def describe(self) -> str:
+        def describe(self, bot: Bot) -> str:
             item: Item = get_by_key(Items, self.item)
-            return f'Thank you for voting! You received {item.get_sentence_chunk()} for your vote.'
+            vote_command_mention = bot.tree.get_app_command('vote').mention
+
+            extra = ''
+            if self.rcoins or self.ritems:
+                reward = Reward.from_raw(self.rcoins, self.ritems)
+                extra = f'\n\n**Voting Milestone reached!** Upon reaching **{self.milestone} votes** you received:\n{reward}'
+
+            return (
+                f'Thank you for voting! You received {item.get_sentence_chunk()} for your vote.\n'
+                f'To see upcoming voting milestones and their rewards, run {vote_command_mention}.{extra}'
+            )
 
     class Death(NamedTuple):
         reason: str | None
@@ -406,7 +419,7 @@ class NotificationData:
         color = Colors.error
         emoji = '\N{SKULL}'
         
-        def describe(self) -> str:
+        def describe(self, _: Bot) -> str:
             extra = (
                 f' and {get_by_key(Items, self.item_lost).get_sentence_chunk(self.quantity_lost)}'
                 if self.item_lost is not None else ''
@@ -422,7 +435,7 @@ class NotificationData:
         color = Colors.warning
         emoji = '\u26a0\ufe0f'
         
-        def describe(self) -> str:
+        def describe(self, _: Bot) -> str:
             s = '' if self.remaining == 1 else 's'
             remaining = (
                 f'You have {self.remaining:,} lifesaver{s} remaining.' if self.remaining > 0
@@ -452,7 +465,7 @@ class _NotificationData(Protocol):
     color: int
     emoji: str
 
-    def describe(self) -> str:
+    def describe(self, _: Bot) -> str:
         ...
 
     def _asdict(self) -> dict[str, Any]:
@@ -494,7 +507,7 @@ class NotificationsManager:
             await dm_channel.send(
                 '\N{BELL} **Notification!**',
                 embed=discord.Embed(
-                    color=notification.data.color, description=notification.data.describe(),
+                    color=notification.data.color, description=notification.data.describe(bot),
                     timestamp=notification.created_at,
                 ).set_author(
                     name=notification.data.title, icon_url=image_url_from_emoji(notification.data.emoji),
@@ -1465,7 +1478,7 @@ class UserRecord(BaseRecord):
             level = cow.level
             yield Multiplier(0.02 + level * 0.006, f'{Pets.cow.display} (Level {level})')
 
-        if ctx is not None and ctx.guild.id in multiplier_guilds:
+        if ctx is not None and ctx.guild is not None and ctx.guild.id in multiplier_guilds:
             yield Multiplier(0.5, ctx.guild.name, is_global=False)
 
     @property
@@ -1552,6 +1565,14 @@ class UserRecord(BaseRecord):
     @property
     def last_dbl_vote(self) -> datetime.datetime:
         return self.data['last_dbl_vote']
+
+    @property
+    def total_votes(self) -> int:
+        return self.data['total_votes']
+
+    @property
+    def votes_this_month(self) -> int:
+        return self.data['votes_this_month']
 
     @property
     def job(self) -> JobProvider | None:

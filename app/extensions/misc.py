@@ -17,6 +17,7 @@ from app.core import BAD_ARGUMENT, Bot, Cog, Context, EDIT, REPLY, command, grou
 from app.core.timers import Timer
 from app.data.items import Items
 from app.data.settings import Setting, Settings
+from app.extensions.events import VOTE_REWARDS
 from app.util.common import converter, cutoff, format_line, pluralize, walk_collection
 from app.util.converters import better_bool, query_setting
 from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginator
@@ -286,14 +287,20 @@ class Miscellaneous(Cog):
             emoji=item.emoji,
         ))
 
-        extra = ''
+        embed = discord.Embed(
+            color=Colors.primary, description=f'Claim {item.get_sentence_chunk()} just for voting!', timestamp=ctx.now,
+        )
+        embed.set_author(name='Vote for Coined!', icon_url=ctx.author.display_avatar)
+        embed.set_thumbnail(url=ctx.bot.user.display_avatar)
+
         record = await ctx.db.get_user_record(ctx.author.id)
         if record.last_dbl_vote is not None:
             vote_again = record.last_dbl_vote + datetime.timedelta(hours=12)
             if vote_again > ctx.now:
-                extra += (
-                    f'\n\u23eb *It seems like you already voted today. '
-                    f'You can vote again {format_dt(vote_again, "R")}!*'
+                embed.add_field(
+                    name='\N{ALARM CLOCK} It seems like you already voted today.',
+                    value=f'You can vote again {format_dt(vote_again, "R")}!',
+                    inline=True,
                 )
                 button = discord.ui.Button(
                     label='Remind me when I can vote again',
@@ -304,26 +311,52 @@ class Miscellaneous(Cog):
                 view.add_item(button)
 
         if is_weekend:
-            extra += (
-                '\n\U0001f525 **BONUS:** You will receive an epic crate instead of a standard voting crate this weekend!'
+            embed.add_field(
+                name='\U0001f525 **Weekend Bonus:** Votes are doubled!',
+                value='You will receive an epic crate instead of a standard voting crate this weekend!',
+                inline=False,
             )
 
-        return f'Claim {item.get_sentence_chunk()} just for voting!{extra}', view, REPLY
+        s = '' if record.votes_this_month == 1 else 's'
+        embed.add_field(
+            name='\U0001f4c8 Vote Count',
+            value=f'You have voted for Coined **{record.votes_this_month} time{s}** this month.',
+            inline=False,
+        )
+        try:
+            next_milestone = min(filter(lambda n: n > record.votes_this_month, VOTE_REWARDS))
+            next_reward = VOTE_REWARDS[next_milestone]
+        except ValueError:
+            pass
+        else:
+            remaining = next_milestone - record.votes_this_month
+            s = '' if remaining == 1 else 's'
+            embed.add_field(
+                name=f'\U0001f381 Next Milestone: {next_milestone} votes ({remaining} vote{s} left)',
+                value=f'Upon reaching this milestone, you will receive:\n{next_reward}',
+                inline=False,
+            )
+        embed.set_footer(text='Votes reset at the beginning of each month.')
+        return embed, view, REPLY
 
-    async def _vote_button_callback(self, vote_again: datetime.datetime, interaction: TypedInteraction) -> None:
-        await self.bot.timers.create(
-            when=vote_again,
-            event='vote_reminder',
-            metadata={
-                'user_id': interaction.user.id,
-                'channel_id': interaction.channel.id,
-                'jump_url': interaction.message.jump_url,
-            },
-        )
+    async def _vote_button_callback(self, vote_again: datetime.datetime, interaction: TypedInteraction) -> None:  # noqa
         await interaction.response.send_message(
-            f"Alright, I'll remind you to vote again {format_dt(vote_again, 'R')}!",
-            ephemeral=True,
+            'Voting reminders are been disabled for now (they\'re a bit buggy).', ephemeral=True,
         )
+        # FIXME
+        # await self.bot.timers.create(
+        #     when=vote_again,
+        #     event='vote_reminder',
+        #     metadata={
+        #         'user_id': interaction.user.id,
+        #         'channel_id': interaction.channel.id,
+        #         'jump_url': interaction.message.jump_url,
+        #     },
+        # )
+        # await interaction.response.send_message(
+        #     f"Alright, I'll remind you to vote again {format_dt(vote_again, 'R')}!",
+        #     ephemeral=True,
+        # )
 
     @Cog.listener()
     async def on_vote_reminder_timer_complete(self, timer: Timer) -> None:

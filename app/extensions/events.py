@@ -6,7 +6,7 @@ import functools
 import random
 import re
 from collections import defaultdict
-from typing import Any
+from typing import Any, Final
 
 import better_exceptions
 import discord
@@ -18,12 +18,32 @@ from app.core import Cog, Command, Context
 from app.core.flags import FlagMeta
 from app.core.helpers import ActiveTransactionLock, CURRENCY_COGS, GenericError
 from app.data.events import EVENT_RARITY_WEIGHTS, Event, Events
-from app.data.items import Items
+from app.data.items import Items, Reward
 from app.database import NotificationData
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.common import cutoff, humanize_duration, pluralize, walk_collection
 from app.util.views import StaticCommandButton
 from config import Colors, errors_channel, guilds_channel, support_server, votes_channel
+
+
+VOTE_REWARDS: Final[dict[int, Reward]] = {
+    5: Reward(coins=5000),
+    10: Reward(items={Items.cigarette: 1, Items.banknote: 1}),
+    15: Reward(coins=10000, items={Items.alcohol: 1}),
+    20: Reward(items={Items.key: 1, Items.cheese: 1, Items.banknote: 1}),
+    25: Reward(coins=15000, items={Items.fish_bait: 100, Items.banknote: 1}),
+    30: Reward(items={Items.durable_pickaxe: 1}),
+    35: Reward(coins=20000, items={Items.banknote: 2}),
+    40: Reward(items={Items.durable_shovel: 1}),
+    45: Reward(coins=25000, items={Items.banknote: 2}),
+    50: Reward(items={Items.voting_trophy: 1}),
+    55: Reward(coins=30000, items={Items.banknote: 3}),
+    60: Reward(items={Items.spinning_coin: 1}),
+    65: Reward(coins=35000, items={Items.banknote: 3}),
+    70: Reward(items={Items.legendary_crate: 1}),
+    75: Reward(coins=50000, items={Items.banknote: 5}),
+    80: Reward(items={Items.mythic_crate: 1}),
+}
 
 
 class EventsCog(Cog, name='Events'):
@@ -325,13 +345,26 @@ class EventsCog(Cog, name='Events'):
         item = Items.epic_crate if data.is_weekend else Items.voting_crate
 
         async with self.bot.db.acquire() as conn:
-            if data.type == 'upvote':
-                await record.update(
-                    last_dbl_vote=datetime.datetime.fromisoformat(data.voted_at),
-                    connection=conn,
-                )
+            kwargs = (
+                # reset monthly votes if the last vote was in a different month
+                {} if record.last_dbl_vote.month == discord.utils.utcnow().month else dict(votes_this_month=0)
+            )
+            await record.update(
+                last_dbl_vote=datetime.datetime.fromisoformat(data.voted_at),
+                connection=conn,
+                **kwargs,
+            )
+            count = 2 if data.is_weekend else 1
+            await record.add(votes_this_month=count, total_votes=count, connection=conn)
+            if reward := VOTE_REWARDS.get(milestone := record.votes_this_month - count + 1):
+                await reward.apply(record, connection=conn)
+
             await inventory.add_item(item, connection=conn)
-            await record.notifications_manager.add_notification(NotificationData.Vote(item=item.key), connection=conn)
+
+            notification = NotificationData.Vote(
+                item=item.key, milestone=reward and milestone, **reward.to_notification_data_kwargs(),
+            )
+            await record.notifications_manager.add_notification(notification, connection=conn)
 
         view = discord.ui.View()
         view.add_item(discord.ui.Button(label='Vote for Coined', url=f'https://top.gg/bot/{self.bot.user.id}/vote'))
@@ -339,12 +372,15 @@ class EventsCog(Cog, name='Events'):
             '\n\U0001f525 **Weekend Bonus:** Received an epic crate instead of a voting crate'
             if data.is_weekend else ''
         )
+        reward = (
+            f'\n\u2728 **Milestone Rewards** for hitting **{milestone} votes** this month:\n{reward}' if reward else ''
+        )
 
         user = self.bot.get_user(data.user_id) or 'Unknown User'
         channel = self.bot.get_partial_messageable(votes_channel)
         await channel.send(
             f'{user} ({data.user_id}) just voted for the bot! '
-            f'They received {item.get_sentence_chunk()} for their vote. Thank you!{weekend}',
+            f'They received {item.get_sentence_chunk()} for their vote. Thank you!{weekend}{reward}',
             view=view,
         )
 

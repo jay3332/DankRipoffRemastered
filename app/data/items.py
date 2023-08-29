@@ -14,11 +14,14 @@ from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
 from app.data.pets import Pet, Pets
-from app.util.common import humanize_duration, pluralize
+from app.util.common import get_by_key, humanize_duration, pluralize
 from config import Emojis
 
 if TYPE_CHECKING:
+    import asyncpg
+
     from app.core import Context
+    from app.database import UserRecord
 
     UsageCallback: TypeAlias = 'Callable[[Items, Context, Item], Awaitable[Any]] | Callable[[Items, Context, Item, int], Awaitable[Any]]'
     RemovalCallback: TypeAlias = 'Callable[[Items, Context, Item], Awaitable[Any]]'
@@ -579,7 +582,7 @@ class Items:
 
     @fishing_pole.to_use
     async def use_fishing_pole(self, ctx: Context, _) -> None:
-        await ctx.invoke(ctx.bot.get_command('fish'))
+        await ctx.invoke(ctx.bot.get_command('fish'))  # type: ignore
 
     axe = Item(
         type=ItemType.tool,
@@ -593,7 +596,7 @@ class Items:
 
     @axe.to_use
     async def use_axe(self, ctx: Context, _) -> None:
-        await ctx.invoke(ctx.bot.get_command('chop'))
+        await ctx.invoke(ctx.bot.get_command('chop'))  # type: ignore
 
     dirt = Item(
         type=ItemType.miscellaneous,
@@ -1001,7 +1004,7 @@ class Items:
     @durable_pickaxe.to_use
     @diamond_pickaxe.to_use
     async def use_pickaxe(self, ctx: Context, _) -> None:
-        await ctx.invoke(ctx.bot.get_command('mine'))
+        await ctx.invoke(ctx.bot.get_command('mine'))  # type: ignore
 
     __pickaxes__: tuple[Item[dict[Item, float]]] = (
         diamond_pickaxe,
@@ -1166,30 +1169,6 @@ class Items:
         rarity=ItemRarity.mythic,
     )
 
-    net = Net(
-        key='net',
-        name='Net',
-        emoji='<:net:1137070560753496104>',
-        description='A net used to catch better pets using the `.hunt` command.',
-        price=10000,
-        buyable=True,
-        metadata=NetMetadata(
-            weights={
-                None: 1.1,
-                Pets.dog: 0.9,
-                Pets.cat: 0.9,
-                Pets.bird: 0.9,
-                Pets.bunny: 0.9,
-                Pets.hamster: 0.9,
-                Pets.mouse: 0.9,
-                Pets.bee: 0.2,
-                Pets.duck: 0.2,
-                Pets.cow: 0.04,
-            },
-            priority=0,
-        ),
-    )
-
     @common_crate.to_use
     @uncommon_crate.to_use
     @rare_crate.to_use
@@ -1231,6 +1210,30 @@ class Items:
             f'{item.emoji} {item.name} x{quantity:,}' for item, quantity in items.items()
         )
         await original.edit(content=f'You opened {formatted} and received:\n{readable}')
+
+    net = Net(
+        key='net',
+        name='Net',
+        emoji='<:net:1137070560753496104>',
+        description='A net used to catch better pets using the `.hunt` command.',
+        price=10000,
+        buyable=True,
+        metadata=NetMetadata(
+            weights={
+                None: 1.1,
+                Pets.dog: 0.9,
+                Pets.cat: 0.9,
+                Pets.bird: 0.9,
+                Pets.bunny: 0.9,
+                Pets.hamster: 0.9,
+                Pets.mouse: 0.9,
+                Pets.bee: 0.2,
+                Pets.duck: 0.2,
+                Pets.cow: 0.04,
+            },
+            priority=0,
+        ),
+    )
 
     cup = Item(
         type=ItemType.tool,
@@ -1492,6 +1495,16 @@ class Items:
         rarity=ItemRarity.rare,
     )
 
+    voting_trophy = Item(
+        type=ItemType.collectible,
+        key='voting_trophy',
+        name='Voting Trophy',
+        emoji='<:voting_trophy:1145893579429007490>',
+        description='Obtained by accumulating 50 [votes](http://top.gg/bot/753017377922482248) within a calendar month. (/vote)',
+        price=200000,
+        rarity=ItemRarity.legendary,
+    )
+
     nineteen_dollar_fortnite_card = Item(
         type=ItemType.collectible,
         key='nineteen_dollar_fortnite_card',
@@ -1524,3 +1537,49 @@ class Items:
 
 
 ITEMS_INST = Items()
+
+
+class Reward(NamedTuple):
+    """Reward for completing a milestone"""
+    coins: int = 0
+    items: dict[Item, int] = {}
+
+    @classmethod
+    def from_raw(cls, coins: int, items_by_key: dict[str, int]) -> Reward:
+        return cls(
+            coins=coins,
+            items={get_by_key(Items, key): quantity for key, quantity in items_by_key.items()},
+        )
+
+    def __str__(self) -> str:
+        base = []
+        if self.coins > 0:
+            base.append(f'{Emojis.coin} **{self.coins:,}**')
+
+        for item, quantity in self.items.items():
+            base.append(item.get_sentence_chunk(quantity))
+
+        return '\n'.join(f'- {chunk}' for chunk in base)
+
+    def __add__(self, other: Reward) -> Reward:
+        return Reward(
+            coins=self.coins + other.coins,
+            items={k: self.items.get(k, 0) + other.items.get(k, 0) for k in {*self.items, *other.items}},
+        )
+
+    @property
+    def items_by_key(self) -> dict[str, int]:
+        return {item.key: quantity for item, quantity in self.items.items()}
+
+    async def apply(self, record: UserRecord, *, connection: asyncpg.Connection | None = None) -> None:
+        """Applies the reward to the user."""
+        if self.coins:
+            await record.add(wallet=self.coins, connection=connection)
+        if self.items:
+            await record.inventory_manager.add_bulk(**self.items_by_key, connection=connection)
+
+    def to_notification_data_kwargs(self) -> dict[str, Any]:
+        return {
+            'rcoins': self.coins,
+            'ritems': self.items_by_key,
+        }
