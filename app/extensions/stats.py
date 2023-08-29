@@ -383,7 +383,7 @@ class Stats(Cog):
                 f'{idx}. {notification.data.emoji} **{notification.data.title}** \u2014 '
                 f'{discord.utils.format_dt(notification.created_at, "R")}'
             ),
-            'value': cutoff(notification.data.describe()),
+            'value': cutoff(notification.data.describe(ctx.bot)),
             'inline': False,
         } for idx, notification in enumerate(notifications.cached, start=1)]
 
@@ -415,7 +415,7 @@ class Stats(Cog):
             return 'Invalid notification index.', BAD_ARGUMENT
 
         embed = discord.Embed(
-            color=notification.data.color, description=notification.data.describe(), timestamp=ctx.now
+            color=notification.data.color, description=notification.data.describe(ctx.bot), timestamp=ctx.now
         )
         embed.set_author(name=notification.data.title, icon_url=ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(notification.data.emoji))
