@@ -160,9 +160,10 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
         record = await ctx.db.get_user_record(ctx.author.id)
 
         if notifs := record.unread_notifications:
+            notifications_mention = ctx.bot.tree.get_app_command('notifications list')
             kwargs['content'] = (
                 f"\U0001f514 You have {notifs:,} unread notification{'s' if notifs != 1 else ''}. "
-                f"Run `{ctx.clean_prefix}notifications` to view them."
+                f"Run {notifications_mention} to view them."
             )
 
         if random.random() < 0.2:

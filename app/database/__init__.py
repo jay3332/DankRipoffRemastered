@@ -505,7 +505,7 @@ class NotificationsManager:
         try:
             dm_channel = await bot.create_dm(discord.Object(self._record.user_id))
             await dm_channel.send(
-                '\N{BELL} **Notification!**',
+                f'\N{BELL} **{notification.data.title}**',
                 embed=discord.Embed(
                     color=notification.data.color, description=notification.data.describe(bot),
                     timestamp=notification.created_at,

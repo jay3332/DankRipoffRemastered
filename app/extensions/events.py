@@ -26,6 +26,25 @@ from app.util.views import StaticCommandButton
 from config import Colors, errors_channel, guilds_channel, support_server, votes_channel
 
 
+LEVEL_REWARDS: Final[dict[int, Reward]] = {
+    1: Reward(items={Items.fishing_pole: 1}),
+    2: Reward(items={Items.banknote: 1}),
+    3: Reward(items={Items.lifesaver: 5}),
+    4: Reward(items={Items.pickaxe: 1}),
+    5: Reward(items={Items.uncommon_crate: 1, Items.padlock: 3, Items.key: 1}),
+    7: Reward(items={Items.shovel: 1, Items.cheese: 1,}),
+    10: Reward(coins=10000, items={Items.epic_crate: 1, Items.banknote: 3, Items.cigarette: 1}),
+    15: Reward(items={Items.axe: 1, Items.net: 1, Items.banknote: 2}),
+    20: Reward(items={Items.legendary_crate: 1}),
+    25: Reward(items={Items.alcohol: 2, Items.sheet_of_paper: 2}),
+    30: Reward(coins=30000, items={Items.banknote: 3, Items.lifesaver: 5}),
+    35: Reward(items={Items.cheese: 5, Items.cigarette: 5}),
+    40: Reward(items={Items.legendary_crate: 1, Items.banknote: 5}),
+    45: Reward(items={Items.durable_pickaxe: 1, Items.durable_shovel: 1}),
+    50: Reward(items={Items.spinning_coin: 1}),
+}
+
+
 VOTE_REWARDS: Final[dict[int, Reward]] = {
     5: Reward(coins=5000),
     10: Reward(items={Items.cigarette: 1, Items.banknote: 1}),

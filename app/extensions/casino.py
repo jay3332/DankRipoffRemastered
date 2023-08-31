@@ -691,10 +691,10 @@ class Casino(Cog):
         embed.colour = Colors.success if multiplier else Colors.error
 
         if multiplier:
-            profit = round(bet * multiplier)
-            await record.add(wallet=profit + bet)
             adjustment, adjusted_text = self.adjust_multiplier(record)
             multiplier += adjustment
+            profit = round(bet * multiplier)
+            await record.add(wallet=profit + bet)
 
             embed.add_field(name=field, value=dedent(f"""
                 You won {Emojis.coin} **{profit:,}**!
