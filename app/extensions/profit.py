@@ -1269,7 +1269,8 @@ class Profit(Cog):
         await record.add_random_exp(12, 18, chance=0.8, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.6)
 
-        yield f'{Emojis.loading} Chopping down some trees...', REPLY
+        area = 'Abundance Forest' if view.choice == view.ABUNDANCE else 'Exotic Forest'
+        yield f'{Emojis.loading} Chopping down trees in **{area}**...', dict(view=None), EDIT
 
         view = await self._get_command_shortcuts(ctx, record)
         await asyncio.sleep(random.uniform(2., 4.))
