@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import functools
 import random
@@ -8,6 +9,7 @@ from collections import defaultdict
 from typing import Any, NamedTuple, TYPE_CHECKING
 
 import discord
+from aiohttp import ClientTimeout
 from discord import app_commands
 from discord.app_commands import Choice
 from discord.ext import commands
@@ -273,11 +275,18 @@ class Miscellaneous(Cog):
     @simple_cooldown(2, 2)
     async def vote(self, ctx: Context) -> CommandResponse:
         """Gives you a link to vote for the bot on top.gg."""
+        try:
+            timeout = ClientTimeout(total=2)
+            async with (
+                ctx.typing(),
+                ctx.bot.session.get('https://top.gg/api/weekend', timeout=timeout) as response
+            ):
+                response.raise_for_status()
+                data = await response.json()
+                is_weekend = data['is_weekend']
 
-        async with ctx.bot.session.get('https://top.gg/api/weekend') as response:
-            response.raise_for_status()
-            data = await response.json()
-            is_weekend = data['is_weekend']
+        except asyncio.TimeoutError:
+            is_weekend = ctx.now.weekday() in (4, 5, 6)
 
         item = Items.epic_crate if is_weekend else Items.voting_crate
         view = UserView(ctx.author)
@@ -395,7 +404,7 @@ class Miscellaneous(Cog):
             })
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'Settings for {ctx.author.name}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Settings for {ctx.author.name}', icon_url=ctx.author.display_avatar)
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields)), REPLY
 
