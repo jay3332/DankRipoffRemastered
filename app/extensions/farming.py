@@ -80,7 +80,7 @@ class LandView(UserView):
         self.boundary_y: int = 0
 
         self.embed: discord.Embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        self.embed.set_author(name=f'{ctx.author.name}\'s Farm', icon_url=ctx.author.avatar.url)
+        self.embed.set_author(name=f'{ctx.author.name}\'s Farm', icon_url=ctx.author.display_avatar)
         self.embed.set_footer(text='Use the arrow buttons below to move around!')
 
         self.embed.add_field(name='Information', value=f'Use `{ctx.prefix}land buy <coordinate>` to buy a patch of land.')
@@ -284,7 +284,7 @@ class Farming(Cog):
         await manager.add_land(*coordinate)
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
-        embed.set_author(name='Successful Purchase', icon_url=ctx.author.avatar.url)
+        embed.set_author(name='Successful Purchase', icon_url=ctx.author.display_avatar)
         embed.description = f'Successfully purchased section of land at **{readable}** for {Emojis.coin} **{price:,}**.'
 
         return embed, REPLY
@@ -321,7 +321,7 @@ class Farming(Cog):
         await manager.remove_land(*coordinate)
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
-        embed.set_author(name='Successful Transaction', icon_url=ctx.author.avatar.url)
+        embed.set_author(name='Successful Transaction', icon_url=ctx.author.display_avatar)
         embed.description = f'Successfully sold the section of land at **{readable}** in return for {Emojis.coin} **{price:,}**.'
 
         return embed, REPLY
@@ -506,7 +506,7 @@ class Farming(Cog):
 
         await record.add_random_exp(10, 15)
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
-        embed.set_author(name='Successful Harvest', icon_url=ctx.author.avatar.url)
+        embed.set_author(name='Successful Harvest', icon_url=ctx.author.display_avatar)
 
         embed.add_field(name='Harvested:', value='\n'.join(
             f'{item.get_display_name()} x{quantity:,}' for item, quantity in harvested.items()
@@ -565,7 +565,7 @@ class Farming(Cog):
 
         await record.add_random_exp(8, 12, chance=0.8)
         embed = discord.Embed(color=Colors.success, description=message, timestamp=ctx.now)
-        embed.set_author(name='Successful Watering', icon_url=ctx.author.avatar.url)
+        embed.set_author(name='Successful Watering', icon_url=ctx.author.display_avatar)
 
         return embed, REPLY
 

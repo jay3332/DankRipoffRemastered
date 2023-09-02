@@ -42,6 +42,8 @@ LEVEL_REWARDS: Final[dict[int, Reward]] = {
     40: Reward(items={Items.legendary_crate: 1, Items.banknote: 5}),
     45: Reward(items={Items.durable_pickaxe: 1, Items.durable_shovel: 1}),
     50: Reward(items={Items.spinning_coin: 1}),
+    55: Reward(items={Items.camera: 1, Items.alcohol: 1}),
+    60: Reward(coins=50000, items={Items.epic_crate: 1, Items.key: 2}),
 }
 
 
@@ -206,7 +208,7 @@ class EventsCog(Cog, name='Events'):
             command = ctx.command
 
             embed = discord.Embed(color=Colors.error, timestamp=ctx.now)
-            embed.set_author(name='Command on cooldown!', icon_url=ctx.author.avatar.url)
+            embed.set_author(name='Command on cooldown!', icon_url=ctx.author.display_avatar)
             embed.description = getattr(command.callback, '__cooldown_message__', 'Please wait before using this command again.')
 
             default = pluralize(f'{error.cooldown.rate} time(s) per {humanize_duration(error.cooldown.per)}')

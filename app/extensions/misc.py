@@ -284,7 +284,7 @@ class Miscellaneous(Cog):
                 response.raise_for_status()
                 data = await response.json()
                 is_weekend = data['is_weekend']
-
+        # if the API is down, calculate weekend by definition in top.gg docs (Friday-Sunday UTC)
         except asyncio.TimeoutError:
             is_weekend = ctx.now.weekday() in (4, 5, 6)
 

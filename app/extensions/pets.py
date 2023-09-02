@@ -18,6 +18,7 @@ from app.core import Cog, Context, command, group, simple_cooldown
 from app.core.helpers import BAD_ARGUMENT, EDIT, REPLY, cooldown_message, user_max_concurrency
 from app.data.items import Item, ItemType, Items, NetMetadata
 from app.data.pets import Pet, Pets
+from app.extensions.profit import Profit
 from app.util import converters
 from app.util.common import (
     image_url_from_emoji,
@@ -141,15 +142,16 @@ class PetsCog(Cog, name='Pets'):
             weights = self.HUNT_DEFAULT_WEIGHTS
 
         yield f'{Emojis.loading} Hunting for pets {extra}...{tip}', REPLY
+        cont = await Profit._get_command_shortcuts(ctx, record)
 
         pet = random.choices(list(weights), weights=list(weights.values()))[0]
         await asyncio.sleep(random.uniform(2, 4))
 
         if pet is None:
-            yield f"You went hunting for pets, but couldn't spot any.", EDIT
+            yield f"You went hunting for pets, but couldn't spot any.", cont, EDIT
             return
 
-        view = HuntView(ctx, record)
+        view = HuntView(ctx, record, cont)
         message = (
             f'{ctx.author.mention}, you went hunting for pets and you spotted something...\n'
             'When you see the pet below, click the button to catch it!'
@@ -183,7 +185,7 @@ class PetsCog(Cog, name='Pets'):
 
         view.finish()
         button.style = discord.ButtonStyle.primary
-        yield 'You were too slow and the pet escaped! Better luck next time.', view, EDIT
+        yield 'You were too slow and the pet escaped! Better luck next time.', view, cont, EDIT
 
     @group(aliases={'pet', 'zoo', 'p'}, hybrid=True, expand_subcommands=True)
     async def pets(self, ctx: Context, *, pet: query_pet = None) -> None:
@@ -494,7 +496,7 @@ def _format_level_data(record: PetRecord) -> str:
     return f'Level {level} ({current:,}/{required:,} XP)'
 
 
-class HuntMissButton(discord.ui.Button):
+class HuntMissButton(discord.ui.Button['HuntView']):
     def __init__(self, *, row: int) -> None:
         super().__init__(emoji=Emojis.space, row=row)
 
@@ -503,7 +505,9 @@ class HuntMissButton(discord.ui.Button):
         self.view.finish()
 
         await itx.response.edit_message(view=self.view)
-        await itx.followup.send('You missed the pet and it ran away! Better aim next time.')
+        await itx.followup.send(
+            'You missed the pet and it ran away! Better aim next time.', view=self.view.followup_view,
+        )
 
 
 class HuntBombButton(discord.ui.Button['HuntView']):
@@ -523,7 +527,10 @@ class HuntBombButton(discord.ui.Button['HuntView']):
             )
 
         await itx.response.edit_message(view=self.view)
-        await itx.followup.send(f'{self.emoji} You clicked the bomb and you explode. You {lost}died.')
+        await itx.followup.send(
+            f'{self.emoji} You clicked the bomb and you explode. You {lost}died.',
+            view=self.view.followup_view,
+        )
 
 
 class HuntTargetButton(discord.ui.Button['HuntView']):
@@ -573,16 +580,17 @@ class HuntTargetButton(discord.ui.Button['HuntView']):
 
         embed.set_footer(text=f'Use {self.view.ctx.clean_prefix}pets info {self.pet.key} to see more details!')
         await itx.response.edit_message(view=self.view)
-        await itx.followup.send(embed=embed)
+        await itx.followup.send(embed=embed, view=self.view.followup_view)
 
 
 class HuntView(UserView):  # CHANGE TO UserView
-    def __init__(self, ctx: Context, record: UserRecord) -> None:
+    def __init__(self, ctx: Context, record: UserRecord, continuation: discord.ui.View | None = None) -> None:
         super().__init__(ctx.author, timeout=15)  # if this doesn't time out in 15 seconds, an error likely occured
         for i in range(20):
             self.add_item(HuntMissButton(row=i % 5))
         self.ctx = ctx
         self.record = record
+        self.followup_view: discord.ui.View | None = continuation
 
     def finish(self) -> None:
         self.stop()

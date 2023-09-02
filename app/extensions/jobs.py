@@ -16,6 +16,7 @@ from app.core.helpers import EPHEMERAL
 from app.data.items import Items
 from app.data.jobs import Job, Jobs, MinigameFailure
 from app.data.pets import Pets
+from app.extensions.profit import Profit
 from app.util.common import (
     expansion_list,
     get_by_key, humanize_duration,
@@ -149,6 +150,8 @@ class JobsCog(Cog, name='Jobs'):
         )
 
         await ctx.reply(f'{Emojis.loading} Working as {info.chunk}...')
+        shortcuts = await Profit._get_command_shortcuts(ctx, record)
+
         await asyncio.sleep(random.uniform(2.0, 4.0))
         expiry = ctx.now + info.cooldown
         try:
@@ -157,7 +160,7 @@ class JobsCog(Cog, name='Jobs'):
             async with ctx.db.acquire() as conn:
                 await record.add(job_fails=1, connection=conn)
                 await record.update(job_cooldown_expires_at=expiry, connection=conn)
-            return str(exc), REPLY
+            return str(exc), shortcuts, REPLY
 
         message = message or ctx._message
         raise_amount = 0 if (record.job.hours + 1) % 5 else info.base_salary // 10
@@ -203,6 +206,9 @@ class JobsCog(Cog, name='Jobs'):
             f'{Emojis.coin} **+{record.job.salary:,}** (base salary)\n{expansion_list(breakdown)}',
             label='View Breakdown', style=discord.ButtonStyle.primary, emoji='\N{MONEY BAG}',
         ))
+        for child in shortcuts.children:
+            view.add_item(child)
+
         await message.reply(
             f'{info.emoji} **SUCCESS!** You work as {info.chunk} and earn {Emojis.coin} **{profit:,}**{item_text}!' + raise_text,
             view=view,

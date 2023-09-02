@@ -133,7 +133,7 @@ class ScratchView(UserView):
 
         self.embed = embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.description = f'Press a button to scratch it off! You have {self.scratches} scratches left.'
-        embed.set_author(name=f'{ctx.author.name}: Scratch-off ticket', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name}: Scratch-off ticket', icon_url=ctx.author.display_avatar)
 
     def fill_cells(self):
         cells = []

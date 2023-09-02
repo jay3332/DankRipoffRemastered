@@ -685,7 +685,7 @@ class Transactions(Cog):
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
         embed.description = f'You bought {item.get_sentence_chunk(quantity)} for {Emojis.coin} **{price:,}** coins.'
-        embed.set_author(name=f'Successful Purchase: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Successful Purchase: {ctx.author}', icon_url=ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(item.emoji))
 
         if money_back and money_back_text:
@@ -735,7 +735,7 @@ class Transactions(Cog):
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
         embed.description = f'You sold {item.get_sentence_chunk(quantity)} in exchange for {Emojis.coin} **{value:,}** coins.'
-        embed.set_author(name=f'Successful Transaction: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Successful Transaction: {ctx.author}', icon_url=ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(item.emoji))
 
         return embed, REPLY
@@ -994,7 +994,7 @@ class Transactions(Cog):
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
         embed.description = f'You gave {entity_human} to {user.mention}.'
-        embed.set_author(name=f'Successful Transaction: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Successful Transaction: {ctx.author}', icon_url=ctx.author.display_avatar)
 
         us, them = updated
         embed.add_field(name='Updated Values', value=f'{ctx.author.name}: {us}\n{user.name}: {them}')
@@ -1056,7 +1056,7 @@ class Transactions(Cog):
             return
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'{ctx.author.name} has dropped {entity_type}!', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name} has dropped {entity_type}!', icon_url=ctx.author.display_avatar)
         embed.description = f'{ctx.author.mention} has dropped {entity_human}!'
 
         embed.set_footer(text=f'Click the button below to retrieve your {entity_type}!')
@@ -1180,7 +1180,7 @@ class Transactions(Cog):
                 f'Next prestige level: {next_emoji} **{next_prestige}**'
             ),
         )
-        embed.set_author(name=f'Prestige: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Prestige: {ctx.author}', icon_url=ctx.author.display_avatar)
         embed.add_field(
             name=f'{_(meets_level)} Level **{record.level}**/{level_requirement:,}',
             value=progress(record.level / level_requirement),

@@ -77,7 +77,7 @@ class Skill(Cog):
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
         embed.set_thumbnail(url=image_url_from_emoji(self.emoji))
-        embed.set_author(name=f'{ctx.author.name}\'s Skills', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name}\'s Skills', icon_url=ctx.author.avatar)
         embed.description = f'You have unlocked {len(skills.cached):,} skills.'
 
         return Paginator(ctx, FieldBasedFormatter(embed, fields, per_page=3)), REPLY
@@ -112,7 +112,7 @@ class Skill(Cog):
         skills = await record.skill_manager.wait()
 
         embed = discord.Embed(color=Colors.primary, description=skill.description, title=skill.name, timestamp=ctx.now)
-        embed.set_author(name=f'Skill: {skill.name}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Skill: {skill.name}', icon_url=ctx.author.avatar)
         embed.set_thumbnail(url=image_url_from_emoji(skill.emoji))
 
         embed.add_field(name='General', value=dedent(f"""
@@ -184,7 +184,7 @@ class Skill(Cog):
             await skills.add_skill(skill, connection=conn)
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
-        embed.set_author(name='Purchase Successful', icon_url=ctx.author.avatar.url)
+        embed.set_author(name='Purchase Successful', icon_url=ctx.author.display_avatar)
         embed.description = f'Successfully unlocked the **{skill.name}** skill for {Emojis.coin} {skill.price:,}.'
 
         return embed, REPLY
@@ -230,7 +230,7 @@ class Skill(Cog):
             await skill.run_training(ctx)
         except TrainingFailure as exc:
             embed = discord.Embed(color=Colors.error, timestamp=ctx.now)
-            embed.set_author(name='Training Failed', icon_url=ctx.author.avatar.url)
+            embed.set_author(name='Training Failed', icon_url=ctx.author.display_avatar)
             embed.add_field(name='You failed training!', value=str(exc))
 
             yield embed, REPLY
@@ -244,7 +244,7 @@ class Skill(Cog):
         skill_record = skills.get_skill(skill)
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
-        embed.set_author(name='Training Successful', icon_url=ctx.author.avatar.url)
+        embed.set_author(name='Training Successful', icon_url=ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(skill.emoji))
 
         embed.description = dedent(f"""

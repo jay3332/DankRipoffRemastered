@@ -212,7 +212,7 @@ class Stats(Cog):
         data = await ctx.db.get_user_record(ctx.author.id)
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f"Multipliers: {ctx.author}", icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f"Multipliers: {ctx.author}", icon_url=ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji('\U0001f4c8'))
 
         # XP Multi
@@ -346,7 +346,7 @@ class Stats(Cog):
         count = sum(quantity > 0 for quantity in inventory.cached.values())
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'{ctx.author.name}\'s Item Book', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name}\'s Item Book', icon_url=ctx.author.display_avatar)
         embed.description = f'You own **{count:,}** out of {len(list(Items.all())):,} unique items.'
 
         if rarity != 'all':

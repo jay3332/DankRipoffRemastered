@@ -7,7 +7,7 @@ from collections import defaultdict, deque
 from datetime import timedelta
 from html import unescape
 from textwrap import dedent
-from typing import Any, Generic, Literal, NamedTuple, TypeVar, TYPE_CHECKING
+from typing import Any, Generic, Literal, NamedTuple, Sequence, TypeVar, TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -19,18 +19,20 @@ from app.core import (
     Cog,
     Context,
     EDIT,
-    HybridContext, REPLY,
+    HybridContext,
+    REPLY,
     command,
     database_cooldown,
     lock_transactions,
     simple_cooldown,
     user_max_concurrency
 )
-from app.core.helpers import cooldown_message
+from app.core.helpers import EPHEMERAL, cooldown_message
 from app.data.items import Item, Items
 from app.data.pets import Pet, Pets
 from app.data.skills import RobberyTrainingButton
 from app.database import NotificationData, RobFailReason, UserRecord
+from app.extensions.misc import _get_retry_after
 from app.util.common import expansion_list, humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
@@ -86,6 +88,7 @@ class SearchButton(discord.ui.Button['SearchView']):
 
 
 T = TypeVar('T', SearchArea, CrimeData)
+I = TypeVar('I')
 
 
 class SearchView(UserView, Generic[T]):
@@ -261,6 +264,77 @@ class Profit(Cog):
 
         return s[0].upper() + s[1:]
 
+    _SHORTCUT_CANDIDATES: list[str] = ['beg', 'search', 'hunt', 'trivia', 'vote']
+    _COOLDOWN_ONLY_CANDIDATES: list[str] = ['hourly', 'daily', 'weekly']
+    _TOOL_MAPPING: dict[Item | tuple[Item, ...], str] = {
+        Items.fishing_pole: 'fish',
+        Items.__pickaxes__: 'mine',
+        Items.__shovels__: 'dig',
+        Items.axe: 'chop',
+    }
+
+    @staticmethod
+    def weighted_sample(population: Sequence[I], weights: Sequence[int], k: int = 1) -> list[I]:
+        weights = list(weights)
+        positions = range(len(population))
+        indices = []
+        while True:
+            needed = k - len(indices)
+            if not needed:
+                break
+            for i in random.choices(positions, weights, k=needed):
+                if weights[i]:
+                    weights[i] = 0.0
+                    indices.append(i)
+        return [population[i] for i in indices]
+
+    @classmethod
+    async def _get_command_shortcuts(cls, ctx: Context, record: UserRecord) -> discord.ui.View:
+        candidates = cls._SHORTCUT_CANDIDATES[:]
+        weights = [1] * len(candidates)
+
+        # if no job or job cooldown is over, add job
+        if record.job is None or record.job.cooldown_expires_at <= ctx.now:
+            candidates.append('job')
+            weights.append(1 if record.job is None else 3)
+
+        inventory = await record.inventory_manager.wait()
+        # if level 2+ OR lifesaver in inventory, add crime and dive
+        if record.level >= 2 or inventory.cached.quantity_of(Items.lifesaver):
+            candidates.extend(['crime', 'dive'])
+            weights.extend([2, 2])
+
+        # for every tool-based command, add the tool to the candidates
+        for items, name in cls._TOOL_MAPPING.items():
+            if isinstance(items, Item):
+                items = (items,)
+            if any(record.inventory_manager.cached.quantity_of(item) for item in items):
+                candidates.append(name)
+                weights.append(4)
+
+        try:
+            index = candidates.index(ctx.command.qualified_name)
+            candidates.pop(index)
+            weights.pop(index)
+        except ValueError:
+            pass
+
+        candidates = [ctx.bot.get_command(name) for name in candidates]
+        for i, candidate in enumerate(candidates):
+            # less than 0.5 seconds in cooldown? favor this command
+            if await _get_retry_after(ctx, candidate) <= 0.5:
+                weights[i] *= 100
+
+        for candidate in cls._COOLDOWN_ONLY_CANDIDATES:
+            if await _get_retry_after(ctx, cmd := ctx.bot.get_command(candidate)) <= 0.5:
+                candidates.append(cmd)
+                weights.append(150)
+
+        view = discord.ui.View(timeout=120)
+        for cmd in cls.weighted_sample(candidates, weights, k=3):
+            view.add_item(StaticCommandButton(label=f'/{cmd.qualified_name}', command=cmd, row=1))
+        return view
+
     # noinspection PyTypeChecker
     @command(aliases={"plead"}, hybrid=True)
     @simple_cooldown(1, 15)
@@ -276,14 +350,10 @@ class Profit(Cog):
         embed = discord.Embed(timestamp=ctx.now)
         embed.set_author(name=f"Beg: {ctx.author}", icon_url=ctx.author.display_avatar)
 
-        view = discord.ui.View(timeout=120)
-        view.add_item(StaticCommandButton(label='/search', command=self.search, row=1))
-        view.add_item(StaticCommandButton(label='/crime', command=self.crime, row=1))
-        view.add_item(StaticCommandButton(label='/dive', command=self.dive, row=1))
-
         await asyncio.sleep(random.uniform(2, 4))
 
         record = await ctx.db.get_user_record(ctx.author.id)
+        view = await self._get_command_shortcuts(ctx, record)
         await record.add_random_exp(4, 7, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.45)
 
@@ -604,11 +674,7 @@ class Profit(Cog):
             accumulated += 0.01 + mouse.level * 0.004
 
         weights[None] *= 1 - accumulated
-
-        cont = discord.ui.View(timeout=120)
-        cont.add_item(StaticCommandButton(label='/beg', command=self.beg))
-        cont.add_item(StaticCommandButton(label='/crime', command=self.crime))
-        cont.add_item(StaticCommandButton(label='/dive', command=self.dive))
+        cont = await self._get_command_shortcuts(ctx, record)
 
         if random.random() > choice.success_chance:
             embed.colour = Colors.error
@@ -764,7 +830,7 @@ class Profit(Cog):
     async def crime(self, ctx: Context):
         """Commit a crime and hope for profit."""
         view: SearchView[CrimeData] = SearchView(ctx, random.sample(list(self.CRIMES), 3), self.CRIMES)
-        yield f'\U0001f92b {ctx.author.mention}, Which crime would you like to commit?', view, REPLY
+        yield f'\U0001f92b {ctx.author.mention}, Which crime would you like to commit?', view, REPLY, EPHEMERAL
 
         await view.wait()
         if not view.choice:
@@ -776,14 +842,11 @@ class Profit(Cog):
 
         name, choice = view.choice
         embed = discord.Embed(timestamp=ctx.now)
-        embed.set_author(name=f'Crime: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Crime: {ctx.author}', icon_url=ctx.author.display_avatar)
         embed.set_footer(text=f'Crime committed: {name}')
         embed.set_thumbnail(url=choice.image)
 
-        cont = discord.ui.View(timeout=120)
-        cont.add_item(StaticCommandButton(label='/beg', command=self.beg))
-        cont.add_item(StaticCommandButton(label='/search', command=self.search))
-        cont.add_item(StaticCommandButton(label='/dive', command=self.dive))
+        cont = await self._get_command_shortcuts(ctx, record)
 
         if random.random() > choice.success_chance:
             embed.colour = Colors.error
@@ -907,10 +970,12 @@ class Profit(Cog):
         fish = {item: fish.count(item) for item in set(fish) if item is not None}
 
         yield f'{Emojis.loading} Casting your fishing pole...', REPLY
+
+        view = await self._get_command_shortcuts(ctx, record)
         await asyncio.sleep(random.uniform(2., 4.))
 
         if not len(fish):
-            yield 'You caught absolutely nothing. Lmao.', EDIT
+            yield 'You caught absolutely nothing. Lmao.', view, EDIT
             return
 
         if any(f in self.RARE_FISH for f in fish):
@@ -938,10 +1003,10 @@ class Profit(Cog):
                     yield (
                         f'{initial}, and the fish jumped out of the water and bit your head off. '
                         f'You died, and also lost your fishing pole.'
-                    ), REPLY
+                    ), view, REPLY
                     return
 
-                yield f'{initial}, and your fishing pole snapped in half. Nice one.', REPLY
+                yield f'{initial}, and your fishing pole snapped in half. Nice one.', view, REPLY
                 return
 
         async with ctx.db.acquire() as conn:
@@ -951,7 +1016,7 @@ class Profit(Cog):
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
 
         embed.add_field(name='You caught:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in fish.items()))
-        embed.set_author(name=f'Fishing: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Fishing: {ctx.author}', icon_url=ctx.author.display_avatar)
         if used_bait:
             embed.add_field(
                 name=f'{Items.fish_bait.emoji} Fish Bait \u2014 **{used_bait - 1:,}** remaining',
@@ -959,7 +1024,7 @@ class Profit(Cog):
                 inline=False,
             )
 
-        yield '', embed, EDIT
+        yield '', embed, view, EDIT
 
     RARE_DIG_ITEMS = {
         Items.hook_worm,
@@ -1005,10 +1070,12 @@ class Profit(Cog):
         await record.add_random_bank_space(10, 15, chance=0.6)
 
         yield f'{Emojis.loading} Digging through the ground using your {shovel.name}...', REPLY
+
+        view = await self._get_command_shortcuts(ctx, record)
         await asyncio.sleep(random.uniform(2., 4.))
 
         if not len(items):
-            yield 'You dug up absolutely nothing. Lmao.', EDIT
+            yield 'You dug up absolutely nothing. Lmao.', view, EDIT
             return
 
         if any(item in self.RARE_DIG_ITEMS for item in items):
@@ -1036,11 +1103,16 @@ class Profit(Cog):
                     yield (
                         f'{initial}, and the mound of dirt you have dug up beforehand collapses in on you, '
                         f'burying yourself alive. You suffocate to death.',
+                        view,
                         REPLY,
                     )
                     return
 
-                yield f'{initial}. You try your best to dig the item up, but your shovel suddenly snaps in half! Whoops.', REPLY
+                yield (
+                    f'{initial}. You try your best to dig the item up, but your shovel suddenly snaps in half! Whoops.',
+                    view,
+                    REPLY,
+                )
                 return
 
         async with ctx.db.acquire() as conn:
@@ -1050,10 +1122,10 @@ class Profit(Cog):
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
 
         embed.add_field(name='You dug up:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in items.items()))
-        embed.set_author(name=f'Digging: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Digging: {ctx.author}', icon_url=ctx.author.display_avatar)
         embed.set_footer(text=f'Used {shovel.name}')
 
-        yield '', embed, EDIT
+        yield '', embed, view, EDIT
 
     RARE_ORES = {
         Items.gold,
@@ -1095,10 +1167,12 @@ class Profit(Cog):
         await record.add_random_bank_space(10, 15, chance=0.6)
 
         yield f'{Emojis.loading} Mining using your {pickaxe.name}...', REPLY
+
+        view = await self._get_command_shortcuts(ctx, record)
         await asyncio.sleep(random.uniform(2., 4.))
 
         if not len(items):
-            yield 'You mined absolutely nothing. Lmao.', EDIT
+            yield 'You mined absolutely nothing. Lmao.', view, EDIT
             return
 
         if any(item in self.RARE_ORES for item in items):
@@ -1106,6 +1180,7 @@ class Profit(Cog):
 
             yield (
                 f'Ooh, the ore you mined looks special! Type `{insert_random_u200b(message)}` to retrieve the ore.',
+                view,
                 EDIT,
             )
 
@@ -1123,10 +1198,13 @@ class Profit(Cog):
                 if random.random() < 0.15:
                     await record.make_dead(reason='Your pickaxe snapped back on you, and you died.')
 
-                    yield f'{initial}. Your pickaxe snaps and the sharp part comes flying back at you, impaling your chest. You died.', REPLY
+                    yield (
+                        f'{initial}. Your pickaxe snaps and the sharp part comes flying back at you, impaling your chest. '
+                        f'You died.', view, REPLY
+                    )
                     return
 
-                yield f'{initial}, and your pickaxe snaps in half while trying to mine the ore.', REPLY
+                yield f'{initial}, and your pickaxe snaps in half while trying to mine the ore.', view, REPLY
                 return
 
         async with ctx.db.acquire() as conn:
@@ -1136,10 +1214,10 @@ class Profit(Cog):
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
 
         embed.add_field(name='You mined:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in items.items()))
-        embed.set_author(name=f'Mining: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Mining: {ctx.author}', icon_url=ctx.author.display_avatar)
         embed.set_footer(text=f'Used {pickaxe.name}')
 
-        yield '', embed, EDIT
+        yield '', embed, view, EDIT
 
     ABUNDANCE_FOREST_WOOD_CHANCES = {
         None: 1,
@@ -1192,15 +1270,17 @@ class Profit(Cog):
         await record.add_random_bank_space(10, 15, chance=0.6)
 
         yield f'{Emojis.loading} Chopping down some trees...', REPLY
+
+        view = await self._get_command_shortcuts(ctx, record)
         await asyncio.sleep(random.uniform(2., 4.))
 
         if not len(wood):
-            yield 'You couldn\'t chop down any trees, lol.', EDIT
+            yield 'You couldn\'t chop down any trees, lol.', view, EDIT
             return
 
         if random.random() > success_chance:
             await record.make_dead(reason='A tree fell on your head while chopping trees.')
-            yield 'How exotic! A tree fell on your head while you were chopping it down, killing you instantly.', EDIT
+            yield 'How exotic! A tree fell on your head while you were chopping it down, killing you instantly.', view, EDIT
             return
 
         # TODO: way to make user lose their axe?
@@ -1211,9 +1291,9 @@ class Profit(Cog):
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
         embed.add_field(name='You generated:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in wood.items()))
-        embed.set_author(name=f'Chopping: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Chopping: {ctx.author}', icon_url=ctx.author.display_avatar)
 
-        yield '', embed, EDIT
+        yield '', embed, view, EDIT
 
     async def pop_trivia_question(self) -> TriviaQuestion:
         try:
@@ -1249,7 +1329,7 @@ class Profit(Cog):
         prize = random.randint(*self.TRIVIA_PRIZE_MAPPING[question.difficulty])
 
         embed = discord.Embed(color=Colors.primary, description=question.question, timestamp=ctx.now)
-        embed.set_author(name=f'Trivia: {ctx.author}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Trivia: {ctx.author}', icon_url=ctx.author.display_avatar)
         embed.set_footer(text='Answer using the buttons below!')
 
         embed.add_field(name='Difficulty', value=question.difficulty.title())
@@ -1265,6 +1345,7 @@ class Profit(Cog):
             return
 
         record = await ctx.db.get_user_record(ctx.author.id)
+        cont = await self._get_command_shortcuts(ctx, record)
 
         async with ctx.db.acquire() as conn:
             await record.add_random_bank_space(10, 15, chance=0.5, connection=conn)
@@ -1272,10 +1353,10 @@ class Profit(Cog):
 
             if view.choice == question.correct_answer:
                 profit = await record.add_coins(prize)
-                yield f'Correct! You earned {Emojis.coin} **{profit:,}**.', REPLY
+                yield f'Correct! You earned {Emojis.coin} **{profit:,}**.', cont, REPLY
                 return
 
-        yield f'Wrong, the correct answer was **{question.correct_answer}**', REPLY
+        yield f'Wrong, the correct answer was **{question.correct_answer}**', cont, REPLY
 
     @command(aliases={'dv', 'submerge'}, hybrid=True)
     @user_max_concurrency(1)
@@ -1298,7 +1379,7 @@ class Profit(Cog):
     @database_cooldown(3_600)
     @user_max_concurrency(1)
     @cooldown_message('This command is named hourly for a reason.')
-    async def hourly(self, ctx: Context) -> tuple[discord.Embed, Any]:
+    async def hourly(self, ctx: Context) -> CommandResponse:
         """Claim your hourly crate."""
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = record.inventory_manager
@@ -1310,15 +1391,17 @@ class Profit(Cog):
             await record.add_random_bank_space(20, 35, chance=0.8, connection=conn)
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
-        embed.set_author(name=f'{ctx.author}: Claim Hourly', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author}: Claim Hourly', icon_url=ctx.author.display_avatar)
         embed.description = f'You claimed your hourly {item.get_display_name(bold=True)}!'
-        return embed, REPLY
+
+        view = await self._get_command_shortcuts(ctx, record)
+        return embed, view, REPLY
 
     @command(aliases={'da', 'day'}, hybrid=True)
     @database_cooldown(86_400)
     @user_max_concurrency(1)
     @cooldown_message('This command is named daily for a reason.')
-    async def daily(self, ctx: Context) -> tuple[discord.Embed, Any]:
+    async def daily(self, ctx: Context) -> CommandResponse:
         """Claim your daily reward!"""
         record = await ctx.db.get_user_record(ctx.author.id)
         cooldowns = await record.cooldown_manager.wait()
@@ -1335,20 +1418,21 @@ class Profit(Cog):
         profit = await record.add_coins(profit)
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'{ctx.author.name}: Claim Daily', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name}: Claim Daily', icon_url=ctx.author.display_avatar)
 
         if streak_benefit:
             embed.add_field(name='Streak Bonus', value=f'+{Emojis.coin} **{streak_benefit:,}** [Streak: {record.daily_streak}]')
 
         embed.description = f'You claimed your daily reward of {Emojis.coin} **{profit:,}**.'
 
-        return embed, REPLY
+        view = await self._get_command_shortcuts(ctx, record)
+        return embed, view, REPLY
 
     @command(aliases={'week', 'wk'}, hybrid=True)
     @database_cooldown(604_800)
     @user_max_concurrency(1)
     @cooldown_message('This command is named weekly for a reason.')
-    async def weekly(self, ctx: Context) -> tuple[discord.Embed, Any]:
+    async def weekly(self, ctx: Context) -> CommandResponse:
         """Claim your weekly reward!"""
         record = await ctx.db.get_user_record(ctx.author.id)
         cooldowns = await record.cooldown_manager.wait()
@@ -1365,14 +1449,15 @@ class Profit(Cog):
         profit = await record.add_coins(profit)
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'{ctx.author.name}: Claim Weekly', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'{ctx.author.name}: Claim Weekly', icon_url=ctx.author.display_avatar)
 
         if streak_benefit:
             embed.add_field(name='Streak Bonus', value=f'+{Emojis.coin} **{streak_benefit:,}** [Streak: {record.weekly_streak}]')
 
         embed.description = f'You claimed your weekly reward of {Emojis.coin} **{profit:,}**.'
 
-        return embed, REPLY
+        view = await self._get_command_shortcuts(ctx, record)
+        return embed, view, REPLY
 
     @command(aliases={'hon', 'bee'}, hybrid=True)
     @database_cooldown(3600)
@@ -1570,7 +1655,7 @@ class Profit(Cog):
             await notify(NotificationData.RobInProgress(user_id=ctx.author.id, guild_name=ctx.guild.name))
 
             embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-            embed.set_author(name=f'{ctx.author.name}: Robbing {user.name}', icon_url=ctx.author.avatar.url)
+            embed.set_author(name=f'{ctx.author.name}: Robbing {user.name}', icon_url=ctx.author.display_avatar)
 
             code = random.randint(100000, 999999)
             embed.description = (
@@ -1877,7 +1962,7 @@ class DivingView(UserView):
 
     def make_embed(self, *, message: str | None = None, error: bool = False, emoji: str = '\u23ec') -> discord.Embed:
         embed = discord.Embed(color=Colors.warning, timestamp=self.ctx.now)
-        embed.set_author(name=f'{self.ctx.author.name}: Diving', icon_url=self.ctx.author.avatar.url)
+        embed.set_author(name=f'{self.ctx.author.name}: Diving', icon_url=self.ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(emoji))
 
         embed.add_field(name='Depth', value=f'{self._depth}m' if self._depth else 'Surface')
