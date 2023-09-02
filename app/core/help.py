@@ -47,7 +47,7 @@ class CogSelect(discord.ui.Select[PaginatorView]):
     @staticmethod
     def get_base_cog_embed(ctx: Context, cog: Cog) -> discord.Embed:
         embed = discord.Embed(color=Colors.primary, description=cog.description, timestamp=ctx.now)
-        embed.set_author(name=f'Help ({cog.qualified_name}): {ctx.author.name}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Help ({cog.qualified_name}): {ctx.author.name}', icon_url=ctx.author.display_avatar)
         embed.set_footer(text=f'Run `{ctx.clean_prefix}help <command>` to get help on a specific command.')
         if emoji := getattr(cog, 'emoji', None):
             embed.set_thumbnail(url=image_url_from_emoji(emoji))
@@ -88,7 +88,7 @@ class CenterButton(discord.ui.Button[PaginatorView]):
     @staticmethod
     def get_embed(ctx: Context) -> discord.Embed:
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.display_avatar)
 
         for name, value in (
             ('<argument>', 'This is a required argument.'),
@@ -204,7 +204,7 @@ class HelpCommand(commands.HelpCommand):
     @classmethod
     def get_bot_help_paginator(cls, ctx: Context, mapping: dict[Cog, list[Command]]) -> Paginator:
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now, description=ctx.bot.description)
-        embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.avatar.url)
+        embed.set_author(name=f'Help: {ctx.author.name}', icon_url=ctx.author.display_avatar)
 
         mapping = cls.filter_mapping(mapping)
         fields = [
@@ -291,10 +291,20 @@ class HelpCommand(commands.HelpCommand):
 
         if command is self._command_impl:
             app_command_name = 'help commands'
+
         elif app_command_name := getattr(command, 'app_command_name', None):
             pass
+
+        elif isinstance(command, discord.ext.commands.HybridGroup):
+            app_command = command.app_command
+            if fallback := command.fallback:
+                app_command = app_command.get_command(fallback)
+
+            app_command_name = app_command.qualified_name
+
         elif app_command := getattr(command, 'app_command', None):
             app_command_name = app_command.qualified_name
+
         if app_command_name and (app_command := ctx.bot.tree.get_app_command(app_command_name)):
             embed.add_field(name='Slash Command', value=app_command.mention, inline=False)
 
