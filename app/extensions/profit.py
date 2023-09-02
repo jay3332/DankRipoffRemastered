@@ -294,7 +294,7 @@ class Profit(Cog):
         weights = [1] * len(candidates)
 
         # if no job or job cooldown is over, add job
-        if record.job is None or record.job.cooldown_expires_at <= ctx.now:
+        if record.job is None or record.job.cooldown_expires_at is None or record.job.cooldown_expires_at <= ctx.now:
             candidates.append('job')
             weights.append(1 if record.job is None else 3)
 
