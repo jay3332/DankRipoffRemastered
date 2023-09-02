@@ -1461,6 +1461,9 @@ class UserRecord(BaseRecord):
         if self._cigarette_active:
             yield Multiplier(2, f'{Items.cigarette.emoji} Cigarette', expires_at=self.cigarette_expiry)
 
+        if quantity := self.inventory_manager.cached.quantity_of(trophy := Items.voting_trophy):
+            yield Multiplier(0.15 * quantity, f'{trophy.get_sentence_chunk(quantity, bold=False)} in inventory')
+
         pets = self.pet_manager
         if cat := pets.get_active_pet(Pets.cat):
             level = cat.level  # Somewhat expensive to calculate, store it first
