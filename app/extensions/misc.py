@@ -49,7 +49,7 @@ async def _get_retry_after(ctx: Context, cmd: Command) -> float:
         return cooldowns.get_cooldown(cmd)
 
     if bucket := cmd._buckets.get_bucket(ctx):
-        return bucket.get_retry_after()
+        return bucket.get_retry_after(discord.utils.utcnow().timestamp())
     return 0.0
 
 
