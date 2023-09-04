@@ -71,7 +71,7 @@ class ScratchButton(discord.ui.Button['ScratchView']):
         self.style = self.info.style
 
         self.view.description.append(f'{5 - self.view.scratches}. {message}')
-        self.view.update_embed()
+        self.view.update_embed(self.cell)
 
         if self.view.scratches <= 0 or self.cell is ScratchCell.lose:
             self.view.disable_items()
@@ -179,9 +179,9 @@ class ScratchView(UserView):
 
         self.add_item(FollowUpButton(self.table_text, label='View Scratch Key', style=discord.ButtonStyle.green, row=4))
 
-    def update_embed(self) -> None:
+    def update_embed(self, cell: ScratchCell | None = None) -> None:
         self.embed.description = '\n'.join(self.description)
-        if self.scratches:
+        if self.scratches and (cell is None or cell is not ScratchCell.lose):
             self.embed.description += pluralize(f'\nYou have {self.scratches} scratch(es) left.')
 
         if self.multiplier:

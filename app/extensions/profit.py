@@ -264,7 +264,7 @@ class Profit(Cog):
 
         return s[0].upper() + s[1:]
 
-    _SHORTCUT_CANDIDATES: list[str] = ['beg', 'search', 'hunt', 'trivia', 'vote']
+    _SHORTCUT_CANDIDATES: list[str] = ['beg', 'search', 'hunt', 'trivia']
     _COOLDOWN_ONLY_CANDIDATES: list[str] = ['hourly', 'daily', 'weekly']
     _TOOL_MAPPING: dict[Item | tuple[Item, ...], str] = {
         Items.fishing_pole: 'fish',
@@ -297,6 +297,12 @@ class Profit(Cog):
         if record.job is None or record.job.cooldown_expires_at is None or record.job.cooldown_expires_at <= ctx.now:
             candidates.append('job')
             weights.append(1 if record.job is None else 3)
+
+        # if user can vote, add vote
+        vote_again = record.last_dbl_vote is None or record.last_dbl_vote + datetime.timedelta(hours=12) <= ctx.now
+        if vote_again:
+            candidates.append('vote')
+            weights.append(2)
 
         inventory = await record.inventory_manager.wait()
         # if level 2+ OR lifesaver in inventory, add crime and dive

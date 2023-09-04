@@ -7,7 +7,7 @@ and game dynamics.
 
 ## 👟 Getting Started
 
-**Don't know where to start?** Run {{/help tutorial}} for an in-depth tutorial on how to use Coined.
+**Don't know where to start?** Click on *Getting Started* at the bottom of this message to learn the basics of Coined.
 You can also run {{/help commands}} to view a list of all commands and their usage.
 
 ## <:yahoo:1132779148725723156> Support Server

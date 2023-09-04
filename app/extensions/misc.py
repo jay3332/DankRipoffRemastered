@@ -6,7 +6,7 @@ import functools
 import random
 import re
 from collections import defaultdict
-from typing import Any, NamedTuple, TYPE_CHECKING
+from typing import Any, NamedTuple, TYPE_CHECKING, cast
 
 import discord
 from aiohttp import ClientTimeout
@@ -25,7 +25,7 @@ from app.util.converters import better_bool, query_setting
 from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginator
 from app.util.structures import Timer as PingTimer
 from app.util.types import CommandResponse, TypedInteraction
-from app.util.views import UserView
+from app.util.views import StaticCommandButton, UserView
 from config import Colors, Emojis, default_permissions, support_server, website
 
 if TYPE_CHECKING:
@@ -49,7 +49,7 @@ async def _get_retry_after(ctx: Context, cmd: Command) -> float:
         return cooldowns.get_cooldown(cmd)
 
     if bucket := cmd._buckets.get_bucket(ctx):
-        return bucket.get_retry_after(discord.utils.utcnow().timestamp())
+        return bucket.get_retry_after()
     return 0.0
 
 
@@ -64,22 +64,67 @@ class CooldownReminderMetadata(NamedTuple):
         return cls(channel_id=metadata['channel_id'], jump_url=metadata['jump_url'], timer_id=timer.id)
 
 
-class Guide:
+class GuidePageSelect(discord.ui.Select['GuideView']):
+    def __init__(self, current: str | None = None) -> None:
+        super().__init__(placeholder='Select a page...', min_values=1, max_values=1, row=0)
+
+        for label, (page, description, pages) in GUIDE_SELECT_OPTIONS.items():
+            self.add_option(
+                label=label, value=page, description=description, emoji=GUIDE_PAGES[page].emoji,
+                default=current in pages,
+            )
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.view.update_page(self.values[0])
+        await interaction.response.edit_message(embed=self.view.render(), view=self.view)
+
+
+class PageRedirectButton(discord.ui.Button['GuideView']):
+    def __init__(self, label: str, redirect: PageRedirect, row: int | None = None) -> None:
+        super().__init__(label=label, style=redirect.style, emoji=redirect.emoji, row=row)
+        self.source = redirect.page
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.view.update_page(self.source)
+        await interaction.response.edit_message(embed=self.view.render(), view=self.view)
+
+
+class AllCommandsButton(discord.ui.Button['GuideView']):
+    def __init__(self) -> None:
+        super().__init__(label='View All Commands', style=discord.ButtonStyle.primary, row=2)
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.view.ctx.interaction = interaction
+        await self.view.ctx.send_help()
+
+
+class GuideView(UserView):
     BACKSLASH_SUBSTITUTION = re.compile(r'\\.', re.MULTILINE)
 
+    source: str
+    lines: list[str]
+    page: GuidePage
+
+    def __init__(self, ctx: Context, *, page: str = None) -> None:
+        super().__init__(ctx.author, timeout=240.0)
+
+        self.ctx: Context = ctx
+        self._embed_color = Colors.primary
+        self.update_page(page or 'index')
+
     @classmethod
-    def walk_markdown(cls, ctx: Context, lines: list[str], embed: discord.Embed) -> None:
+    def walk_markdown(cls, ctx: Context, lines: list[str], page: GuidePage, embed: discord.Embed) -> None:
         index = 0
         current = []
         current_field = None
 
         while index < len(lines):
             line = lines[index]
-            line = line.strip()
+            line = line.rstrip()
             line = format_line(ctx, line)
             while line.endswith('\\'):
                 index += 1
-                line = line[:-1] + format_line(ctx, lines[index].strip())
+                line = line[:-1] + format_line(ctx, lines[index].rstrip())
 
             if line.startswith('##'):
                 if current:
@@ -91,7 +136,8 @@ class Guide:
 
                 current_field = line[2:].lstrip()
             elif line.startswith('#'):
-                embed.title = line[1:].lstrip()
+                fmt = '{0} {1}' if page.emoji and page.show_emoji_in_title else '{1}'
+                embed.title = fmt.format(page.emoji, line[1:].lstrip())
             else:
                 current.append(line)
 
@@ -102,31 +148,139 @@ class Guide:
         elif current:
             embed.description = '\n'.join(current)
 
-    @classmethod
-    def view(cls, ctx: Context) -> discord.ui.View:
-        view = discord.ui.View()
-        view.add_item(
-            discord.ui.Button(
-                label='Invite Coined to your server!',
-                url=oauth_url(ctx.bot.user.id, permissions=discord.Permissions(default_permissions)),
-            ),
-        )
-        view.add_item(
-            discord.ui.Button(label='Support Server', url=support_server),
-        )
-        view.add_item(
-            discord.ui.Button(label='Website', url=website),
-        )
-        return view
+    def update_page(self, source: str) -> None:
+        self.source = source
+        self.lines = cast('Miscellaneous', self.ctx.cog).get_guide_source_lines(source)
+        self.page = GUIDE_PAGES[source]
+        self.update()
 
-    @classmethod
-    def render(cls, ctx: Context, lines: list[str]) -> discord.Embed:
-        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_thumbnail(url=ctx.bot.user.avatar)
-        embed.set_author(name='Coined Guide', icon_url=ctx.author.display_avatar)
+    def update(self) -> None:
+        self.clear_items()
+        self.add_item(GuidePageSelect(self.source))
 
-        cls.walk_markdown(ctx, lines, embed)
+        for label, redirect in self.page.redirects.items():
+            if isinstance(redirect, PageRedirect):
+                self.add_item(PageRedirectButton(label, redirect, row=2 if self.source == 'index' else None))
+            else:
+                self.add_item(StaticCommandButton(
+                    command=self.ctx.bot.get_command(redirect.command),
+                    label=label,
+                    emoji=redirect.emoji,
+                    style=discord.ButtonStyle.primary,
+                ))
+
+        if self.source == 'index':
+            self.add_item(discord.ui.Button(
+                label='Add Coined to your server!',
+                url=oauth_url(self.ctx.bot.user.id, permissions=discord.Permissions(default_permissions)),
+                row=1,
+            ))
+            self.add_item(discord.ui.Button(label='Support Server', url=support_server, row=1))
+            self.add_item(discord.ui.Button(label='Website', url=website, row=1))
+            self.add_item(AllCommandsButton())
+
+    def render(self) -> discord.Embed:
+        embed = discord.Embed(color=self._embed_color, timestamp=self.ctx.now)
+        embed.set_author(name='Coined Guide', icon_url=self.ctx.author.display_avatar)
+
+        if self.page.thumbnail:
+            embed.set_thumbnail(url=self.page.thumbnail)
+        if self.page.image_url:
+            embed.set_image(url=self.page.image_url)
+
+        self.walk_markdown(self.ctx, self.lines, self.page, embed)
         return embed
+
+
+class PageRedirect(NamedTuple):
+    page: str
+    style: discord.ButtonStyle = discord.ButtonStyle.secondary
+    emoji: str | None = None
+
+
+class CommandRedirect(NamedTuple):
+    command: str
+    emoji: str | None = None
+
+
+class GuidePage(NamedTuple):
+    emoji: str | None = None
+    show_emoji_in_title: bool = True
+    thumbnail: str | None = None
+    image_url: str | None = None
+    redirects: dict[str, PageRedirect | CommandRedirect] = {}
+
+
+GUIDE_PAGES: dict[str, GuidePage] = {
+    'index': GuidePage(
+        emoji='<:coined_yahoo:1140378821288263761>',
+        show_emoji_in_title=False,
+        thumbnail='https://cdn.discordapp.com/avatars/753017377922482248/1b5ac72b4541c1eb26f2c92076ce5687.png',
+        redirects={'Getting Started': PageRedirect('getting-started')},
+    ),
+    'getting-started': GuidePage(
+        emoji='\U0001f44b',
+        redirects={
+            'Earning Coins': PageRedirect('earning'),
+            'Stats That Matter': PageRedirect('stats-that-matter'),
+        },
+    ),
+    'earning': GuidePage(
+        emoji='\U0001f4b0',
+        redirects={
+            'Back': PageRedirect('getting-started', style=discord.ButtonStyle.danger),
+        },
+    ),
+    'stats-that-matter': GuidePage(
+        emoji='\U0001f4c8',
+        redirects={
+            'Back': PageRedirect('getting-started', style=discord.ButtonStyle.danger),
+            'Levels and XP': PageRedirect('xp'),
+            'Items': PageRedirect('items'),
+            'Skills': PageRedirect('skills'),
+            'Pets': PageRedirect('pets'),
+        }
+    ),
+    'pets': GuidePage(
+        emoji='<:dog:1134641292245205123>',
+        redirects={
+            'How do I hunt?': PageRedirect('hunt'),
+            'Equipping Pets': PageRedirect('equip'),
+            'Feeding Pets': PageRedirect('feed'),
+        },
+    ),
+    'hunt': GuidePage(
+        emoji='<:net:1137070560753496104>',
+        image_url='https://cdn.discordapp.com/attachments/1145117706509631548/1147735395136716831/ezgif.com-optimize-3.gif',
+        redirects={
+            'What are Pets?': PageRedirect('pets'),
+            'Equipping Pets': PageRedirect('equip'),
+            'Feeding Pets': PageRedirect('feed'),
+            'Begin Hunting': CommandRedirect('hunt'),
+        },
+    ),
+    'equip': GuidePage(
+        redirects={
+            'Back to Pets': PageRedirect('pets', style=discord.ButtonStyle.danger),
+        },
+    ),
+    'feed': GuidePage(
+        emoji='<:carrot:941096334365175839>',
+        redirects={
+            'Back to Pets': PageRedirect('pets', style=discord.ButtonStyle.danger),
+            'Begin Feeding': CommandRedirect('feed'),
+        }
+    ),
+}
+
+GUIDE_SELECT_OPTIONS: dict[str, tuple[str, str, set[str]]] = {
+    'Coined Overview': ('index', 'An overview of Coined, which is the guide homepage.', {'index'}),
+    'Getting Started': (
+        'getting-started', 'Learn how to get started with Coined.',
+        {'getting-started', 'earning', 'stats-that-matter'},
+    ),
+    'Pets': ('pets', 'Learn more about the pets system.', {'pets', 'hunt', 'equip', 'feed'}),
+}
 
 
 class Miscellaneous(Cog):
@@ -148,16 +302,13 @@ class Miscellaneous(Cog):
         self._cooldown_reminder_exists = defaultdict[int, dict[str, CooldownReminderMetadata]](dict)
         self.__cooldown_reminder_fetch_task = self.bot.loop.create_task(self._fetch_cooldown_reminders())
 
-    async def render_guide(self, ctx: Context, page: str) -> discord.Embed:
+    def get_guide_source_lines(self, page: str) -> list[str]:
         if page not in self._guides:
             with open(f'./guide/{page}.md', 'r') as f:
                 self._guides[page] = lines = f.readlines()
+            return lines
 
-            embed = Guide.render(ctx, lines)
-            return embed
-
-        embed = Guide.render(ctx, self._guides[page])
-        return embed
+        return self._guides[page]
 
     async def _fetch_cooldown_reminders(self) -> None:
         await self.bot.db.wait()
@@ -187,7 +338,8 @@ class Miscellaneous(Cog):
         if entity:
             return await ctx.send_help(entity)
 
-        return await self.render_guide(ctx, 'index'), Guide.view(ctx), REPLY
+        view = GuideView(ctx)
+        return view.render(), view, REPLY
 
     help_app_command = app_commands.Group(name='help', description='Learn how to use Coined.')
 

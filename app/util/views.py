@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable, TypeAlias, TYPE_CHECKING
 
 import discord
-from discord.ext import commands
 
 from app.util.structures import TemporaryAttribute
 
@@ -64,7 +63,7 @@ async def _dummy_parse_arguments(_ctx: Context) -> None:
     pass
 
 
-async def _get_context(command: HybridCommand | HybridGroupCommand, interaction: discord.Interaction) -> Context:
+async def interaction_context(command: HybridCommand | HybridGroupCommand, interaction: discord.Interaction) -> Context:
     interaction._cs_command = command
     interaction.message = None
     return await interaction.client.get_context(interaction)
@@ -80,7 +79,7 @@ async def invoke_command(
     cog = command.cog
     command = command.copy()
     command.cog = cog
-    ctx = await _get_context(command, source) if isinstance(source, discord.Interaction) else source
+    ctx = await interaction_context(command, source) if isinstance(source, discord.Interaction) else source
     ctx.args = [ctx.cog, ctx, *args]
     ctx.kwargs = kwargs
 
@@ -119,7 +118,7 @@ class CommandInvocableModal(discord.ui.Modal):
         self.command = command
 
     async def get_context(self, interaction: TypedInteraction) -> Context:
-        return await _get_context(self.command, interaction)
+        return await interaction_context(self.command, interaction)
 
     # source is _underscored to avoid conflict with commands that have a source parameter
     async def invoke(self, _source: TypedInteraction | Context, /, *args: Any, **kwargs: Any) -> None:
