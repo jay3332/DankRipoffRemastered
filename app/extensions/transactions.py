@@ -557,7 +557,7 @@ class Transactions(Cog):
 
     @command(aliases={"store", "market", "sh", "iteminfo", "ii", "item"}, hybrid=True)
     @app_commands.describe(item='The item to view specific information on.')
-    @simple_cooldown(1, 6)
+    @simple_cooldown(4, 6)
     async def shop(self, ctx: Context, *, item: query_item = None) -> CommandResponse:
         """View the item shop, or view information on a specific item.
 
