@@ -8,6 +8,8 @@ their own unique properties and uses.
 Items can be obtained throughout the Coined economy system in a variety of ways. Some items are common, some are super \
 rare, and some are even unobtainable! How many can you collect?
 
+View your own item inventory by running {{/inventory}}. See *Your Inventory* for more information.
+
 ## Buying and Selling Items
 
 A very direct way of obtaining items is by buying them from coins. There are many different shops and markets you can \
@@ -21,8 +23,8 @@ When you want to sell an item in your inventory (usually for coins), you can sel
 ## Using Items
 
 - Some items are also *usable* via {{/use}}. Some are also usable in bulk, whereas some have usage limits.
-- Many power-up-style items which are *activated on use* can also be *removed* to remove its effects. You \
-can do this by running {{/remove}}.
+- Many power-up-style items which are *activated on use* can also be *removed* to remove its effects. You can do this \
+by running {{/remove}}.
 
 ## Crafting Items
 

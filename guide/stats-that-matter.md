@@ -19,6 +19,12 @@ Train skills and pets for passive boosts and assistance throughout Coined.
 - Check your skills by running {{/skills}}. Train them by running {{/train}}.
 - For more information on skills, see *Skills* at the bottom of this message.
 
+## 🌾 Farming
+Plant crops, water them, and harvest them over time for a passive supply of crop harvests.
+- These harvests can be used to keep a steady supply of food for your pets (see *Pets* below)
+- View your farm by running {{/farm view}}.
+- For more information on farming, see *Farming* at the bottom of this message.
+
 ## 🦮 Pets
 Obtain special boosts, abilities, and battle attacks throughout the Coined economy system by collecting and raising \
 pets.

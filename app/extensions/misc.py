@@ -98,6 +98,26 @@ class AllCommandsButton(discord.ui.Button['GuideView']):
         await self.view.ctx.send_help()
 
 
+class BackButton(discord.ui.Button['GuideView']):
+    def __init__(self) -> None:
+        super().__init__(label='Back', style=discord.ButtonStyle.danger, row=1)
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.view._history.pop()
+        self.view.update_page(self.view._history[-1], back=True)
+        await interaction.response.edit_message(embed=self.view.render(), view=self.view)
+
+
+class HelpRedirectButton(discord.ui.Button['GuideView']):
+    def __init__(self, redirect: HelpRedirect, **kwargs: Any) -> None:
+        super().__init__(emoji=redirect.emoji, **kwargs)
+        self.entity = redirect.entity
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.view.ctx.interaction = interaction
+        await self.view.ctx.send_help(self.entity)
+
+
 class GuideView(UserView):
     BACKSLASH_SUBSTITUTION = re.compile(r'\\.', re.MULTILINE)
 
@@ -110,6 +130,7 @@ class GuideView(UserView):
 
         self.ctx: Context = ctx
         self._embed_color = Colors.primary
+        self._history: list[str] = []
         self.update_page(page or 'index')
 
     @classmethod
@@ -148,8 +169,10 @@ class GuideView(UserView):
         elif current:
             embed.description = '\n'.join(current)
 
-    def update_page(self, source: str) -> None:
+    def update_page(self, source: str, *, back: bool = False) -> None:
         self.source = source
+        if not back:
+            self._history.append(source)
         self.lines = cast('Miscellaneous', self.ctx.cog).get_guide_source_lines(source)
         self.page = GUIDE_PAGES[source]
         self.update()
@@ -158,12 +181,27 @@ class GuideView(UserView):
         self.clear_items()
         self.add_item(GuidePageSelect(self.source))
 
+        if len(self._history) > 1:
+            self.add_item(BackButton())
+        blacklist = self._history[-1] if self._history else None
+
         for label, redirect in self.page.redirects.items():
             if isinstance(redirect, PageRedirect):
+                if blacklist and redirect.page == blacklist:  # don't repeat the back button
+                    continue
                 self.add_item(PageRedirectButton(label, redirect, row=2 if self.source == 'index' else None))
+            elif isinstance(redirect, HelpRedirect):
+                self.add_item(HelpRedirectButton(
+                    redirect,
+                    label=label,
+                    style=discord.ButtonStyle.primary,
+                    row=2 if self.source == 'index' else None,
+                ))
             else:
                 self.add_item(StaticCommandButton(
                     command=self.ctx.bot.get_command(redirect.command),
+                    command_args=redirect.command_args,
+                    command_kwargs=redirect.command_kwargs,
                     label=label,
                     emoji=redirect.emoji,
                     style=discord.ButtonStyle.primary,
@@ -200,6 +238,13 @@ class PageRedirect(NamedTuple):
 
 class CommandRedirect(NamedTuple):
     command: str
+    command_args: list[str] | None = None
+    command_kwargs: dict[str, Any] | None = None
+    emoji: str | None = None
+
+
+class HelpRedirect(NamedTuple):
+    entity: str
     emoji: str | None = None
 
 
@@ -228,19 +273,48 @@ GUIDE_PAGES: dict[str, GuidePage] = {
     'earning': GuidePage(
         emoji='\U0001f4b0',
         redirects={
-            'Back': PageRedirect('getting-started', style=discord.ButtonStyle.danger),
+            'Next Page': PageRedirect('earning-2', style=discord.ButtonStyle.success),
+            'Work and Jobs': PageRedirect('work'),
         },
+    ),
+    'earning-2': GuidePage(
+        emoji='\U0001f4b0',
+        redirects={
+            'Diving': PageRedirect('diving'),
+            'Browse Casino Commands': HelpRedirect('casino'),
+        },
+    ),
+    'levels': GuidePage(
+        emoji='\u2728',
+        redirects={
+            'View my Level': CommandRedirect('level'),
+            'Prestige': CommandRedirect('prestige'),
+        },
+    ),
+    'work': GuidePage(
+        emoji='\U0001f4bc',
+        redirects={
+            'Begin Working': CommandRedirect('work'),
+        },
+    ),
+    'diving': GuidePage(
+        emoji='\U0001f30a',
+        redirects={
+            'View more ways to profit': PageRedirect('earning'),
+            'Begin Diving': CommandRedirect('dive'),
+        }
     ),
     'stats-that-matter': GuidePage(
         emoji='\U0001f4c8',
         redirects={
-            'Back': PageRedirect('getting-started', style=discord.ButtonStyle.danger),
-            'Levels and XP': PageRedirect('xp'),
+            'Levels and XP': PageRedirect('levels'),
             'Items': PageRedirect('items'),
             'Skills': PageRedirect('skills'),
+            'Farming': PageRedirect('farming'),
             'Pets': PageRedirect('pets'),
         }
     ),
+    'skills': GuidePage(emoji='\U0001f52e'),
     'pets': GuidePage(
         emoji='<:dog:1134641292245205123>',
         redirects={
@@ -259,27 +333,64 @@ GUIDE_PAGES: dict[str, GuidePage] = {
             'Begin Hunting': CommandRedirect('hunt'),
         },
     ),
-    'equip': GuidePage(
+    'farming': GuidePage(
+        emoji='\U0001f9d1\u200d\U0001f33e',
         redirects={
-            'Back to Pets': PageRedirect('pets', style=discord.ButtonStyle.danger),
+            'Pets': PageRedirect('pets'),
+            'Crafting': PageRedirect('craft'),
+            'View your Farm': CommandRedirect('farm'),
+        }
+    ),
+    'craft': GuidePage(
+        emoji='\u2692\ufe0f',
+        redirects={
+            'Items': PageRedirect('items'),
+            'Earning Coins': PageRedirect('earning'),
+            'Begin Crafting': CommandRedirect('craft'),
         },
     ),
+    'items': GuidePage(
+        emoji='\U0001f392',
+        redirects={
+            'Your Inventory': PageRedirect('inventory'),
+            'Take a peek at the shop': CommandRedirect('shop'),
+            'Crafting': PageRedirect('craft'),
+        },
+    ),
+    'inventory': GuidePage(
+        emoji='\U0001f4e6',
+        redirects={
+            'View your Inventory': CommandRedirect('inventory'),
+        },
+    ),
+    'equip': GuidePage(),
     'feed': GuidePage(
         emoji='<:carrot:941096334365175839>',
         redirects={
-            'Back to Pets': PageRedirect('pets', style=discord.ButtonStyle.danger),
             'Begin Feeding': CommandRedirect('feed'),
+            'Farming': PageRedirect('farming'),
         }
+    ),
+    'prestige': GuidePage(
+        emoji=Emojis.prestige[1],
+        redirects={
+            'View your Prestige Requirements': CommandRedirect('prestige'),
+        },
     ),
 }
 
 GUIDE_SELECT_OPTIONS: dict[str, tuple[str, str, set[str]]] = {
     'Coined Overview': ('index', 'An overview of Coined, which is the guide homepage.', {'index'}),
-    'Getting Started': (
-        'getting-started', 'Learn how to get started with Coined.',
-        {'getting-started', 'earning', 'stats-that-matter'},
-    ),
+    'Getting Started': ('getting-started', 'Learn how to get started with Coined.', {'getting-started'}),
+    'Earning Coins': ('earning', 'Learn how to earn coins.', {'earning', 'earning-2', 'stats-that-matter'}),
+    'Levels and XP': ('levels', 'Learn more about how levels and experience work.', {'levels'}),
+    'Items': ('items', 'Learn more about items and inventory.', {'items', 'inventory', 'craft'}),
+    'Farming': ('farming', 'Learn more about crops and the farming system.', {'farming'}),
+    'Skills': ('skills', 'Learn more about skills and training them.', {'skills'}),
     'Pets': ('pets', 'Learn more about the pets system.', {'pets', 'hunt', 'equip', 'feed'}),
+    'Work and Jobs': ('work', 'Learn more about working and jobs.', {'work'}),
+    'Diving': ('diving', 'Learn how to dive wisely to optimize profit.', {'diving'}),
+    'Prestige': ('prestige', 'Learn why and how users prestige.', {'prestige'}),
 }
 
 

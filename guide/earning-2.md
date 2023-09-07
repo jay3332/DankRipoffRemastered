@@ -13,13 +13,15 @@ Commands that are listed here are unlocked once you obtain and own a tool in you
 > For more information on items and your inventory, see *Items* at the bottom of this message.
 - {{/fish}} – Cast a fishing pole into the water for fish and other items, which can be sold for coins.
   - Requires a **<:fishing_pole:935298127353745499> Fishing Pole**
-  - See *Fishing* for more information on fishing.
 - {{/mine}} – Mine for precious ores, which can be sold for coins.
   - Requires a **<:pickaxe:939598952284692520> Pickaxe**
-  - See *Mining* for more information on mining.
 - {{/dig}} – Dig underground to find worms and relics, which can be sold for coins.
   - Requires a **<:shovel:938575120157515786> Shovel**
-  - See *Digging* for more information on digging.
 - {{/chop}} – Chop down trees for wood, which can be sold for coins.
   - Requires an **<:axe:937880907946283058> Axe**
-  - See *Chopping* for more information on chopping.
+
+## The Casino
+
+These commands were not designed for making a profit, but rather for "completeness" of the economy system. \
+Gambling is a horrible way to make money as they are designed to have a net loss. (They are more for fun than anything else.)
+> See *Browse Casino Commands* for more information on the casino.
