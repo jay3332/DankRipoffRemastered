@@ -288,7 +288,7 @@ GUIDE_PAGES: dict[str, GuidePage] = {
         emoji='\u2728',
         redirects={
             'View my Level': CommandRedirect('level'),
-            'Prestige': CommandRedirect('prestige'),
+            'Prestige': PageRedirect('prestige'),
         },
     ),
     'work': GuidePage(
