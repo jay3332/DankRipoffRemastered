@@ -271,7 +271,7 @@ class JobsCog(Cog, name='Jobs'):
             command=self.work, label='Work', style=discord.ButtonStyle.primary, emoji=self.emoji,
             disabled=not available,
         ))
-        return embed, view
+        return embed, view, REPLY
 
     @work.command('list', aliases={'l', 'ls', 'offers', 'offerings', 'find'}, hybrid=True)
     async def job_list(self, ctx: Context) -> CommandResponse:
