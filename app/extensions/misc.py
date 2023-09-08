@@ -486,10 +486,6 @@ class Miscellaneous(Cog):
         ctx = await self.bot.get_context(itx)
         await ctx.send_help(resolved)
 
-    @command(aliases={'tutor', 'tut'}, hybrid=True, with_app_command=False)
-    async def tutorial(self, ctx: Context) -> CommandResponse:
-        """Starts an in-depth tutorial on how to use Coined."""
-
     @command(alias="pong", hybrid=True)
     @simple_cooldown(2, 2)
     async def ping(self, ctx: Context) -> tuple[str, Any]:

@@ -1268,6 +1268,16 @@ class Profit(Cog):
         # random.random() is INCLUSIVE of 0, but EXCLUSIVE of 1
         success_chance = 0.95 if view.choice == view.EXOTIC else 1
         mapping = self.ABUNDANCE_FOREST_WOOD_CHANCES if view.choice == view.ABUNDANCE else self.EXOTIC_FOREST_WOOD_CHANCES
+        mapping = mapping.copy()
+
+        pets = await record.pet_manager.wait()
+        extra_weight = 1
+
+        if panda := pets.get_active_pet(Pets.panda):
+            extra_weight += 0.02 + panda.level * 0.005
+
+        mapping[Items.redwood] *= extra_weight
+        mapping[Items.blackwood] *= extra_weight
 
         wood = random.choices(list(mapping), weights=list(mapping.values()), k=13)
         wood = {item: wood.count(item) for item in set(wood) if item is not None}

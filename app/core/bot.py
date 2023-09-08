@@ -363,10 +363,13 @@ class Bot(commands.Bot):
 
         if message.content in {f'<@{self.user.id}>', f'<@!{self.user.id}>'}:
             prefix = await self._get_display_prefix(message)
+            help_guide = self.tree.get_app_command('help guide').mention
+            help_commands = self.tree.get_app_command('help commands').mention
             await message.reply(
-                f"Hey, I'm {self.user.name}. My prefix here is **`{prefix}`**\n"
-                f"Additionally, most of my commands are available as slash commands.\n\n"
-                f"For more help, run `{prefix}help`."
+                f"Hey, I'm {self.user.name}. My command prefix here is **`{prefix}`**\n"
+                f"Additionally, most of my commands are available as slash commands.\n"
+                f"- For a guide on how to use this bot, run {help_guide}.\n"
+                f"- To browse all commands available to you, run {help_commands}.\n"
             )
 
         if discord.PartialEmoji.from_str(message.content).id == 1140424004407144538:
