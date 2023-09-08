@@ -287,7 +287,7 @@ class Stats(Cog):
             {'Your' if user == ctx.author else f"{user.name}'s"} inventory is worth {Emojis.coin} **{worth:,}**.
             Additionally, you own **{len(fields):,}** out of {len(list(Items.all())):,} unique items.
         """)
-        embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.avatar.url)
+        embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.display_avatar)
 
         go_shopping = StaticCommandButton(
             command=ctx.bot.get_command('shop'),
