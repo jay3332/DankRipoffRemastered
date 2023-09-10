@@ -118,6 +118,7 @@ class PetsCog(Cog, name='Pets'):
         Pets.bee: 0.05,
         Pets.duck: 0.05,
         Pets.cow: 0.004,
+        Pets.panda: 0.004,
     }
 
     @command(aliases={'catch', 'hu', 'ct', 'h'}, hybrid=True)
