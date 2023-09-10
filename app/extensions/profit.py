@@ -1186,7 +1186,6 @@ class Profit(Cog):
 
             yield (
                 f'Ooh, the ore you mined looks special! Type `{insert_random_u200b(message)}` to retrieve the ore.',
-                view,
                 EDIT,
             )
 
