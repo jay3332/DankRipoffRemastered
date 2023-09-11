@@ -1504,6 +1504,10 @@ class UserRecord(BaseRecord):
             level = bird.level
             yield Multiplier(0.01 + level * 0.004, f'{Pets.bird.display} (Level {level})')
 
+        if panda := pets.get_active_pet(Pets.panda):
+            level = panda.level
+            yield Multiplier(0.02 + level * 0.01, f'{Pets.panda.display} (Level {level})')
+
     @property
     def coin_multiplier(self) -> float:
         return 1 + sum(m.multiplier for m in self.walk_coin_multipliers())

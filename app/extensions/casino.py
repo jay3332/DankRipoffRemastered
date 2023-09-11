@@ -571,7 +571,7 @@ class Casino(Cog):
     emoji = '\U0001f911'
 
     @staticmethod
-    def _format_roll(roll: list[int]) -> str:
+    def _format_roll(roll: tuple[int, int] | list[int]) -> str:
         assert len(roll) == 2
 
         first, second = roll
@@ -607,8 +607,8 @@ class Casino(Cog):
             await record.add_random_exp(10, 15, chance=0.5, ctx=ctx, connection=conn)
             await record.add_random_bank_space(10, 15, chance=0.5, connection=conn)
 
-        their_dice = random.choices(range(1, 6), k=2)
-        my_dice = random.choices(range(1, 6), k=2)
+        their_dice = random.choices(range(1, 7), k=2)
+        my_dice = random.randint(2, 6), random.randint(1, 6)
 
         their_sum = sum(their_dice)
         my_sum = sum(my_dice)

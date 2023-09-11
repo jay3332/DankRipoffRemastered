@@ -1,7 +1,6 @@
 # Hunting for Pets
 
-You can hunt for pets by running {{/hunt}}.
-- Hunting is risk-free and there are no requirements to hunt!
+You can hunt for pets by running {{/hunt}}. Hunting is risk-free and there are no requirements to hunt!
 For an introduction to the pet system, see the guide by clicking on *What are Pets?* at the bottom of this message.
 
 ## Things to note

@@ -120,6 +120,11 @@ class JobsCog(Cog, name='Jobs'):
     @user_max_concurrency(1)
     async def work(self, ctx: Context) -> CommandResponse:
         """Work your job and earn some money."""
+        if ctx.invoked_with == 'job':
+            return await ctx.invoke(self.job_view)  # type: ignore
+        elif ctx.invoked_with == 'jobs':
+            return await ctx.invoke(self.job_list)  # type: ignore
+
         record = await ctx.db.get_user_record(ctx.author.id)
         if record.job is None:
             mention, view = self._prepare_find_job_error(ctx)
@@ -266,7 +271,7 @@ class JobsCog(Cog, name='Jobs'):
             command=self.work, label='Work', style=discord.ButtonStyle.primary, emoji=self.emoji,
             disabled=not available,
         ))
-        return embed, view
+        return embed, view, REPLY
 
     @work.command('list', aliases={'l', 'ls', 'offers', 'offerings', 'find'}, hybrid=True)
     async def job_list(self, ctx: Context) -> CommandResponse:

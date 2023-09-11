@@ -368,7 +368,8 @@ class EventsCog(Cog, name='Events'):
         async with self.bot.db.acquire() as conn:
             kwargs = (
                 # reset monthly votes if the last vote was in a different month
-                {} if record.last_dbl_vote.month == discord.utils.utcnow().month else dict(votes_this_month=0)
+                {} if record.last_dbl_vote is None or record.last_dbl_vote.month == discord.utils.utcnow().month
+                else dict(votes_this_month=0)
             )
             await record.update(
                 last_dbl_vote=datetime.datetime.fromisoformat(data.voted_at),

@@ -118,6 +118,7 @@ class PetsCog(Cog, name='Pets'):
         Pets.bee: 0.05,
         Pets.duck: 0.05,
         Pets.cow: 0.004,
+        Pets.panda: 0.004,
     }
 
     @command(aliases={'catch', 'hu', 'ct', 'h'}, hybrid=True)
@@ -129,7 +130,9 @@ class PetsCog(Cog, name='Pets'):
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = await record.inventory_manager.wait()
 
-        available: Iterator[Item[NetMetadata]] = filter(lambda item: item.type is ItemType.net, inventory.cached)
+        available: Iterator[Item[NetMetadata]] = (
+            item for item, quantity in inventory.cached.items() if quantity > 0 and item.type is ItemType.net
+        )
         net: Item[NetMetadata] | None = None
         extra = 'with your bare hands'
         tip = f'\n\U0001f4a1 **Tip:** Buy nets from the shop to hunt rarer pets!'

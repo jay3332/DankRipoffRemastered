@@ -171,9 +171,23 @@ class Pets:
         max_energy=500,
         benefit=lambda level: (
             f'- +{2 + level * 0.5}% more coins from beg, search, and crime\n'
-            f'- +{2 + level * 0.6}% global XP multiplier\n'
+            f'- +{2 + level * 0.6}% global XP multiplier'
         ),
         abilities=lambda level: (
             f'- Produce milk (1 per hour) with `.milk` ({Emojis.bolt} 100)'
         )
+    )
+
+    panda = Pet(
+        name='Panda',
+        key='panda',
+        emoji='\U0001f43c',
+        rarity=PetRarity.rare,
+        description='Celebrated for their unique black-and-white appearance, bamboo shoots make up most of their diet.',
+        energy_per_minute=0.3,
+        max_energy=400,
+        benefit=lambda level: (
+            f'- +{2 + level}% global coin multiplier\n'
+            f'- +{2 + level * 0.5}% chance to find rarer wood when chopping trees'
+        ),
     )

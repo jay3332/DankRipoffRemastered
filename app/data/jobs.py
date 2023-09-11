@@ -625,6 +625,50 @@ class Jobs:
         },
     )
 
+    cashier = Job(
+        name='Cashier',
+        key='cashier',
+        description='Work as a cashier at a retail store',
+        emoji='<:cash_register:1149505898306359346>',
+        keywords=[
+            'cashier',
+            'cash register',
+            'retail',
+            'customer service',
+            'payment',
+            'price check',
+            'price match',
+            'credit card',
+            'transaction',
+            'receipt',
+            'barcode',
+            'checkout',
+            'bagging area',
+            'coupon',
+            'ka ching',
+        ],
+        phrases=[
+            'welcome to walmart, how may i help you?',
+            'how can i assist you today?',
+            'did you find everything you were looking for?',
+            'would you like to sign up for our rewards program?',
+            'do you have a store loyalty card?',
+            'would you like to round up your total for charity?',
+            'i\'ll need to see some id for this purchase',
+            'i\'m sorry, this coupon is expired',
+            'thank you for shopping with us!',
+            'alright next in line please',
+            'will we be using cash or card today?',
+        ],
+        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        base_salary=950,
+        cooldown=datetime.timedelta(minutes=29),
+        work_experience_required=0,
+        items={
+            None: 1,  # todo
+        },
+    )
+
     mechanic = Job(
         name='Mechanic',
         key='mechanic',
@@ -664,4 +708,47 @@ class Jobs:
         items={
             None: 1,  # todo
         }
+    )
+
+    taxi_driver = Job(
+        name='Taxi Driver',
+        key='taxi_driver',
+        description='Drive people around in a taxi and get paid',
+        emoji='\U0001f695',
+        keywords=[
+            'taxi',
+            'taxi cab',
+            'passenger',
+            'seatbelt',
+            'meter',
+            'route',
+            'destination',
+            'drop off',
+            'pickup',
+            'traffic',
+            'traffic jam',
+            'taxi fare',
+            'arrival time',
+        ],
+        phrases=[
+            'where will we be going today?',
+            'i\'ll have you there in no time',
+            'hop in, i\'ll take you where you need to go',
+            'i\'m gonna need to take a detour',
+            'traffic seems very heavy today',
+            'any stops along the way?',
+            "i'll help you with your luggage",
+            'let me know if the temperature is okay',
+            'thank you for riding with us',
+            'how has your day been so far?'
+            'are you in a hurry?',
+            'please buckle your seatbelt',
+        ],
+        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        base_salary=1100,
+        cooldown=datetime.timedelta(minutes=26),
+        work_experience_required=10,
+        items={
+            None: 1,  # todo
+        },
     )

@@ -14,7 +14,7 @@ of land with 🔒 (locks) on them are not owned by you yet, and you must purchas
 
 ## Buying and Planting Crops
 
-- You must first have crops in your inventory before you can plant them. You can buy crops from the standard item shop \
+- You must first have crops in your inventory before you can plant them. You can browse crops in the standard item shop \
 by running {{/shop}} and then filtering by the **Crop** category. You can then buy crops by running {{/buy}}.
 - Once you have crops in your inventory, you can plant them on your land by running {{/farm plant}}.
 
