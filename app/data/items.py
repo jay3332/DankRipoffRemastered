@@ -464,7 +464,7 @@ class Items:
         # Simulate chances
         simulator = (i for i in range(quantity) if random.random() < 0.02)
         died_on = next(simulator, None)
-        if random.random() < chance:
+        if died_on is not None:
             await record.make_dead(reason='You died due to lactose intolerance from eating cheese.')
             
             if quantity <= 1:
