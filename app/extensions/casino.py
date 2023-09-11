@@ -411,7 +411,7 @@ class Blackjack(UserView):
     async def handle_win(self, message: str) -> discord.Embed:
         self.stop()
         multiplier = random.uniform(0.7, 1.0)
-        adjustment, adjusted_text = Casino.adjust_multiplier(self.record, modification=0.5)
+        adjustment, adjusted_text = Casino.adjust_multiplier(self.record, modification=0.6)
         multiplier += adjustment
         profit = await self.record.add_coins(round(self.bet * multiplier))
 
