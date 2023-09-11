@@ -56,8 +56,8 @@ class Pets:
         energy_per_minute=0.2,
         max_energy=100,
         benefit=lambda level: (
-            f'- +{1 + level * 0.3}% coins from begging\n'
-            f'- +{1 + level * 0.4}% chance to find items while searching'
+            f'- +{1 + level * 0.3:g}% coins from begging\n'
+            f'- +{1 + level * 0.4:g}% chance to find items while searching'
         ),
     )
 
@@ -70,8 +70,8 @@ class Pets:
         energy_per_minute=0.2,
         max_energy=100,
         benefit=lambda level: (
-            f'- +{1 + level * 0.2}% weight on finding rarer items when fishing\n'
-            f'- +{0.8 + level * 0.4}% global XP multiplier'
+            f'- +{1 + level * 0.2:g}% weight on finding rarer items when fishing\n'
+            f'- +{0.8 + level * 0.4:g}% global XP multiplier'
         ),
     )
 
@@ -84,7 +84,7 @@ class Pets:
         energy_per_minute=0.5,
         max_energy=100,
         benefit=lambda level: (
-            f'- +{1 + level * 0.4}% global coin multiplier'
+            f'- +{1 + level * 0.4:g}% global coin multiplier'
         ),
     )
 
@@ -97,7 +97,7 @@ class Pets:
         energy_per_minute=0.2,
         max_energy=100,
         benefit=lambda level: (
-            f'- +{1 + level * 0.5}% global XP multiplier'
+            f'- +{1 + level * 0.5:g}% global XP multiplier'
         ),
     )
 
@@ -110,8 +110,8 @@ class Pets:
         energy_per_minute=0.5,
         max_energy=100,
         benefit=lambda level: (
-            f'- +{1 + level * 0.4}% weight on finding rarer items when digging\n'
-            f'- +{0.5 + level * 0.1}% money back when buying items'
+            f'- +{1 + level * 0.4:g}% weight on finding rarer items when digging\n'
+            f'- +{0.5 + level * 0.1:g}% money back when buying items'
         ),
     )
 
@@ -124,8 +124,8 @@ class Pets:
         energy_per_minute=0.2,
         max_energy=100,
         benefit=lambda level: (
-            f'- +{5 + level * 0.5}% XP multiplier increase from eating cheese\n'
-            f'- +{1 + level * 0.4}% chance to find items while searching'
+            f'- +{5 + level * 0.5:g}% XP multiplier increase from eating cheese\n'
+            f'- +{1 + level * 0.4:g}% chance to find items while searching'
         ),
     )
 
@@ -138,9 +138,9 @@ class Pets:
         energy_per_minute=0.3,
         max_energy=200,
         benefit=lambda level: (
-            f'- +{2 + level * 0.5}% profit from working\n'
-            f'- +{1 + level * 0.25}% chance to get an Uncommon Crate when claiming hourly crates\n'  # TODO
-            f'- +{1 + level * 0.3}% global XP multiplier'
+            f'- +{2 + level * 0.5:g}% profit from working\n'
+            f'- +{1 + level * 0.25:g}% chance to get an Uncommon Crate when claiming hourly crates\n'  # TODO
+            f'- +{1 + level * 0.3:g}% global XP multiplier'
         ),
     )
 
@@ -153,8 +153,8 @@ class Pets:
         energy_per_minute=0.3,
         max_energy=300,
         benefit=lambda level: (
-            f'- +{1 + level * 0.4}% faster harvesting crops\n'
-            f'- {2 + level * 0.25}% chance to sting someone when they try robbing you'
+            f'- +{1 + level * 0.4:g}% faster harvesting crops\n'
+            f'- {2 + level * 0.25:g}% chance to sting someone when they try robbing you'
         ),
         abilities=lambda level: (
             f'- Produce honey (1 per hour) with `.honey` ({Emojis.bolt} 60)'
@@ -170,8 +170,8 @@ class Pets:
         energy_per_minute=0.5,
         max_energy=500,
         benefit=lambda level: (
-            f'- +{2 + level * 0.5}% more coins from beg, search, and crime\n'
-            f'- +{2 + level * 0.6}% global XP multiplier'
+            f'- +{2 + level * 0.5:g}% more coins from beg, search, and crime\n'
+            f'- +{2 + level * 0.6:g}% global XP multiplier'
         ),
         abilities=lambda level: (
             f'- Produce milk (1 per hour) with `.milk` ({Emojis.bolt} 100)'
@@ -188,6 +188,6 @@ class Pets:
         max_energy=400,
         benefit=lambda level: (
             f'- +{2 + level}% global coin multiplier\n'
-            f'- +{2 + level * 0.5}% chance to find rarer wood when chopping trees'
+            f'- +{2 + level * 0.5:g}% chance to find rarer wood when chopping trees'
         ),
     )
