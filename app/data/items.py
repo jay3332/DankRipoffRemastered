@@ -397,7 +397,7 @@ class Items:
         key='banknote',
         name='Banknote',
         emoji='<:banknote:934913052174848040>',
-        description='You can sell these for coins, or use these in order to expand your bank space. Gives between 1,000 to 3,000 bank space.',
+        description='You can sell these for coins, or use these in order to expand your bank space. Gives between 1,500 to 3,500 bank space.',
         sell=10000,
         rarity=ItemRarity.uncommon,
         dispose=True,
