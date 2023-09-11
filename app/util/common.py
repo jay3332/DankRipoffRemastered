@@ -12,7 +12,7 @@ from typing import (
     Callable,
     Iterable, Iterator,
     Mapping,
-    Optional,
+    NamedTuple, Optional,
     ParamSpec,
     TYPE_CHECKING,
     Type,
@@ -96,6 +96,33 @@ def calculate_level(exp: int, *, base: int = 1000, factor: float = 1.45, precisi
     level = 0
 
     while exp > (requirement := level_requirement_for(level, **kwargs)):
+        exp -= requirement
+        level += 1
+
+    return level, exp, requirement
+
+
+class CubicCurve(NamedTuple):
+    a: float = 0
+    b: float = 0
+    c: float = 0
+    d: float = 0
+
+    def __call__(self, x: float) -> float:
+        return self.a * x ** 3 + self.b * x ** 2 + self.c * x + self.d
+
+
+DEFAULT_CURVE = CubicCurve(0.25, 11.75, 88)
+
+
+def level_requirement_v2_for(level: int, *, curve: CubicCurve = DEFAULT_CURVE, precision: int = 50) -> int:
+    return math.ceil(curve(level) / precision) * precision
+
+
+def calculate_level_v2(exp: int, *, curve: CubicCurve = DEFAULT_CURVE, precision: int = 50) -> tuple[int, int, int]:
+    level = 0
+
+    while exp > (requirement := level_requirement_v2_for(level, curve=curve, precision=precision)):
         exp -= requirement
         level += 1
 

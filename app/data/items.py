@@ -410,7 +410,7 @@ class Items:
         await asyncio.sleep(random.uniform(2, 4))
         record = await ctx.db.get_user_record(ctx.author.id)
 
-        profit = random.randint(1000 * quantity, 3000 * quantity)
+        profit = sum(random.randint(1500, 3500) for _ in range(quantity))  # simulate random distribution
         additional = int(profit * record.prestige * 0.1)
         await record.add(max_bank=profit + additional)
 
@@ -451,7 +451,7 @@ class Items:
         return f'{quantity:,} slices of {item.name}'
 
     @cheese.to_use
-    async def use_cheese(self, ctx: Context, item: Item, quantity: int) -> None:
+    async def use_cheese(self, ctx: Context, item: Item, quantity: int) -> OverrideQuantity | None:
         if quantity > 100:
             raise ItemUsageError('You can only eat up to 100 slices of cheese at a time.')
 

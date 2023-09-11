@@ -21,7 +21,7 @@ from app.data.jobs import Job, Jobs
 from app.data.pets import Pet, Pets
 from app.data.skills import Skill, Skills
 from app.database.migrations import Migrator
-from app.util.common import calculate_level, get_by_key, image_url_from_emoji, pick
+from app.util.common import calculate_level, calculate_level_v2, get_by_key, image_url_from_emoji, pick
 from config import Colors, DatabaseConfig, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
@@ -1234,7 +1234,6 @@ class JobProvider(NamedTuple):
 class UserRecord(BaseRecord):
     """Stores data about a user."""
 
-    LEVELING_CURVE = dict(base=100, factor=1.22)
     ALCOHOL_ACTIVE_DURATION = datetime.timedelta(hours=2)
 
     def __init__(self, user_id: int, *, db: Database) -> None:
@@ -1424,7 +1423,7 @@ class UserRecord(BaseRecord):
 
     @property
     def level_data(self) -> tuple[int, int, int]:
-        return calculate_level(self.total_exp, **self.LEVELING_CURVE)
+        return calculate_level_v2(self.total_exp)
 
     @property
     def level(self) -> int:
