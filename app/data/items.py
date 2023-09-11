@@ -14,7 +14,7 @@ from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
 from app.data.pets import Pet, Pets
-from app.util.common import get_by_key, humanize_duration, pluralize
+from app.util.common import get_by_key, humanize_duration, ordinal, pluralize
 from config import Emojis
 
 if TYPE_CHECKING:
@@ -441,6 +441,15 @@ class Items:
         energy=75,
     )
 
+    CHEESE_DEATH_MESSAGE = 'eat the cheese only to find out that you are lactose intolerant, and now you\'re dead.'
+
+    @staticmethod
+    def _format_in_slices(item: Item, quantity: int) -> str:
+        if quantity == 1:
+            return f'a slice of {item.name}'
+
+        return f'{quantity:,} slices of {item.name}'
+
     @cheese.to_use
     async def use_cheese(self, ctx: Context, item: Item, quantity: int) -> None:
         if quantity > 100:
@@ -448,11 +457,7 @@ class Items:
 
         record = await ctx.db.get_user_record(ctx.author.id)
 
-        if quantity == 1:
-            readable = f'a slice of {item.name}'
-        else:
-            readable = f'{quantity:,} slices of {item.name}'
-
+        readable = self._format_in_slices(item, quantity)
         original = await ctx.reply(f'{item.emoji} Eating {readable}...')
         await asyncio.sleep(random.uniform(2, 4))
 
@@ -463,26 +468,35 @@ class Items:
             await record.make_dead(reason='You died due to lactose intolerance from eating cheese.')
             
             if quantity <= 1:
-                await original.edit(
-                    content=f'{item.emoji} You eat the cheese only to find out that you are lactose intolerant, and now you\'re dead.'
-                )
+                await original.edit(content=f'{item.emoji} You {self.CHEESE_DEATH_MESSAGE}')
                 return
 
-        working_quantity = died_on + 1 if died_on is not None else quantity
-        gain = random.uniform(0.001 * quantity, 0.01 * quantity)
+        used_quantity = died_on + 1 if died_on is not None else quantity
+        working_quantity = died_on if died_on is not None else quantity
+        # simulate random distrobution
+        gain = sum(random.uniform(0.001, 0.01) for _ in range(working_quantity))
+
+        readable = self._format_in_slices(working_quantity)
         content = dedent(f'''
             {item.emoji} You ate {readable} and gained a **{gain:.02%}** EXP multiplier.
             You now have a **{record.base_exp_multiplier:.02%}** base EXP multiplier.
         ''')
+
+        if died_on is not None:
+            content += (
+                f'\n\N{WARNING SIGN} On eating your **{ordinal(used_quantity)}** slice of cheese, you {self.CHEESE_DEATH_MESSAGE}'
+            )
+
         pets = await record.pet_manager.wait()
         if mouse := pets.get_active_pet(Pets.mouse):
             multiplier = 0.05 + mouse.level * 0.005
             gain += (extra := gain * multiplier)
-            content += f'\n*Your **{Pets.mouse.display}** gave you extra **{extra:.03%}** EXP multiplier!*'
+            content += f'\n{Pets.mouse.emoji} Your mouse gave you extra **{extra:.03%}** EXP multiplier!'
 
         # 0.1% to 1% per slice
         await record.add(exp_multiplier=gain)
         await original.edit(content=content)
+        return OverrideQuantity(used_quantity)
 
     cigarette = Item(
         type=ItemType.tool,
