@@ -405,7 +405,7 @@ class Items:
 
     @banknote.to_use
     async def use_banknote(self, ctx: Context, item: Item, quantity: int) -> None:
-        message = await ctx.message.reply(pluralize(f'{item.emoji} Using {quantity} banknote(s)...'))
+        message = await ctx.reply(pluralize(f'{item.emoji} Using {quantity} banknote(s)...'))
 
         await asyncio.sleep(random.uniform(2, 4))
         record = await ctx.db.get_user_record(ctx.author.id)
