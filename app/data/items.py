@@ -484,7 +484,7 @@ class Items:
 
         if died_on is not None:
             content += (
-                f'\n\N{WARNING SIGN} On eating your **{ordinal(used_quantity)}** slice of cheese, you {self.CHEESE_DEATH_MESSAGE}'
+                f'\n\N{WARNING SIGN}\ufe0f On eating your **{ordinal(used_quantity)}** slice of cheese, you {self.CHEESE_DEATH_MESSAGE}'
             )
 
         pets = await record.pet_manager.wait()
