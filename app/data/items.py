@@ -75,6 +75,10 @@ class NetMetadata(NamedTuple):
     priority: int
 
 
+class OverrideQuantity(NamedTuple):
+    quantity: int
+
+
 @dataclass
 class Item(Generic[T]):
     """Stores data about an item."""
@@ -169,10 +173,13 @@ class Item(Generic[T]):
             quantity = 1
 
         try:
-            await coro
+            result = await coro
         except ItemUsageError as exc:
             await ctx.send(exc, reference=ctx.message)
             return 0
+        else:
+            if isinstance(result, OverrideQuantity):
+                return result.quantity
 
         return quantity
 
@@ -426,8 +433,7 @@ class Items:
         emoji='<:cheese:937157036737724477>',
         description=(
             'A lucsious slice of cheese. Eating (using) these will increase your permanent EXP multiplier. '
-            'There is a super small chance (2% per slice of cheese) you could die from lactose intolerance, though.\n\n'
-            'It is preferred to use these individually rather than in bulk.'
+            'There is a super small chance (2% per slice of cheese) you could die from lactose intolerance, though.'
         ),
         price=7500,
         buyable=True,
@@ -437,8 +443,8 @@ class Items:
 
     @cheese.to_use
     async def use_cheese(self, ctx: Context, item: Item, quantity: int) -> None:
-        if quantity > 10:
-            raise ItemUsageError('You can only eat up to 10 slices of cheese at a time.')
+        if quantity > 100:
+            raise ItemUsageError('You can only eat up to 100 slices of cheese at a time.')
 
         record = await ctx.db.get_user_record(ctx.author.id)
 
@@ -450,15 +456,19 @@ class Items:
         original = await ctx.reply(f'{item.emoji} Eating {readable}...')
         await asyncio.sleep(random.uniform(2, 4))
 
-        chance = 1 - 0.98 ** quantity
+        # Simulate chances
+        simulator = (i for i in range(quantity) if random.random() < 0.02)
+        died_on = next(simulator, None)
         if random.random() < chance:
             await record.make_dead(reason='You died due to lactose intolerance from eating cheese.')
-            await original.edit(
-                content=f'{item.emoji} You eat the cheese only to find out that you are lactose intolerant, and now you\'re dead.'
-            )
+            
+            if quantity <= 1:
+                await original.edit(
+                    content=f'{item.emoji} You eat the cheese only to find out that you are lactose intolerant, and now you\'re dead.'
+                )
+                return
 
-            return
-
+        working_quantity = died_on + 1 if died_on is not None else quantity
         gain = random.uniform(0.001 * quantity, 0.01 * quantity)
         content = dedent(f'''
             {item.emoji} You ate {readable} and gained a **{gain:.02%}** EXP multiplier.
