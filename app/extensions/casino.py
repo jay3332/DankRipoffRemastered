@@ -581,7 +581,7 @@ class Casino(Cog):
     def adjust_multiplier(record: UserRecord, *, modification: float = 1.0) -> tuple[float, str]:
         expansion = Emojis.Expansion
         if expiry := record.alcohol_expiry:
-            multiplier = 0.5 * modification
+            multiplier = 0.25 * modification
             return (
                 multiplier,
                 f'\n{expansion.first} applied +{multiplier:.0%} multiplier from {Items.alcohol.emoji} Alcohol'

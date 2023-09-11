@@ -609,7 +609,7 @@ class Miscellaneous(Cog):
 
     async def _vote_button_callback(self, vote_again: datetime.datetime, interaction: TypedInteraction) -> None:  # noqa
         await interaction.response.send_message(
-            'Voting reminders are been disabled for now (they\'re a bit buggy).', ephemeral=True,
+            'Voting reminders have been disabled for now (they\'re a bit buggy).', ephemeral=True,
         )
         # FIXME
         # await self.bot.timers.create(

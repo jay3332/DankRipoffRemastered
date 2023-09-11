@@ -253,7 +253,7 @@ class Items:
         description=(
             'Intoxicate yourself with alcohol! Drinking alcohol will make you drunk for two hours.\n\nWhile drunk, you will:\n'
             '- have a +25% coin multiplier,\n'
-            '- have a +50% gambling multiplier,\n'
+            '- have a +25% gambling multiplier,\n'
             '- have a +15% chance to successfully rob others,\n'
             '- have a +15% chance to successfully shoot others, **but:**\n'
             '- not be able to work,\n'
