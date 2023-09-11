@@ -476,7 +476,7 @@ class Items:
         # simulate random distrobution
         gain = sum(random.uniform(0.001, 0.01) for _ in range(working_quantity))
 
-        readable = self._format_in_slices(working_quantity)
+        readable = self._format_in_slices(item, working_quantity)
         content = dedent(f'''
             {item.emoji} You ate {readable} and gained a **{gain:.02%}** EXP multiplier.
             You now have a **{record.base_exp_multiplier:.02%}** base EXP multiplier.
