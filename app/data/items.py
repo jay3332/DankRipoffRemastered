@@ -467,7 +467,7 @@ class Items:
         if died_on is not None:
             await record.make_dead(reason='You died due to lactose intolerance from eating cheese.')
             
-            if quantity <= 1:
+            if quantity <= 1 or died_on == 0:
                 await original.edit(content=f'{item.emoji} You {self.CHEESE_DEATH_MESSAGE}')
                 return
 
