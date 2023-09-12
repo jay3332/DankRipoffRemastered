@@ -1960,7 +1960,7 @@ class RobbingKeypad(discord.ui.View):
 
 class FindItemButton(discord.ui.Button['FindItemView']):
     def __init__(self, item: Item, row: int) -> None:
-        super().__init__(label=item.emoji, style=discord.ButtonStyle.secondary, row=row)
+        super().__init__(emoji=item.emoji, style=discord.ButtonStyle.secondary, row=row)
         self.item: Item = item
 
     async def callback(self, interaction: TypedInteraction) -> None:
