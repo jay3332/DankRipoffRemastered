@@ -14,11 +14,12 @@ AnyUser: TypeAlias = discord.User | discord.Member
 
 
 class OwnerBypassButton(discord.ui.Button['UserView']):
-    def __init__(self) -> None:
+    def __init__(self, parent: UserView) -> None:
+        self.parent: UserView = parent
         super().__init__(style=discord.ButtonStyle.primary, label='Enable Owner Bypass')
 
     async def callback(self, interaction: TypedInteraction) -> None:
-        self.view._user_view_owner_bypass = True
+        self.parent._user_view_owner_bypass = True
         await interaction.response.edit_message(content='Enabled owner bypass. You may now use the view.', view=None)
 
 
@@ -31,14 +32,16 @@ class UserView(discord.ui.View):
     async def interaction_check(self, interaction: TypedInteraction) -> bool:
         if interaction.user != self.user:
             if await interaction.client.is_owner(interaction.user):
-                if not self._user_view_owner_bypass:
-                    view = discord.ui.View(timeout=30).add_item(OwnerBypassButton())
-                    await interaction.response.send_message(
-                        content='Enable owner bypass to use this component view.',
-                        ephemeral=True,
-                        view=view,
-                    )
-                return self._user_view_owner_bypass
+                if self._user_view_owner_bypass:
+                    return True
+
+                view = discord.ui.View(timeout=30).add_item(OwnerBypassButton(self))
+                await interaction.response.send_message(
+                    content='Enable owner bypass to use this component view.',
+                    ephemeral=True,
+                    view=view,
+                )
+                return False
 
             message = f'This component view is owned by {self.user.mention}, therefore you cannot use it.'
             await interaction.response.send_message(content=message, ephemeral=True)
