@@ -623,7 +623,8 @@ class Casino(Cog):
             adjustment, adjusted_text = self.adjust_multiplier(record)
             multiplier += adjustment
 
-            profit = await record.add(wallet=round(bet * multiplier))
+            profit = round(bet * multiplier)
+            await record.add(wallet=profit)
 
             embed.colour = Colors.success
             embed.set_author(name='Winner!', icon_url=ctx.author.display_avatar)
