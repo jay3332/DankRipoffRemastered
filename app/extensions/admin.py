@@ -245,12 +245,14 @@ class Admin(Cog):
         record = await ctx.db.get_user_record(user.id)
 
         if isinstance(entity, int):
+            verb = 'Spawned' if entity >= 0 else 'Removed'
             await record.add(wallet=entity)
-            return f'Spawned {Emojis.coin} **{entity:,}** in {user.mention}\'s wallet.', REPLY
+            return f'{verb} {Emojis.coin} **{abs(entity):,}** in {user.mention}\'s wallet.', REPLY
 
         item, quantity = entity
+        verb = 'Spawned' if quantity >= 0 else 'Removed'
         await record.inventory_manager.add_item(item, quantity)
-        return f'Spawned {item.get_sentence_chunk(quantity)} in {user.mention}\'s inventory.', REPLY
+        return f'{verb} {item.get_sentence_chunk(abs(quantity))} in {user.mention}\'s inventory.', REPLY
 
 
 setup = Admin.simple_setup
