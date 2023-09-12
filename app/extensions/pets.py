@@ -691,7 +691,6 @@ class FeedCustomModal(discord.ui.Modal):
 
         await self.parent.do_feed(interaction, quantity)
 
-
 class FeedView(UserView):
     def __init__(self, ctx: Context, record: UserRecord, entry: PetRecord) -> None:
         super().__init__(ctx.author, timeout=60)
@@ -701,7 +700,12 @@ class FeedView(UserView):
         self.entry: PetRecord = entry
         self.items: list[Item] = sorted(
             (item for item in Items.all() if item.energy),
-            key=lambda item: (self.inventory.cached.quantity_of(item) <= 0, item.energy),
+            key=lambda item: (
+                (quantity := self.inventory.cached.quantity_of(item)) > 0,
+                -item.rarity.value,
+                quantity * item.energy,
+            ),
+            reverse=True,
         )
         self.index: int = 0
         self._color = Colors.primary
