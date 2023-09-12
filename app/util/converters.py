@@ -162,7 +162,7 @@ def get_amount(total: float, minimum: int, maximum: int, arg: str) -> int:
     if amount > total:
         raise NotEnough(amount)
 
-    if amount <= 0:
+    if minimum >= 0 and amount <= 0:
         if total == 0:
             raise ZeroQuantity()
         raise NotAnInteger()
