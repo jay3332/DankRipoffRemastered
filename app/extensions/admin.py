@@ -232,6 +232,10 @@ class Admin(Cog):
         """Developer-only commands."""
         await ctx.send_help(ctx.command)
 
+    @staticmethod
+    def _spawn_verb_prep(amount: int) -> tuple[str, str]:
+        return ('Spawned', 'in') if amount >= 0 else ('Removed', 'from')
+
     @developer.command('spawn', aliases={'add', '+', 'give'})
     async def dev_spawn(
         self,
@@ -245,14 +249,14 @@ class Admin(Cog):
         record = await ctx.db.get_user_record(user.id)
 
         if isinstance(entity, int):
-            verb = 'Spawned' if entity >= 0 else 'Removed'
+            verb, preposition = self._spawn_verb_prep(entity)
             await record.add(wallet=entity)
-            return f'{verb} {Emojis.coin} **{abs(entity):,}** in {user.mention}\'s wallet.', REPLY
+            return f'{verb} {Emojis.coin} **{abs(entity):,}** {preposition} {user.mention}\'s wallet.', REPLY
 
         item, quantity = entity
-        verb = 'Spawned' if quantity >= 0 else 'Removed'
+        verb, preposition = self._spawn_verb_prep(quantity)
         await record.inventory_manager.add_item(item, quantity)
-        return f'{verb} {item.get_sentence_chunk(abs(quantity))} in {user.mention}\'s inventory.', REPLY
+        return f'{verb} {item.get_sentence_chunk(abs(quantity))} {preposition} {user.mention}\'s inventory.', REPLY
 
 
 setup = Admin.simple_setup
