@@ -474,7 +474,8 @@ class Items:
         used_quantity = died_on + 1 if died_on is not None else quantity
         working_quantity = died_on if died_on is not None else quantity
         # simulate random distrobution
-        gain = sum(random.uniform(0.001, 0.01) for _ in range(working_quantity))
+        if gain := sum(random.uniform(0.001, 0.01) for _ in range(working_quantity)):
+            await record.add(exp_multiplier=gain)
 
         readable = self._format_in_slices(item, working_quantity)
         content = dedent(f'''
@@ -493,8 +494,6 @@ class Items:
             gain += (extra := gain * multiplier)
             content += f'\n{Pets.mouse.emoji} Your mouse gave you extra **{extra:.03%}** EXP multiplier!'
 
-        # 0.1% to 1% per slice
-        await record.add(exp_multiplier=gain)
         await original.edit(content=content)
         return OverrideQuantity(used_quantity)
 

@@ -7,7 +7,7 @@ Pets must first be **equipped** in order for their boosts/abilities/attacks to a
 
 ## Limits
 
-- You may only eqiup up to three pets at a time.
+- You may only equip up to three pets at a time.
   - This limit will be upgradable in the future.
 - You are limited to 5 *pet swaps* per *2 hours*.
   - Equipping or unequipping a pet counts as *0.5 pet swaps*.
