@@ -980,7 +980,7 @@ class Profit(Cog):
             game = FindItemView(ctx, rarest, avoid=[ItemType.fish])
 
             yield (
-                f'{ctx.author.mention}, Looks like one of the fish you caught was pretty heavy! Click on the **{rarest.name}** '
+                f'{ctx.author.mention}, Looks like one of the fish you caught was pretty heavy! Click on the **{rarest.name}**'
                 ' to wind up your fishing pole before it breaks!',
                 game,
                 EDIT,
