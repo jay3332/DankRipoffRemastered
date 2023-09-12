@@ -1004,10 +1004,10 @@ class Profit(Cog):
                     yield (
                         f'{initial}, and the fish jumped out of the water and bit your head off. '
                         f'You died, and also lost your fishing pole.'
-                    ), view, REPLY
+                    ), view, EDIT
                     return
 
-                yield f'{initial}, and your fishing pole snapped in half. Nice one.', view, REPLY
+                yield f'{initial}, and your fishing pole snapped in half. Nice one.', view, EDIT
                 return
 
         async with ctx.db.acquire() as conn:
