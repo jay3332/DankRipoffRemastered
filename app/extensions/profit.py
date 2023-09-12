@@ -982,7 +982,7 @@ class Profit(Cog):
             yield (
                 f'{ctx.author.mention}, Looks like one of the fish you caught was pretty heavy! Click on the **{rarest.name}** '
                 ' to wind up your fishing pole before it breaks!',
-                view,
+                game,
                 EDIT,
             )
             await game.wait()
