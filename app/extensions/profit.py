@@ -1982,15 +1982,11 @@ class FindItemView(UserView):
 
         super().__init__(ctx.author, timeout=15)
 
-        position = random.randint(0, 7)
-        candidates = random.sample([item for item in Items.all() if item.type not in self.avoid], k=7)
-        for i in range(8):
-            if i == position:
-                self.add_item(FindItemButton(item, row=i // 4))
-                i -= 1
-                continue
-
-            self.add_item(FindItemButton(candidates[i], row=i // 4))
+        candidates = random.sample([item for item in Items.all() if item.type not in self.avoid], k=8)
+        candidates[random.randrange(0, len(candidates))] = item
+        for i, candidate in enumerate(candidates):
+            self.add_item(FindItemButton(candidate, row=i // 4))
+            continue
 
     async def on_timeout(self) -> None:
         for button in self.children:
