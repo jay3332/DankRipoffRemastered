@@ -28,7 +28,7 @@ from app.core import (
     user_max_concurrency
 )
 from app.core.helpers import EPHEMERAL, cooldown_message
-from app.data.items import Item, Items
+from app.data.items import Item, ItemType, Items
 from app.data.pets import Pet, Pets
 from app.data.skills import RobberyTrainingButton
 from app.database import NotificationData, RobFailReason, UserRecord
@@ -934,16 +934,6 @@ class Profit(Cog):
         Items.vibe_fish,
     }
 
-    FISHING_PROMPTS = (
-        "that's a big fish",
-        "what a heavy one",
-        "this must be something special",
-        "mom, get the camera!",
-        "what must this be?",
-        "fish fish fish",
-        "my fishing pole is about to break",
-    )
-
     @command(aliases={'f', 'cast', 'fishing', 'fishingpole'}, hybrid=True)
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
@@ -985,22 +975,27 @@ class Profit(Cog):
             return
 
         if any(f in self.RARE_FISH for f in fish):
-            message = random.choice(self.FISHING_PROMPTS)
+            # what's the rarest fish in the bunch?
+            rarest: Item = max(fish, key=lambda f: f.sell)
+            game = FindItemView(ctx, rarest, avoid=[ItemType.fish])
 
             yield (
-                f'Looks like one of the fish you caught was pretty heavy! Type `{insert_random_u200b(message)}` to '
-                f'wind up your fishing pole before it breaks!',
+                f'{ctx.author.mention}, Looks like one of the fish you caught was pretty heavy! Click on the **{rarest.name}** '
+                ' to wind up your fishing pole before it breaks!',
+                view,
                 EDIT,
             )
+            await game.wait()
 
-            try:
-                await ctx.bot.wait_for(
-                    'message',
-                    check=lambda m: m.author == ctx.author and m.channel == ctx.channel and m.content.lower() == message,
-                    timeout=20,
+            if not game.winner:
+                initial = (
+                    "You couldn't wind up your fishing pole in time"
+                    if game.clicked_on is None
+                    else (
+                        'You clicked on the wrong item '
+                        f'({game.clicked_on.get_display_name(bold=True)} instead of {rarest.get_display_name(bold=True)})'
+                    )
                 )
-            except asyncio.TimeoutError:
-                initial = "You couldn't wind up your fishing pole in time"
                 await inventory.add_item('fishing_pole', -1)
 
                 if random.random() < 0.15:
@@ -1961,6 +1956,45 @@ class RobbingKeypad(discord.ui.View):
         self.caught = True
         self.dangling_interaction = interaction
         self.stop()
+
+
+class FindItemButton(discord.ui.Button['FindItemView']):
+    def __init__(self, item: Item, row: int) -> None:
+        super().__init__(label=item.emoji, style=discord.ButtonStyle.secondary, row=row)
+        self.item: Item = item
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.view.winner = self.view.item is self.item
+        self.view.clicked_on = self.item
+        for button in self.view.children:
+            button.disabled = True
+
+        self.view.stop()
+
+
+class FindItemView(UserView):
+    def __init__(self, ctx: Context, item: Item, avoid: ItemType | Sequence[ItemType] | None = None) -> None:
+        self.winner: bool = False
+        self.clicked_on: Item | None = None
+        self.ctx: Context = ctx
+        self.item: Item = item
+        self.avoid: set[ItemType] = set(avoid) if avoid else {item.type}
+
+        super().__init__(ctx.author, timeout=15)
+
+        position = random.randint(0, 7)
+        candidates = random.sample([item for item in Items.all() if item.type not in self.avoid], k=7)
+        for i in range(8):
+            if i == position:
+                self.add_item(FindItemButton(item, row=i // 4))
+                i -= 1
+                continue
+
+            self.add_item(FindItemButton(candidates[i], row=i // 4))
+
+    async def on_timeout(self) -> None:
+        for button in self.children:
+            button.disabled = True
 
 
 class DivingView(UserView):
