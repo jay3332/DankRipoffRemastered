@@ -1466,7 +1466,7 @@ class UserRecord(BaseRecord):
         pets = self.pet_manager
         if cat := pets.get_active_pet(Pets.cat):
             level = cat.level  # Somewhat expensive to calculate, store it first
-            yield Multiplier(0.008 + level * 0.003, f'{Pets.cat.display} (Level {level})')
+            yield Multiplier(0.008 + level * 0.004, f'{Pets.cat.display} (Level {level})')
 
         if bunny := pets.get_active_pet(Pets.bunny):
             level = bunny.level

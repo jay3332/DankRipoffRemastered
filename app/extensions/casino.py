@@ -90,7 +90,8 @@ class ScratchButton(discord.ui.Button['ScratchView']):
 
             else:
                 self.view.embed.clear_fields()
-                gain = await self.view.record.add_coins(self.view.bet * self.view.multiplier)
+                gain = self.view.bet * self.view.multiplier
+                await self.view.record.add(wallet=gain)
                 profit = gain - self.view.bet
 
                 self.view.embed.colour = Colors.success if profit > 0 else Colors.warning
@@ -413,7 +414,7 @@ class Blackjack(UserView):
         multiplier = random.uniform(0.7, 1.0)
         adjustment, adjusted_text = Casino.adjust_multiplier(self.record, modification=0.6)
         multiplier += adjustment
-        profit = await self.record.add_coins(round(self.bet * multiplier))
+        profit = await self.record.add(wallet=round(self.bet * multiplier))
 
         embed = self.make_embed()
         embed.colour = Colors.success
@@ -622,7 +623,8 @@ class Casino(Cog):
             adjustment, adjusted_text = self.adjust_multiplier(record)
             multiplier += adjustment
 
-            profit = await record.add_coins(round(bet * multiplier))
+            profit = round(bet * multiplier)
+            await record.add(wallet=profit)
 
             embed.colour = Colors.success
             embed.set_author(name='Winner!', icon_url=ctx.author.display_avatar)
