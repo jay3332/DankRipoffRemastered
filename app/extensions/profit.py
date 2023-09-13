@@ -1970,6 +1970,7 @@ class FindItemButton(discord.ui.Button['FindItemView']):
             button.disabled = True
 
         self.view.stop()
+        await interaction.response.defer()
 
 
 class FindItemView(UserView):

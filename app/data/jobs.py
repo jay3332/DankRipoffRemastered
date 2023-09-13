@@ -28,11 +28,12 @@ class MinigameFailure(Exception):
 class Minigame(NamedTuple):
     name: str
     callback: MinigameCallback
+    multiplier: float = 1.0
 
 
-def minigame(name: str) -> Callable[[MinigameCallback], Minigame]:
+def minigame(name: str, *, multiplier: float = 1.0) -> Callable[[MinigameCallback], Minigame]:
     def decorator(func: MinigameCallback) -> Minigame:
-        return Minigame(name, func)
+        return Minigame(name, func, multiplier)
 
     return decorator
 
@@ -428,6 +429,107 @@ async def tic_tac_toe(ctx: Context, embed: discord.Embed, _job: Job) -> discord.
     return message
 
 
+class SlidingGameButton(discord.ui.Button['SlidingGame']):
+    def __init__(self, parent: SlidingGame, *, index: int, row: int) -> None:
+        super().__init__()
+        self.parent: SlidingGame = parent
+        self.index = index
+        self.row = row
+        self.update()
+
+    @property
+    def value(self) -> int | None:
+        return self.parent.board[self.index]
+
+    def update(self) -> None:
+        self.label = str(self.value) if self.value is not None else '\u200b'
+        self.style = discord.ButtonStyle.primary if self.value is not None else discord.ButtonStyle.secondary
+        empty_index = self.parent.board.index(None)
+
+        on_row = self.index // self.parent.width == empty_index // self.parent.width
+        has_empty_neighbor = self.value is not None and (
+            self.index - 1 == empty_index and on_row
+            or self.index + 1 == empty_index and on_row
+            or self.index - self.parent.width == empty_index
+            or self.index + self.parent.width == empty_index
+        )
+        # disable if not neighbors with empty cell
+        self.disabled = not has_empty_neighbor
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        board = self.parent.board
+        empty_index = board.index(None)
+        board[self.index], board[empty_index] = board[empty_index], board[self.index]
+        # update self and surrounding buttons
+        for button in self.parent.children:
+            button.update()  # type: ignore
+
+        if board == self.parent.goal:
+            for button in self.parent.children:
+                button.disabled = True
+            self.parent.winner = True
+            self.parent.stop()
+
+        await interaction.response.edit_message(view=self.parent)
+
+
+class SlidingGame(UserView):
+    def __init__(self, ctx: Context, *, width: int = 3, height: int = 3, easy: bool = False) -> None:
+        super().__init__(ctx.author, timeout=60)
+        self.ctx = ctx
+        self.width = width
+        self.winner: bool = False
+
+        self.board: list[int | None] = list(range(1, width * height))
+        self.board.append(None)
+        self.goal: list[int | None] = self.board.copy()
+        while self.board == self.goal:
+            random.shuffle(self.board)
+
+        assert not easy or width == height == 3, 'easy mode only works with 3x3 boards'
+        # swap some cells to their optimal positions
+        if easy:
+            self.swap(0, 1)
+            self.swap(1, 3)
+            self.swap(4, 2)
+
+        for i in range(width * height):
+            self.add_item(SlidingGameButton(self, index=i, row=i // width))
+
+    def swap(self, index: int, value: int) -> None:
+        idx = self.board.index(value)
+        self.board[index], self.board[idx] = value, self.board[index]
+
+
+@minigame('Sliding Game', multiplier=1.5)
+async def sliding_game(ctx: Context, embed: discord.Embed, _job: Job) -> discord.Message:
+    game = SlidingGame(ctx, easy=True)
+    embed.add_field(
+        name='Sliding Game',
+        value=(
+            'Slide the numbers to get them in order! You have 60 seconds.\n'
+            '*Hint: Click on an enabled button to swap it with the empty cell*'
+        ),
+    )
+
+    message = await ctx.maybe_edit(embed=embed, view=game)
+    try:
+        await asyncio.wait_for(game.wait(), timeout=60)
+    except asyncio.TimeoutError:
+        game.winner = False
+        game.stop()
+
+    if not game.winner:
+        for button in game.children:
+            button.disabled = True
+            button.style = discord.ButtonStyle.danger
+
+        await ctx.maybe_edit(view=game)
+        raise MinigameFailure("You didn't finish the game in time, so you failed work for today.")
+
+    return message
+
+
 class Job(NamedTuple):
     name: str
     key: str
@@ -660,7 +762,7 @@ class Jobs:
             'alright next in line please',
             'will we be using cash or card today?',
         ],
-        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        minigames=[unscramble, retype, tic_tac_toe, logic_game, sliding_game],
         base_salary=950,
         cooldown=datetime.timedelta(minutes=29),
         work_experience_required=0,
@@ -701,7 +803,7 @@ class Jobs:
             'looks like a coolant leak. i\'ll patch it up',
             'the check engine light is on, what could be the problem?'
         ],
-        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        minigames=[unscramble, retype, tic_tac_toe, logic_game, sliding_game],
         base_salary=1000,
         cooldown=datetime.timedelta(minutes=28),
         work_experience_required=5,
@@ -740,11 +842,11 @@ class Jobs:
             "i'll help you with your luggage",
             'let me know if the temperature is okay',
             'thank you for riding with us',
-            'how has your day been so far?'
+            'how has your day been so far?',
             'are you in a hurry?',
             'please buckle your seatbelt',
         ],
-        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        minigames=[unscramble, retype, tic_tac_toe, logic_game, sliding_game],
         base_salary=1100,
         cooldown=datetime.timedelta(minutes=26),
         work_experience_required=10,

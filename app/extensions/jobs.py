@@ -148,9 +148,16 @@ class JobsCog(Cog, name='Jobs'):
         embed.set_author(name=f'{ctx.author.name}: Work', icon_url=ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(info.emoji))
 
-        disclaimer = ' (before multipliers)' if record.coin_multiplier > 1 else ''
+        multiplier_mention = ctx.bot.tree.get_app_command('multiplier').mention
+        disclaimer = f' with +{record.coin_multiplier:.1%} {multiplier_mention}' if record.coin_multiplier > 1 else ''
+        extra = (
+            f'\n{Emojis.Expansion.standalone} *This is a harder task!* '
+            f'You will get {minigame.multiplier - 1:.0%} more coins.'
+        ) if minigame.multiplier > 1 else ''
+
+        salary = round(record.job.salary * minigame.multiplier)
         embed.description = (
-            f'Expected salary: {Emojis.coin} **{record.job.salary:,}**{disclaimer}\n'
+            f'Expected salary{disclaimer}: {Emojis.coin} **{salary * record.coin_multiplier:,.0f}**{extra}\n'
             'To work, complete the minigame below'
         )
 
@@ -175,11 +182,10 @@ class JobsCog(Cog, name='Jobs'):
             await record.add(job_hours=1, work_experience=1, job_salary=raise_amount, connection=conn)
             await record.update(job_cooldown_expires_at=expiry, connection=conn)
             raise_text = (
-                f'\n\u2934\ufe0f **You got a raise!** Your salary is now {Emojis.coin} **{record.job.salary:,}**.'
+                f'\n\u2934\ufe0f **You got a raise!** Your base salary is now {Emojis.coin} **{record.job.salary:,}**.'
                 if raise_amount else ''
             )
 
-            salary = record.job.salary
             pets = await record.pet_manager.wait()
             if duck := pets.get_active_pet(Pets.duck):
                 multiplier = 0.02 + duck.level * 0.005
@@ -191,7 +197,6 @@ class JobsCog(Cog, name='Jobs'):
             extra = profit - salary
             if extra:
                 multiplier = record.coin_multiplier - 1
-                multiplier_mention = ctx.bot.tree.get_app_command('multiplier').mention
                 breakdown.append(
                     f'+{multiplier:.1%} Coin Multiplier ({multiplier_mention}): {Emojis.coin} **+{extra:,}**',
                 )
