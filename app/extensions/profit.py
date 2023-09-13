@@ -1060,9 +1060,9 @@ class Profit(Cog):
         mapping = shovel.metadata.copy()
         pets = await record.pet_manager.wait()
         if hamster := pets.get_active_pet(Pets.hamster):
-            extra = 0.01 + hamster.level * 0.004
+            extra = 1.01 + hamster.level * 0.004
             for item in self.RARE_DIG_ITEMS:
-                mapping[item] += extra
+                mapping[item] *= extra
 
         items = random.choices(list(mapping), weights=list(mapping.values()), k=7)
         items = {item: items.count(item) for item in set(items) if item is not None}
