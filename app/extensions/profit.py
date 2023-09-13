@@ -955,9 +955,9 @@ class Profit(Cog):
         mapping = mapping.copy()
         pets = await record.pet_manager.wait()
         if cat := pets.get_active_pet(Pets.cat):
-            extra = 0.01 + cat.level * 0.002
+            extra = 1.01 + cat.level * 0.002
             for item in self.RARE_FISH:
-                mapping[item] += extra
+                mapping[item] *= extra
 
         await record.add_random_exp(12, 18, chance=0.8, ctx=ctx)
         await record.add_random_bank_space(10, 15, chance=0.6)
