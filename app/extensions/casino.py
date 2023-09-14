@@ -414,7 +414,8 @@ class Blackjack(UserView):
         multiplier = random.uniform(0.7, 1.0)
         adjustment, adjusted_text = Casino.adjust_multiplier(self.record, modification=0.6)
         multiplier += adjustment
-        profit = await self.record.add(wallet=round(self.bet * multiplier))
+        profit = round(self.bet * multiplier)
+        await self.record.add(wallet=profit)
 
         embed = self.make_embed()
         embed.colour = Colors.success
