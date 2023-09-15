@@ -86,6 +86,7 @@ class Player:
     attack_stack: BuffStack[float] = field(default_factory=BuffStack)
     defense_stack: BuffStack[float] = field(default_factory=BuffStack)  # Note: this ticks when the OPPONENT moves
     accuracy_stack: BuffStack[float] = field(default_factory=BuffStack)
+    poison_stack: BuffStack[int] = field(default_factory=BuffStack)
     max_hp: int = field(init=False)
     max_stamina: int = field(init=False)
 
@@ -111,9 +112,16 @@ class Player:
     def accuracy(self) -> float:
         return self.accuracy_stack.product
 
+    @property
+    def poison_damage(self) -> int:
+        return self.poison_stack.sum
+
     def tick_offensive(self, last_used_ability_type: AbilityType) -> None:
         self.attack_stack.tick(last_used_ability_type)
         self.accuracy_stack.tick(last_used_ability_type)
+
+        self.hp -= self.poison_damage
+        self.posion_stack.tick(last_used_ability_type)
 
     def tick_defensive(self, last_used_ability_type: AbilityType) -> None:
         self.defense_stack.tick(last_used_ability_type)
@@ -345,6 +353,8 @@ class BattleView(discord.ui.View):
             buff_text.append(f'- **DEF** {-player.defense_buff + 1:+.1%}')
         if player.accuracy != 1:
             buff_text.append(f'- **ACC** {player.accuracy - 1:+.1%}')
+        if player.poison_damage > 0:
+            buff_text.append(f'- \U0001f9ea **-{player.poison_damage} HP**')
 
         return '\n'.join(buff_text)
 

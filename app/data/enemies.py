@@ -58,3 +58,8 @@ class Enemies:
             Abilities.handcuffs: 0.3,
         },
     )
+
+    shark = Enemy(
+        key='shark',
+        
+    )

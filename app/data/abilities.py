@@ -100,7 +100,7 @@ class Abilities:
                 text=f'{ctx.player.user} tries to **punch** {ctx.target.user}, but {reason}',
             )
 
-        base = random.uniform(5, 10) * ctx.level ** 1.2
+        base = random.uniform(6, 18) * ctx.level ** 1.2
         area = random.choice((
             'face',
             'chest',
@@ -144,7 +144,7 @@ class Abilities:
                 text=f'{ctx.player.user} tries to **kick** {ctx.target.user}, but {reason}',
             )
 
-        base = random.uniform(3, 12) * ctx.level ** 1.2
+        base = random.uniform(8, 16) * ctx.level ** 1.2
         area = random.choice((
             'stomach',
             'arm',
@@ -173,7 +173,7 @@ class Abilities:
 
     @herb.callback
     async def callback(self, ctx: BattleContext) -> Any:
-        hp = round(random.uniform(6, 12) * ctx.level ** 1.2)
+        hp = round(random.uniform(8, 14) * ctx.level ** 1.2)
         hp = ctx.player.heal(hp)
         ctx.player.tick_offensive(AbilityType.healing)
 
@@ -195,11 +195,11 @@ class Abilities:
 
     @speak_to_the_manager.callback
     async def callback(self, ctx: BattleContext) -> Any:
-        ctx.target.accuracy_stack.append(0.5, 2, types={AbilityType.attack})
+        ctx.target.accuracy_stack.append(0.75, 2, types={AbilityType.attack})
         ctx.add_buff_commentary(
             player=ctx.player,
             text=f'**Karen** demands to speak to the manager, distracting {ctx.target.user}.',
-            buff=f'**Accuracy Debuff:** -50% for 2 attacks',
+            buff=f'**Accuracy Debuff:** -25% for 2 attacks',
         )
 
     insult = Ability(
@@ -207,17 +207,17 @@ class Abilities:
         name='Insult',
         type=AbilityType.attack,
         description='Insults the opponent, lowering their motivation and lowering their attack.',
-        effect='Applies a 50% attack debuff for the next 2 attacks from the opponent.',
+        effect='Applies a 25% attack debuff for the next 2 attacks from the opponent.',
         emoji='\U0001f595',
     )
 
     @insult.callback
     async def callback(self, ctx: BattleContext) -> Any:
-        ctx.target.attack_stack.append(0.5, 2, types={AbilityType.attack})
+        ctx.target.attack_stack.append(0.75, 2, types={AbilityType.attack})
         ctx.add_buff_commentary(
             player=ctx.player,
             text=f'{ctx.player.user} **insults** {ctx.target.user}, lowering their motivation.',
-            buff=f'**Attack Debuff:** -50% for 2 attacks',
+            buff=f'**Attack Debuff:** -25% for 2 attacks',
         )
 
     block = Ability(
@@ -265,21 +265,27 @@ class Abilities:
         name='Taser',
         type=AbilityType.attack,
         description='Tases the opponent, dealing damage and lowering their defense.',
-        effect='Deals a small amount of damage and applies a 50% defense debuff for the next 2 moves from the opponent.',
+        effect='Deals a small amount of damage and applies a 25% defense debuff for the next 2 moves from the opponent.',
         emoji='<:taser:1142672274487529473>',
     )
 
     @taser.callback
     async def callback(self, ctx: BattleContext) -> Any:
         damage = ctx.deal_attack(round(random.uniform(4, 9) * ctx.level ** 1.2))
-        ctx.target.defense_stack.append(1.5, 2, types={AbilityType.attack})
+        ctx.target.defense_stack.append(1.25, 2, types={AbilityType.attack})
         ctx.player.tick_offensive(AbilityType.attack)
 
         ctx.add_attack_commentary(
             damage=damage,
             text=f'{ctx.player.user} **tases** {ctx.target.user} and deals **{damage} HP**',
-            buff=f'**Defense Debuff:** -50% for 2 attacks',
+            buff=f'**Defense Debuff:** -25% for 2 attacks',
         )
+
+    shark_bite = Ability(
+        key='shark_bite',
+        name='Shark Bite',
+        
+    )
 
 
 _ABILITIES_INST = Abilities()
