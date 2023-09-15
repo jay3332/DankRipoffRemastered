@@ -1959,8 +1959,8 @@ class FishingView(UserView):
         self.clear_items()
 
         if current := self.current:
-            choices = [current, *random.sample(self.FISH, k=2)]
-            random.shuffle(choices)
+            choices = random.sample(self.FISH, k=3)
+            choices[random.randrange(0,  len(choices))] = current
 
             for choice in choices:
                 self.add_item(FishingButton(choice))
@@ -1975,13 +1975,16 @@ class FishingView(UserView):
                 self.ctx,
                 {self.ctx.author: self.record},
                 opponent=self.current.metadata,
-                level=1,  # TODO: should this scale with the user's level?
+                level=0,  # TODO: should this scale with the user's level?
                 description=f'The {self.current.display_name} challenges you to a battle! Defeat it to catch it!',
                 embeds=[self.make_embed()],
             )
             await interaction.response.edit_message(embeds=game.make_public_embeds(), view=game)
+
+            self.timeout = None
             await game.wait()
             await asyncio.sleep(1)
+            self.timeout = 60
 
             if not game.won:
                 self.stop()
@@ -2004,8 +2007,7 @@ class FishingView(UserView):
                 embed = discord.Embed(color=Colors.error, timestamp=interaction.created_at)
                 embed.add_field(name=f'You were defeated by the {self.current.display_name}!', value=text)
 
-                message = await interaction.original_response()
-                return await message.edit(
+                return await interaction.edit_original_response(
                     embeds=[self.make_embed(), embed], view=await self._shortcuts(),
                 )
 
@@ -2020,10 +2022,8 @@ class FishingView(UserView):
             return await interaction.response.edit_message(embed=self.make_embed(), view=await self._shortcuts())
 
         await self.remove_bait()
-        await interaction.response.edit_message(
-            embeds=[self.make_embed(), self.prompt_embed()],
-            view=self,
-        )
+        caller = interaction.response.edit_message if not interaction.response.is_done() else interaction.edit_original_response
+        await caller(embeds=[self.make_embed(), self.prompt_embed()], view=self)
 
     async def remove_bait(self) -> None:
         if not self.previously_used_bait:
