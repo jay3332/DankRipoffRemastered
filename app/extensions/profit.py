@@ -28,11 +28,13 @@ from app.core import (
     user_max_concurrency
 )
 from app.core.helpers import EPHEMERAL, cooldown_message
-from app.data.items import Item, ItemType, Items
+from app.data.enemies import Enemy
+from app.data.items import FishingPoleMetadata, Item, ItemRarity, ItemType, Items
 from app.data.pets import Pet, Pets
 from app.data.skills import RobberyTrainingButton
 from app.database import NotificationData, RobFailReason, UserRecord
 from app.extensions.misc import _get_retry_after
+from app.features.battles import PvEBattleView
 from app.util.common import expansion_list, humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
@@ -893,139 +895,30 @@ class Profit(Cog):
 
         yield embed, cont, REPLY
 
-    FISH_CHANCES: dict[Item | None, float] = {
-        None: 1,
-        Items.fish: 0.4,
-        Items.sardine: 0.25,
-        Items.angel_fish: 0.175,
-        Items.blowfish: 0.125,
-        Items.crab: 0.075,
-        Items.lobster: 0.04,
-        Items.octopus: 0.02,
-        Items.dolphin: 0.0075,
-        Items.shark: 0.004,
-        Items.whale: 0.0015,
-        Items.axolotl: 0.0005,
-        Items.vibe_fish: 0.00025,
-    }
-
-    FISH_CHANCES_WITH_BAIT: dict[Item | None, float] = {
-        None: 1,
-        Items.fish: 0.4,
-        Items.sardine: 0.25,
-        Items.angel_fish: 0.2,
-        Items.blowfish: 0.2,
-        Items.crab: 0.125,
-        Items.lobster: 0.055,
-        Items.octopus: 0.03,
-        Items.dolphin: 0.015,
-        Items.shark: 0.0085,
-        Items.whale: 0.0035,
-        Items.axolotl: 0.0015,
-        Items.vibe_fish: 0.00075,
-    }
-
-    RARE_FISH = {
-        Items.octopus,
-        Items.dolphin,
-        Items.shark,
-        Items.whale,
-        Items.axolotl,
-        Items.vibe_fish,
-    }
-
     @command(aliases={'f', 'cast', 'fishing', 'fishingpole'}, hybrid=True)
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
     async def fish(self, ctx: Context):
         """Use your fishing pole to fish for fish and sell them for profit!"""
         record = await ctx.db.get_user_record(ctx.author.id)
-        inventory = await record.inventory_manager.wait()
+        await record.inventory_manager.wait()
+        await record.pet_manager.wait()
 
-        if not inventory.cached.quantity_of('fishing_pole'):
-            yield f'You need {Items.fishing_pole.get_sentence_chunk()} to fish.', BAD_ARGUMENT
-            return
+        await record.add_random_exp(15, 20, chance=0.8, ctx=ctx)
+        await record.add_random_bank_space(12, 20, chance=0.6)
 
-        if used_bait := inventory.cached.quantity_of('fish_bait'):
-            mapping = self.FISH_CHANCES_WITH_BAIT
-            await inventory.add_item('fish_bait', -1)
-        else:
-            mapping = self.FISH_CHANCES
-
-        mapping = mapping.copy()
-        pets = await record.pet_manager.wait()
-        if cat := pets.get_active_pet(Pets.cat):
-            extra = 1.01 + cat.level * 0.002
-            for item in self.RARE_FISH:
-                mapping[item] *= extra
-
-        await record.add_random_exp(12, 18, chance=0.8, ctx=ctx)
-        await record.add_random_bank_space(10, 15, chance=0.6)
-
-        fish = random.choices(list(mapping), weights=list(mapping.values()), k=5)
-        fish = {item: fish.count(item) for item in set(fish) if item is not None}
-
-        yield f'{Emojis.loading} Casting your fishing pole...', REPLY
-
-        view = await self._get_command_shortcuts(ctx, record)
+        game = FishingView(ctx, record=record)
+        yield (
+            f'{Emojis.loading} Casting your {game.tool.display_name}...'
+            if game.tool else f'{Emojis.loading} Fishing with your bare hands...',
+            REPLY,
+        )
         await asyncio.sleep(random.uniform(2., 4.))
 
-        if not len(fish):
-            yield 'You caught absolutely nothing. Lmao.', view, EDIT
-            return
+        await game.remove_bait()
+        yield '', game.make_embed(), game.prompt_embed(), game, EDIT
 
-        if any(f in self.RARE_FISH for f in fish):
-            # what's the rarest fish in the bunch?
-            rarest: Item = max(fish, key=lambda f: f.sell)
-            game = FindItemView(ctx, rarest, avoid=[ItemType.fish])
-
-            yield (
-                f'{ctx.author.mention}, Looks like one of the fish you caught was pretty heavy! Click on the **{rarest.name}**'
-                ' to wind up your fishing pole before it breaks!',
-                game,
-                EDIT,
-            )
-            await game.wait()
-
-            if not game.winner:
-                initial = (
-                    "You couldn't wind up your fishing pole in time"
-                    if game.clicked_on is None
-                    else (
-                        'You clicked on the wrong item '
-                        f'({game.clicked_on.get_display_name(bold=True)} instead of {rarest.get_display_name(bold=True)})'
-                    )
-                )
-                await inventory.add_item('fishing_pole', -1)
-
-                if random.random() < 0.15:
-                    await record.make_dead(reason='A fish bit your head off while fishing!')
-
-                    yield (
-                        f'{initial}, and the fish jumped out of the water and bit your head off. '
-                        f'You died, and also lost your fishing pole.'
-                    ), view, EDIT
-                    return
-
-                yield f'{initial}, and your fishing pole snapped in half. Nice one.', view, EDIT
-                return
-
-        async with ctx.db.acquire() as conn:
-            for item, count in fish.items():
-                await inventory.add_item(item, count, connection=conn)
-
-        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
-
-        embed.add_field(name='You caught:', value='\n'.join(f'{item.get_display_name(bold=True)} x{count}' for item, count in fish.items()))
-        embed.set_author(name=f'Fishing: {ctx.author}', icon_url=ctx.author.display_avatar)
-        if used_bait:
-            embed.add_field(
-                name=f'{Items.fish_bait.emoji} Fish Bait \u2014 **{used_bait - 1:,}** remaining',
-                value='*Bait increased the chance of catching better fish.*',
-                inline=False,
-            )
-
-        yield '', embed, view, EDIT
+        await game.wait()
 
     RARE_DIG_ITEMS = {
         Items.hook_worm,
@@ -1958,40 +1851,266 @@ class RobbingKeypad(discord.ui.View):
         self.stop()
 
 
-class FindItemButton(discord.ui.Button['FindItemView']):
-    def __init__(self, item: Item, row: int) -> None:
-        super().__init__(emoji=item.emoji, style=discord.ButtonStyle.secondary, row=row)
-        self.item: Item = item
+class FishingButton(discord.ui.Button['FishingView']):
+    def __init__(self, fish: Item) -> None:
+        super().__init__(label=fish.name, style=discord.ButtonStyle.primary)
+        self.fish: Item = fish
 
     async def callback(self, interaction: TypedInteraction) -> None:
-        self.view.winner = self.view.item is self.item
-        self.view.clicked_on = self.item
-        for button in self.view.children:
-            button.disabled = True
+        if self.fish is not self.view.current:
+            self.view.stop()
+            for button in self.view.children:
+                assert isinstance(button, discord.ui.Button)
+                button.disabled = True
+                button.style = (
+                    discord.ButtonStyle.success
+                    if isinstance(button, FishingButton) and button.fish is self.view.current
+                    else discord.ButtonStyle.secondary
+                )
+            self.style = discord.ButtonStyle.danger
 
-        self.view.stop()
-        await interaction.response.defer()
+            shortcuts = await self.view._shortcuts()
+            for child in shortcuts.children:
+                child.row = 1
+                self.view.add_item(child)
+
+            self.view.embed_color = Colors.secondary
+            embed = discord.Embed(color=Colors.secondary, timestamp=interaction.created_at)
+            embed.add_field(
+                name=f'Wrong, that was {self.view.current.get_sentence_chunk()}!',
+                value=(
+                    f'The {self.view.current.name} got away and your fishing session ended.\n'
+                    f'You can fish again later by using {self.view.fish_mention}.'
+                ),
+            )
+            return await interaction.response.edit_message(embeds=[self.view.make_embed(), embed], view=self.view)
+
+        await self.view.advance(interaction)
 
 
-class FindItemView(UserView):
-    def __init__(self, ctx: Context, item: Item, avoid: ItemType | Sequence[ItemType] | None = None) -> None:
-        self.winner: bool = False
-        self.clicked_on: Item | None = None
+class FishingView(UserView):
+    FISH: list[Item] = [item for item in Items.all() if item.type is ItemType.fish]
+    BASE_FISH_CHANCES: dict[Item | None, float] = {
+        None: 1.2,
+        Items.fish: 0.4,
+        Items.sardine: 0.25,
+        Items.angel_fish: 0.175,
+        Items.blowfish: 0.125,
+        Items.crab: 0.05,
+        Items.lobster: 0.025,
+        Items.octopus: 0.01,
+        Items.dolphin: 0.005,
+        Items.shark: 0.002,
+        Items.whale: 0.001,
+        Items.axolotl: 0.0004,
+    }
+
+    def __init__(self, ctx: Context, *, record: UserRecord) -> None:
+        super().__init__(ctx.author, timeout=30)
+
         self.ctx: Context = ctx
-        self.item: Item = item
-        self.avoid: set[ItemType] = set(avoid) if avoid else {item.type}
+        self.record: UserRecord = record
+        self.collected: defaultdict[Item, int] = defaultdict(int)
+        self.count: int = 0
+        self.max_count: int = 5   # TODO: will be upgradable with prestige tokens
+        self.embed_color: int = Colors.secondary
 
-        super().__init__(ctx.author, timeout=15)
+        inventory = record.inventory_manager
+        assert inventory._task.done(), 'inventory_manager must be fetched'
 
-        candidates = random.sample([item for item in Items.all() if item.type not in self.avoid], k=8)
-        candidates[random.randrange(0, len(candidates))] = item
-        for i, candidate in enumerate(candidates):
-            self.add_item(FindItemButton(candidate, row=i // 4))
-            continue
+        pets = record.pet_manager
+        assert pets._task.done(), 'pet_manager must be fetched'
+
+        fishing_poles = (item for item in Items.__fishing_poles__ if inventory.cached.quantity_of(item) > 0)
+        self.tool: Item[FishingPoleMetadata] | None = next(fishing_poles, None)
+
+        weights = self.tool.metadata.weights if self.tool else self.BASE_FISH_CHANCES
+        self.weights: dict[Item | None, float] = weights.copy()
+
+        # Apply pet multipliers
+        if cat := pets.get_active_pet(Pets.cat):
+            extra = 1.01 + cat.level * 0.002
+
+            for item in self.weights:
+                if item and item.rarity < ItemRarity.rare:
+                    continue
+                self.weights[item] *= extra
+
+        # Apply bait multipliers
+        self.weights_with_bait: dict[Item | None, float] = self.weights.copy()
+
+        for item in self.weights_with_bait:
+            if item and item.rarity < ItemRarity.rare:
+                continue
+            self.weights_with_bait[item] *= 1.2  # Constant +20% chance with bait
+
+        self.update()
+
+    @property
+    def fish_mention(self) -> str:
+        return self.ctx.bot.tree.get_app_command('fish').mention
+
+    def update(self):
+        self.count += 1
+        self.previously_used_bait: bool = self.record.inventory_manager.cached.quantity_of(Items.fish_bait) > 0
+        weights = self.weights_with_bait if self.previously_used_bait else self.weights
+
+        self.current: Item | None = random.choices(list(weights), weights=list(weights.values()))[0]
+        self.clear_items()
+
+        if current := self.current:
+            choices = [current, *random.sample(self.FISH, k=2)]
+            random.shuffle(choices)
+
+            for choice in choices:
+                self.add_item(FishingButton(choice))
+        else:
+            self.add_item(self.continue_fishing)
+
+        self.add_item(self.quit_fishing)
+
+    async def advance(self, interaction: TypedInteraction) -> Any:
+        if self.current and isinstance(self.current.metadata, Enemy):
+            game = PvEBattleView(
+                self.ctx,
+                {self.ctx.author: self.record},
+                opponent=self.current.metadata,
+                level=1,  # TODO: should this scale with the user's level?
+                description=f'The {self.current.display_name} challenges you to a battle! Defeat it to catch it!',
+                embeds=[self.make_embed()],
+            )
+            await interaction.response.edit_message(embeds=game.make_public_embeds(), view=game)
+            await game.wait()
+            await asyncio.sleep(1)
+
+            if not game.won:
+                self.stop()
+                # bare hands? 75% chance they survive and pay medical fees. 25% chance they die
+                if not self.tool or random.random() < 0.3:
+                    if random.random() < 0.75:
+                        debt = max(
+                            random.randint(500, 2500), int(self.record.wallet * random.uniform(0.05, 0.3)),
+                        )
+                        text = f'The fish defeats you and bites your hand! You paid {Emojis.coin} **{debt:,}** in medical fees.'
+                        await self.record.add(wallet=-debt)
+                    else:
+                        text = f'The fish defeats you and bites your head off! You died.'
+                        await self.record.make_dead(reason='A fish bit your hand off')
+                # otherwise, 70% chance the fish damages the fishing pole
+                else:
+                    text = f'Your {self.tool.display_name} was damaged in the battle.'
+                    # TODO damage fishing pole
+
+                embed = discord.Embed(color=Colors.error, timestamp=interaction.created_at)
+                embed.add_field(name=f'You were defeated by the {self.current.display_name}!', value=text)
+
+                message = await interaction.original_response()
+                return await message.edit(
+                    embeds=[self.make_embed(), embed], view=await self._shortcuts(),
+                )
+
+        if self.current:
+            self.collected[self.current] += 1
+
+        self.update()
+        if self.count > self.max_count:
+            self.stop()
+            self.embed_color = Colors.success
+            await self.give_prizes()
+            return await interaction.response.edit_message(embed=self.make_embed(), view=await self._shortcuts())
+
+        await self.remove_bait()
+        await interaction.response.edit_message(
+            embeds=[self.make_embed(), self.prompt_embed()],
+            view=self,
+        )
+
+    async def remove_bait(self) -> None:
+        if not self.previously_used_bait:
+            return
+
+        await self.record.inventory_manager.add_item(Items.fish_bait, -1)
+
+    def make_embed(self) -> discord.Embed:
+        ctx = self.ctx
+        embed = discord.Embed(color=self.embed_color, timestamp=ctx.now if not self.is_finished() else None)
+        embed.set_author(name=f'{ctx.author.name}\'s Fishing Session', icon_url=ctx.author.display_avatar)
+        if self.collected:
+            embed.add_field(
+                name='You caught:' if self.is_finished() else 'You\'ve collected:',
+                value='\n'.join(f'{item.display_name} x{quantity}' for item, quantity in self.collected.items() if item),
+                inline=False,
+            )
+        else:
+            embed.description = 'You haven\'t caught anything yet.' if not self.is_finished() else 'You didn\'t catch any fish.'
+
+        if not self.is_finished():
+            embed.add_field(
+                name=f'Progress \u2014 {self.count}/{self.max_count}', value=progress_bar(self.count / self.max_count),
+            )
+        return embed
+
+    def prompt_embed(self) -> discord.Embed:
+        embed = discord.Embed(
+            color=Colors.secondary if self.current else Colors.warning,
+            timestamp=discord.utils.utcnow(),
+        )
+        if current := self.current:
+            embed.add_field(
+                name='You caught a fish!',
+                value=f'Identify the fish you caught to collect it and continue fishing!',
+                inline=False,
+            )
+            if self.previously_used_bait:
+                remaining = self.record.inventory_manager.cached.quantity_of(Items.fish_bait)
+                embed.add_field(
+                    name=f'{Items.fish_bait.emoji} Fish Bait \u2014 **{remaining:,}** remaining',
+                    value='*Bait increased the chance of catching rarer fish.*',
+                    inline=False,
+                )
+            embed.set_thumbnail(url=image_url_from_emoji(current.emoji))
+        else:
+            embed.add_field(
+                name='Nothing!',
+                value='You cast your line but nothing bit. Try again!',
+            )
+        return embed
+
+    async def _shortcuts(self) -> discord.ui.View:
+        return await Profit._get_command_shortcuts(self.ctx, self.record)
+
+    async def give_prizes(self) -> None:
+        self.embed_color = Colors.success
+        kwargs = {item.key: quantity for item, quantity in self.collected.items() if item}
+        await self.record.inventory_manager.add_bulk(**kwargs)
+
+    @discord.ui.button(label='Continue Fishing', style=discord.ButtonStyle.primary)
+    async def continue_fishing(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:
+        await self.advance(interaction)
+        await interaction.response.edit_message(
+            embeds=[self.make_embed(), self.prompt_embed()],
+            view=self,
+        )
+
+    @discord.ui.button(label='Quit Fishing', style=discord.ButtonStyle.danger)
+    async def quit_fishing(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:
+        self.stop()
+        self.embed_color = Colors.success
+
+        embed = discord.Embed(
+            color=Colors.warning, timestamp=interaction.created_at,
+            description=f'You ended your fishing session. Fish again by running {self.fish_mention}!',
+        )
+        await self.give_prizes()
+        await interaction.response.edit_message(embeds=[self.make_embed(), embed], view=await self._shortcuts())
 
     async def on_timeout(self) -> None:
-        for button in self.children:
-            button.disabled = True
+        embed = discord.Embed(
+            color=Colors.error, timestamp=self.ctx.now,
+            description=f'You ran out of time! You can fish again by running {self.fish_mention}.',
+        )
+        embed.set_author(name=f'{self.ctx.author.name}\'s Fishing Session', icon_url=self.ctx.author.display_avatar)
+        await self.ctx.maybe_edit(embed=embed, view=await self._shortcuts())
 
 
 class DivingView(UserView):

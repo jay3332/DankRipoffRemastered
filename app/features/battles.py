@@ -410,6 +410,7 @@ class PvEBattleView(BattleView):
         title: str | None = None,
         description: str | None = None,
         time_limit: float | None = None,
+        embeds: list[discord.Embed] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(ctx, records, team=team, opponent=opponent, **kwargs)
@@ -447,6 +448,7 @@ class PvEBattleView(BattleView):
         self.won: bool = False
         self._lost: set[discord.Member] = set()
         self._original_message: discord.Message | None = None
+        self._start_embeds: list[discord.Embed] = embeds or []
 
     @classmethod
     def public(
@@ -483,7 +485,7 @@ class PvEBattleView(BattleView):
         await asyncio.sleep(time_limit)
         if not self.is_finished():
             self.stop()
-            self._embed_author = Colors.error
+            self._embed_color = Colors.error
             self.add_simple_commentary(
                 f'\u23f1\ufe0f **Time\'s up!** You couldn\'t defeat {self.opponent.display} in time.',
             )
@@ -547,7 +549,7 @@ class PvEBattleView(BattleView):
         embed.title = f'Fighting **{self.opponent.display}**'
 
         if author := self._embed_author:
-            embed.set_author(name=author, icon_url=image_url_from_emoji('\u2694\ufe0f'))
+            embed.set_author(name=author, icon_url=image_url_from_emoji('\u2694'))
 
         embed.description = self._embed_description
         embed.set_thumbnail(url=image_url_from_emoji(self.opponent.emoji))
@@ -559,21 +561,26 @@ class PvEBattleView(BattleView):
             inline=False,
         )
         embed.add_field(name='\U0001f4e3 Commentary', value=self.formatted_commentary, inline=False)
+
+        participants = len(self.records)
+        if participants and self.team is None:
+            s = '' if participants == 1 else 's'
+            embed.set_footer(text=f'{participants:,} participant{s}')
         return embed
 
     def make_public_embeds(self) -> list[discord.Embed]:
         enemy = self.make_enemy_embed()
         if solo := self.solo_player:
             enemy.timestamp = None
-            return [enemy, self.make_player_embed(solo)]
+            return [*self._start_embeds, enemy, self.make_player_embed(solo)]
 
-        return [enemy]
+        return [*self._start_embeds, enemy]
 
     def get_player_embeds(self, player: Player) -> list[discord.Embed]:
         if self.solo:
             return self.make_public_embeds()
 
-        return [self.make_player_embed(player)]
+        return [*self._start_embeds, self.make_player_embed(player)]
 
     def check_winner(self) -> int:
         if self.opponent_player.hp <= 0:

@@ -32,7 +32,7 @@ LEVEL_REWARDS: Final[dict[int, Reward]] = {
     3: Reward(items={Items.lifesaver: 5}),
     4: Reward(items={Items.pickaxe: 1}),
     5: Reward(items={Items.uncommon_crate: 1, Items.padlock: 3, Items.key: 1}),
-    7: Reward(items={Items.shovel: 1, Items.cheese: 1,}),
+    7: Reward(items={Items.shovel: 1, Items.cheese: 1}),
     10: Reward(coins=10000, items={Items.epic_crate: 1, Items.banknote: 3, Items.cigarette: 1}),
     15: Reward(items={Items.axe: 1, Items.net: 1, Items.banknote: 2}),
     20: Reward(items={Items.legendary_crate: 1}),

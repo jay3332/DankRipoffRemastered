@@ -13,6 +13,7 @@ from typing import Any, Awaitable, Callable, Generator, Generic, NamedTuple, TYP
 from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
+from app.data.enemies import Enemies
 from app.data.pets import Pet, Pets
 from app.util.common import get_by_key, humanize_duration, ordinal, pluralize
 from config import Emojis
@@ -31,17 +32,18 @@ T = TypeVar('T')
 
 class ItemType(Enum):
     """Stores the type of this item."""
-    tool = 0
-    fish = 1
-    wood = 2
-    crate = 3
-    collectible = 4
-    worm = 5
-    ore = 6
-    crop = 7
-    harvest = 8
-    net = 9
-    miscellaneous = 10
+    tool          = 0
+    power_up      = 1
+    fish          = 2
+    wood          = 3
+    crate         = 4
+    collectible   = 5
+    worm          = 6
+    ore           = 7
+    crop          = 8
+    harvest       = 9
+    net           = 10
+    miscellaneous = 11
 
 
 class ItemRarity(Enum):
@@ -52,6 +54,11 @@ class ItemRarity(Enum):
     legendary = 4
     mythic = 5
     unobtainable = 6
+
+    def __lt__(self, other: Any):
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.value < other.value
 
 
 class CrateMetadata(NamedTuple):
@@ -73,6 +80,11 @@ class HarvestMetadata(NamedTuple):
 class NetMetadata(NamedTuple):
     weights: dict[Pet, float]
     priority: int
+
+
+class FishingPoleMetadata(NamedTuple):
+    weights: dict[Item, float]
+    durability: int
 
 
 class OverrideQuantity(NamedTuple):
@@ -574,16 +586,6 @@ class Items:
         sell=5_000,
     )
 
-    fishing_pole = Item(
-        type=ItemType.tool,
-        key='fishing_pole',
-        name='Fishing Pole',
-        emoji='<:fishing_pole:935298127353745499>',
-        description='Owning this will grant you access to the `fish` command - fish for fish and sell them for profit!',
-        price=10000,
-        buyable=True,
-    )
-
     fish_bait = Item(
         type=ItemType.tool,
         key='fish_bait',
@@ -602,10 +604,6 @@ class Items:
         description='A stick. It\'s not very useful on it\'s own, but it can be used to craft other items. Although gainable from commands, you can manually craft these.',
         sell=100,
     )
-
-    @fishing_pole.to_use
-    async def use_fishing_pole(self, ctx: Context, _) -> None:
-        await ctx.invoke(ctx.bot.get_command('fish'))  # type: ignore
 
     axe = Item(
         type=ItemType.tool,
@@ -745,6 +743,7 @@ class Items:
         description='A normal fish. Commonly found in the ocean.',
         sell=100,
         energy=3,
+        metadata=Enemies.cop,
     )
 
     sardine = Fish(
@@ -865,6 +864,38 @@ class Items:
         rarity=ItemRarity.mythic,
         sell=35000,
         energy=200,
+    )
+
+    fishing_pole = Item(
+        type=ItemType.tool,
+        key='fishing_pole',
+        name='Fishing Pole',
+        emoji='<:fishing_pole:935298127353745499>',
+        description='Owning this will grant you access to the `fish` command - fish for fish and sell them for profit!',
+        price=10000,
+        buyable=True,
+        metadata=FishingPoleMetadata(
+            weights={
+                None: 1,
+                fish: 0.4,
+                sardine: 0.25,
+                angel_fish: 0.175,
+                blowfish: 0.125,
+                crab: 0.075,
+                lobster: 0.04,
+                octopus: 0.02,
+                dolphin: 0.0075,
+                shark: 0.004,
+                whale: 0.0015,
+                axolotl: 0.0005,
+                vibe_fish: 0.00025,
+            },
+            durability=10,
+        ),
+    )
+
+    __fishing_poles__: tuple[Item[FishingPoleMetadata], ...] = (
+        fishing_pole,
     )
 
     wood = Wood(

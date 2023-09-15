@@ -440,7 +440,7 @@ class NotificationData:
             remaining = (
                 f'You have {self.remaining:,} lifesaver{s} remaining.' if self.remaining > 0
                 else (
-                    '**You have no more lifesavers remaining!** You will lose coins and items the next time you die '
+                    '\n\n**You have no more lifesavers remaining!** You will lose coins and items the next time you die '
                     'unless you replenish your lifesavers.'
                 )
             )
@@ -1007,10 +1007,10 @@ class PetManager:
     def __init__(self, record: UserRecord) -> None:
         self._record = record
         self.cached: dict[Pet, PetRecord] = {}
-        self.__fetch_task = asyncio.create_task(self.fetch())
+        self._task = asyncio.create_task(self.fetch())
 
     async def wait(self) -> Self:
-        await self.__fetch_task
+        await self._task
         return self
 
     async def fetch(self) -> None:

@@ -148,14 +148,20 @@ class JobsCog(Cog, name='Jobs'):
         embed.set_author(name=f'{ctx.author.name}: Work', icon_url=ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(info.emoji))
 
+        breakdown = []
         multiplier_mention = ctx.bot.tree.get_app_command('multiplier').mention
-        disclaimer = f' with +{record.coin_multiplier:.1%} {multiplier_mention}' if record.coin_multiplier > 1 else ''
+        disclaimer = f' with +{record.coin_multiplier - 1:.1%} {multiplier_mention}' if record.coin_multiplier > 1 else ''
+
         extra = (
             f'\n{Emojis.Expansion.standalone} *This is a harder task!* '
             f'You will get {minigame.multiplier - 1:.0%} more coins.'
         ) if minigame.multiplier > 1 else ''
 
         salary = round(record.job.salary * minigame.multiplier)
+        difference = salary - record.job.salary
+        if difference > 0:
+            breakdown.append(f'+{minigame.multiplier - 1:.1%} Minigame Multiplier: {Emojis.coin} **+{difference:,.0f}**')
+
         embed.description = (
             f'Expected salary{disclaimer}: {Emojis.coin} **{salary * record.coin_multiplier:,.0f}**{extra}\n'
             'To work, complete the minigame below'
@@ -177,7 +183,6 @@ class JobsCog(Cog, name='Jobs'):
         message = message or ctx._message
         raise_amount = 0 if (record.job.hours + 1) % 5 else info.base_salary // 10
 
-        breakdown = []
         async with ctx.db.acquire() as conn:
             await record.add(job_hours=1, work_experience=1, job_salary=raise_amount, connection=conn)
             await record.update(job_cooldown_expires_at=expiry, connection=conn)
