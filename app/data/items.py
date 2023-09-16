@@ -892,7 +892,10 @@ class Items:
         key='fishing_pole',
         name='Fishing Pole',
         emoji='<:fishing_pole:935298127353745499>',
-        description='Owning this will grant you access to the `fish` command - fish for fish and sell them for profit!',
+        description=(
+            'Owning this will grant you access to more fish and better luck in the `fish` command - '
+            'fish for fish and sell them for profit!'
+        ),
         price=10000,
         buyable=True,
         metadata=FishingPoleMetadata(
