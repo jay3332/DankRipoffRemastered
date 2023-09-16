@@ -613,7 +613,7 @@ class Items:
         name='Fish Bait',
         emoji='\U0001fab1',
         description='When you fish while owning this, your chances of catching rarer fish will increase. Disposed every time you fish, no matter success or fail.',
-        price=300,
+        price=150,
         buyable=True,
     )
 
