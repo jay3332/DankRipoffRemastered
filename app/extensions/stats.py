@@ -45,8 +45,10 @@ class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
                 case _:
                     start = '<:bullet:934890293902327838>'
 
+            record: UserRecord
             result.append(
-                f'{start} {Emojis.coin} **{record.wallet:,}** \u2014 {discord.utils.escape_markdown(str(member))}'
+                f'{start} {Emojis.coin} **{record.wallet:,}** \u2014 '
+                f'{discord.utils.escape_markdown(str(member))} {Emojis.get_prestige_emoji(record.prestige)}'
             )
 
         embed = discord.Embed(color=Colors.primary, description='\n'.join(result), timestamp=paginator.ctx.now)
