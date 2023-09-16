@@ -2046,8 +2046,10 @@ class FishingView(UserView):
             embed.description = 'You haven\'t caught anything yet.' if not self.is_finished() else 'You didn\'t catch any fish.'
 
         if not self.is_finished():
+            previous_count = self.count - 1
             embed.add_field(
-                name=f'Progress \u2014 {self.count}/{self.max_count}', value=progress_bar(self.count / self.max_count),
+                name=f'Progress \u2014 {previous_count}/{self.max_count}',
+                value=progress_bar(previous_count / self.max_count),
             )
         return embed
 
