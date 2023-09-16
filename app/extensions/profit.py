@@ -1965,6 +1965,7 @@ class FishingView(UserView):
             for choice in choices:
                 self.add_item(FishingButton(choice))
         else:
+            self.previously_used_bait = False
             self.add_item(self.continue_fishing)
 
         self.add_item(self.quit_fishing)
