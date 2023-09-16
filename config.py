@@ -33,7 +33,7 @@ description: str = (
 # An ID or list of IDs
 owner: Collection[int] | int = 414556245178056706
 default_prefix: Collection[str] | str = '.' + '.' * beta
-token: str = env('DISCORD_TOKEN')
+token: str = env('DISCORD_TOKEN' if not beta else 'DISCORD_STAGING_TOKEN')
 
 default_permissions: int = 414531833025
 support_server = 'https://discord.gg/BjzrQZjFwk'  # caif

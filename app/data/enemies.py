@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from app.data.abilities import Ability, Abilities
+from app.data.items import Items
 
 
 class Enemy(NamedTuple):
@@ -61,5 +62,13 @@ class Enemies:
 
     shark = Enemy(
         key='shark',
-        
+        name='Shark',
+        description=Items.shark.description,
+        emoji=Items.shark.emoji,
+        base_hp=60,
+        abilities={
+            Abilities.swim: 0.8,
+            Abilities.serrated_fins: 0.4,
+            Abilities.shark_bite: 0.2,
+        }
     )

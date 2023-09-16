@@ -114,17 +114,24 @@ class Player:
 
     @property
     def poison_damage(self) -> int:
-        return self.poison_stack.sum
+        return int(self.poison_stack.sum)
+
+    @property
+    def total_poison(self) -> int:
+        return sum(entry.remaining * entry.factor for entry in self.poison_stack)
 
     def tick_offensive(self, last_used_ability_type: AbilityType) -> None:
         self.attack_stack.tick(last_used_ability_type)
         self.accuracy_stack.tick(last_used_ability_type)
 
         self.hp -= self.poison_damage
-        self.posion_stack.tick(last_used_ability_type)
+        self.poison_stack.tick(last_used_ability_type)
 
     def tick_defensive(self, last_used_ability_type: AbilityType) -> None:
         self.defense_stack.tick(last_used_ability_type)
+
+        self.hp -= self.poison_damage
+        self.poison_stack.tick(last_used_ability_type)
 
     def heal(self, hp: int) -> int:
         hp = min(hp, self.max_hp - self.hp)
@@ -157,7 +164,8 @@ class BattleContext(NamedTuple):
         return self.battle.ctx
 
     def _transform(self, text: str) -> str:
-        return f'{self.ability.emoji} {text}'
+        enemy = self.player.user if not isinstance(self.player.user, discord.Member) else None
+        return f'{self.ability.emoji_for(enemy)} {text}'
 
     def add_attack_commentary(
         self,
@@ -354,7 +362,8 @@ class BattleView(discord.ui.View):
         if player.accuracy != 1:
             buff_text.append(f'- **ACC** {player.accuracy - 1:+.1%}')
         if player.poison_damage > 0:
-            buff_text.append(f'- \U0001f9ea **-{player.poison_damage} HP**')
+            persisted = f'(-{player.total_poison} HP left)' if player.poison_damage != player.total_poison else ''
+            buff_text.append(f'- \U0001f9ea **-{player.poison_damage} HP** on next turn {persisted}')
 
         return '\n'.join(buff_text)
 

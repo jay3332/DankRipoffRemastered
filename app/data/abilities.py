@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, NamedTuple, TypeAlias, TYPE_CHECKING
 
@@ -42,6 +42,7 @@ class Ability:
     description: str
     effect: str
     emoji: str
+    skins: dict[str, str] = field(default_factory=dict)
     stamina: int = 0
     curve: tuple[int, int] = (100, 1.22)
     exclusive_to: list[Ref] | None = None
@@ -49,7 +50,13 @@ class Ability:
 
     @property
     def display(self) -> str:
-        return f'{self.emoji} {self.name}'
+        return self.display_for(None)
+
+    def display_for(self, enemy: Enemy | str | None, /) -> str:
+        return f'{self.emoji_for(enemy)} {self.name}'
+
+    def emoji_for(self, enemy: Enemy | str | None, /) -> str:
+        return self.skins.get(enemy if isinstance(enemy, str) else enemy.key, self.emoji) if enemy else self.emoji
 
     @property
     def exclusive_to_resolved(self) -> list[Enemy | Pet] | None:
@@ -273,7 +280,6 @@ class Abilities:
     async def callback(self, ctx: BattleContext) -> Any:
         damage = ctx.deal_attack(round(random.uniform(4, 9) * ctx.level ** 1.2))
         ctx.target.defense_stack.append(1.25, 2, types={AbilityType.attack})
-        ctx.player.tick_offensive(AbilityType.attack)
 
         ctx.add_attack_commentary(
             damage=damage,
@@ -284,7 +290,78 @@ class Abilities:
     shark_bite = Ability(
         key='shark_bite',
         name='Shark Bite',
-        
+        type=AbilityType.attack,
+        description='The shark lunges forward and bites the opponent; jaws snapping shut with immense force.',
+        effect='Deals a large amount of damage and slowly removes 3 HP per turn for the next 3 turns due to bleeding.',
+        emoji='<:shark_bite:1152315697343500359>',
+        exclusive_to=[Ref('shark', RefType.enemy)],
+    )
+
+    @shark_bite.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        if random.random() < 0.3:
+            ctx.add_attack_commentary(
+                text=f'{ctx.player.user} tries **biting** {ctx.target.user}, but misses!',
+            )
+
+        damage = ctx.deal_attack(round(random.uniform(5, 10) * ctx.level ** 1.1))
+        ctx.target.poison_stack.append(3, 3)
+
+        ctx.add_attack_commentary(
+            damage=damage,
+            text=f'{ctx.player.user} **bites** {ctx.target.user}; jaws snapping shut with immense force, dealing **{damage} HP**',
+            buff=f'**You\'re Bleeding!** -3 HP per turn for 3 turns',
+        )
+
+    serrated_fins = Ability(
+        key='serrated_fins',
+        name='Serrated Fins',
+        type=AbilityType.attack,
+        description='The shark\'s fins become razor-sharp, dealing damage and lowering the opponent\'s defense.',
+        effect='Deals a small amount of damage and applies a 25% defense debuff for the next 2 moves from the opponent.',
+        emoji='<:serrated_fins:1152381247021142056>',
+        exclusive_to=[Ref('shark', RefType.enemy)],
+    )
+
+    @serrated_fins.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        damage = ctx.deal_attack(round(random.uniform(3, 6) * ctx.level ** 1.1))
+        ctx.target.defense_stack.append(1.25, 2, types={AbilityType.attack})
+
+        ctx.add_attack_commentary(
+            damage=damage,
+            text=f'{ctx.player.user} **slashes** {ctx.target.user} with its **serrated fins**, dealing **{damage} HP**',
+            buff=f'**Defense Debuff:** -25% for 2 attacks',
+        )
+
+    swim = Ability(
+        key='swim',
+        name='Swim',
+        type=AbilityType.defense,
+        description='Swims around in the water, making them harder for the opponent to hit.',
+        effect='Adds a 25% defense buff against the next attack from the opponent.',
+        emoji='\U0001f3ca',
+        skins=dict(shark='<:shark_swim:1152430176236474379>'),
+    )
+
+    @swim.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        ctx.player.defense_stack.append(buff := 0.75, 1, types={AbilityType.attack})
+        ctx.player.tick_offensive(AbilityType.defense)
+        ctx.add_buff_commentary(
+            player=ctx.player,
+            text=f'{ctx.player.user} **swims** around in the water, making them hard to find.',
+            buff=f'**Next attack taken:** -{1 - buff:.1%} damage',
+        )
+
+    mighty_splash = Ability(
+        key='mighty_splash',
+        name='Mighty Splash',
+        type=AbilityType.attack,
+        description='The whale leaps out of the water and crashes down, causing a massive splash that stuns the opponent.',
+        effect='Deals a medium amount of damage and applies a 25% damage debuff for the next attack from the opponent.',
+        emoji='<:WHAT:1144780908315033711>',  # TODO
+        exclusive_to=[Ref('whale', RefType.enemy)],
     )
 
 

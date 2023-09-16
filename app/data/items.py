@@ -13,7 +13,6 @@ from typing import Any, Awaitable, Callable, Generator, Generic, NamedTuple, TYP
 from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
-from app.data.enemies import Enemies
 from app.data.pets import Pet, Pets
 from app.util.common import get_by_key, humanize_duration, ordinal, pluralize
 from config import Emojis
@@ -23,6 +22,7 @@ if TYPE_CHECKING:
 
     from app.core import Context
     from app.database import UserRecord
+    from app.data.enemies import Enemy
 
     UsageCallback: TypeAlias = 'Callable[[Items, Context, Item], Awaitable[Any]] | Callable[[Items, Context, Item, int], Awaitable[Any]]'
     RemovalCallback: TypeAlias = 'Callable[[Items, Context, Item], Awaitable[Any]]'
@@ -89,6 +89,16 @@ class FishingPoleMetadata(NamedTuple):
 
 class OverrideQuantity(NamedTuple):
     quantity: int
+
+
+class EnemyRef(NamedTuple):
+    ref: str
+
+    @property
+    def resolved(self) -> Enemy:
+        from app.data.enemies import Enemies
+
+        return get_by_key(Enemies, self.ref)
 
 
 @dataclass
@@ -205,13 +215,16 @@ class ItemUsageError(Exception):
     """When raised, disposed items will not be disposed."""
 
 
-Fish = partial(Item, type=ItemType.fish)
-Wood = partial(Item, type=ItemType.wood)
-Crate: Callable[..., Item[CrateMetadata]] = partial(Item, type=ItemType.crate, dispose=True, sellable=False)
-Worm = partial(Item, type=ItemType.worm)
-Ore = partial(Item, type=ItemType.ore)
-Harvest = partial(Item, type=ItemType.harvest)
-Net = partial(Item, type=ItemType.net)
+if TYPE_CHECKING:
+    Fish = Wood = Crate = Worm = Ore = Harvest = Net = Item
+else:
+    Fish = partial(Item, type=ItemType.fish)
+    Wood = partial(Item, type=ItemType.wood)
+    Crate: Callable[..., Item[CrateMetadata]] = partial(Item, type=ItemType.crate, dispose=True, sellable=False)
+    Worm = partial(Item, type=ItemType.worm)
+    Ore = partial(Item, type=ItemType.ore)
+    Harvest = partial(Item, type=ItemType.harvest)
+    Net = partial(Item, type=ItemType.net)
 
 
 def Crop(*, metadata: CropMetadata, **kwargs) -> Item[CropMetadata]:
@@ -453,7 +466,8 @@ class Items:
         energy=75,
     )
 
-    CHEESE_DEATH_MESSAGE = 'eat the cheese only to find out that you are lactose intolerant, and now you\'re dead.'
+    CHEESE_DEATH_MESSAGE_END = 'only to find out that you are lactose intolerant, and now you\'re dead.'
+    CHEESE_DEATH_MESSAGE = f'eat the cheese {CHEESE_DEATH_MESSAGE_END}'
 
     @staticmethod
     def _format_in_slices(item: Item, quantity: int) -> str:
@@ -464,8 +478,8 @@ class Items:
 
     @cheese.to_use
     async def use_cheese(self, ctx: Context, item: Item, quantity: int) -> OverrideQuantity | None:
-        if quantity > 100:
-            raise ItemUsageError('You can only eat up to 100 slices of cheese at a time.')
+        if quantity > 500:
+            raise ItemUsageError('You can only eat up to 500 slices of cheese at a time.')
 
         record = await ctx.db.get_user_record(ctx.author.id)
 
@@ -479,9 +493,16 @@ class Items:
         if died_on is not None:
             await record.make_dead(reason='You died due to lactose intolerance from eating cheese.')
             
-            if quantity <= 1 or died_on == 0:
+            if quantity <= 1:
                 await original.edit(content=f'{item.emoji} You {self.CHEESE_DEATH_MESSAGE}')
                 return
+
+            if died_on == 0:
+                await original.edit(content=(
+                    f'{item.emoji} You eat the first slice of cheese {self.CHEESE_DEATH_MESSAGE_END}\n'
+                    'The rest of your cheese was left untouched.'
+                ))
+                return OverrideQuantity(1)
 
         used_quantity = died_on + 1 if died_on is not None else quantity
         working_quantity = died_on if died_on is not None else quantity
@@ -743,7 +764,6 @@ class Items:
         description='A normal fish. Commonly found in the ocean.',
         sell=100,
         energy=3,
-        metadata=Enemies.cop,
     )
 
     sardine = Fish(
@@ -824,6 +844,7 @@ class Items:
         rarity=ItemRarity.rare,
         sell=1250,
         energy=36,
+        metadata=EnemyRef('shark'),
     )
 
     whale = Fish(
@@ -875,21 +896,22 @@ class Items:
         price=10000,
         buyable=True,
         metadata=FishingPoleMetadata(
-            weights={
-                None: 1,
-                fish: 0.4,
-                sardine: 0.25,
-                angel_fish: 0.175,
-                blowfish: 0.125,
-                crab: 0.075,
-                lobster: 0.04,
-                octopus: 0.02,
-                dolphin: 0.0075,
-                shark: 0.004,
-                whale: 0.0015,
-                axolotl: 0.0005,
-                vibe_fish: 0.00025,
-            },
+            # weights={
+            #     None: 1,
+            #     fish: 0.4,
+            #     sardine: 0.25,
+            #     angel_fish: 0.175,
+            #     blowfish: 0.125,
+            #     crab: 0.075,
+            #     lobster: 0.04,
+            #     octopus: 0.02,
+            #     dolphin: 0.0075,
+            #     shark: 0.004,
+            #     whale: 0.0015,
+            #     axolotl: 0.0005,
+            #     vibe_fish: 0.00025,
+            # },
+            weights={shark: 1},
             durability=10,
         ),
     )

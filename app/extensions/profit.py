@@ -28,8 +28,7 @@ from app.core import (
     user_max_concurrency
 )
 from app.core.helpers import EPHEMERAL, cooldown_message
-from app.data.enemies import Enemy
-from app.data.items import FishingPoleMetadata, Item, ItemRarity, ItemType, Items
+from app.data.items import EnemyRef, FishingPoleMetadata, Item, ItemRarity, ItemType, Items
 from app.data.pets import Pet, Pets
 from app.data.skills import RobberyTrainingButton
 from app.database import NotificationData, RobFailReason, UserRecord
@@ -1960,7 +1959,8 @@ class FishingView(UserView):
 
         if current := self.current:
             choices = random.sample(self.FISH, k=3)
-            choices[random.randrange(0,  len(choices))] = current
+            if current not in choices:
+                choices[random.randrange(0,  len(choices))] = current
 
             for choice in choices:
                 self.add_item(FishingButton(choice))
@@ -1970,12 +1970,12 @@ class FishingView(UserView):
         self.add_item(self.quit_fishing)
 
     async def advance(self, interaction: TypedInteraction) -> Any:
-        if self.current and isinstance(self.current.metadata, Enemy):
+        if self.current and isinstance(self.current.metadata, EnemyRef):
             game = PvEBattleView(
                 self.ctx,
                 {self.ctx.author: self.record},
-                opponent=self.current.metadata,
-                level=0,  # TODO: should this scale with the user's level?
+                opponent=self.current.metadata.resolved,
+                level=1,  # TODO: should this scale with the user's level?
                 description=f'The {self.current.display_name} challenges you to a battle! Defeat it to catch it!',
                 embeds=[self.make_embed()],
             )
@@ -2033,7 +2033,7 @@ class FishingView(UserView):
 
     def make_embed(self) -> discord.Embed:
         ctx = self.ctx
-        embed = discord.Embed(color=self.embed_color, timestamp=ctx.now if not self.is_finished() else None)
+        embed = discord.Embed(color=self.embed_color, timestamp=ctx.now if self.is_finished() else None)
         embed.set_author(name=f'{ctx.author.name}\'s Fishing Session', icon_url=ctx.author.display_avatar)
         if self.collected:
             embed.add_field(
@@ -2061,18 +2061,18 @@ class FishingView(UserView):
                 value=f'Identify the fish you caught to collect it and continue fishing!',
                 inline=False,
             )
-            if self.previously_used_bait:
-                remaining = self.record.inventory_manager.cached.quantity_of(Items.fish_bait)
-                embed.add_field(
-                    name=f'{Items.fish_bait.emoji} Fish Bait \u2014 **{remaining:,}** remaining',
-                    value='*Bait increased the chance of catching rarer fish.*',
-                    inline=False,
-                )
             embed.set_thumbnail(url=image_url_from_emoji(current.emoji))
         else:
             embed.add_field(
                 name='Nothing!',
                 value='You cast your line but nothing bit. Try again!',
+            )
+        if self.previously_used_bait:
+            remaining = self.record.inventory_manager.cached.quantity_of(Items.fish_bait)
+            embed.add_field(
+                name=f'{Items.fish_bait.emoji} Fish Bait \u2014 **{remaining:,}** remaining',
+                value='*Bait increased the chance of catching rarer fish.*',
+                inline=False,
             )
         return embed
 
@@ -2087,10 +2087,6 @@ class FishingView(UserView):
     @discord.ui.button(label='Continue Fishing', style=discord.ButtonStyle.primary)
     async def continue_fishing(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:
         await self.advance(interaction)
-        await interaction.response.edit_message(
-            embeds=[self.make_embed(), self.prompt_embed()],
-            view=self,
-        )
 
     @discord.ui.button(label='Quit Fishing', style=discord.ButtonStyle.danger)
     async def quit_fishing(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:
