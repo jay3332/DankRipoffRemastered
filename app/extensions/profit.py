@@ -895,7 +895,7 @@ class Profit(Cog):
         yield embed, cont, REPLY
 
     @command(aliases={'f', 'cast', 'fishing', 'fishingpole'}, hybrid=True)
-    @simple_cooldown(1, 25)
+    @simple_cooldown(1, 40)
     @user_max_concurrency(1)
     async def fish(self, ctx: Context):
         """Use your fishing pole to fish for fish and sell them for profit!"""
