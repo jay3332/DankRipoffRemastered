@@ -87,7 +87,7 @@ class TemporaryAttribute(Generic[T, V]):
         setattr(self.obj, self.attr, self.original)
 
 
-class DottedDict(dict):
+class DottedDict(dict[str, V]):
     __getattr__ = dict.__getitem__
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__

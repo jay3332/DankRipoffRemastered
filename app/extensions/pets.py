@@ -58,6 +58,16 @@ def has_operations(count: int):
     return commands.check(predicate)
 
 
+class HuntHelpButton(discord.ui.Button):
+    def __init__(self, ctx: Context) -> None:
+        super().__init__(style=discord.ButtonStyle.primary, label='View the Hunting Guide', row=2)
+        self.ctx = ctx
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.ctx.interaction = interaction
+        await self.ctx.send_guide('hunt')
+
+
 class PetsCog(Cog, name='Pets'):
     """Hunt, manage, and raise your pets!"""
 
@@ -500,13 +510,15 @@ def _format_level_data(record: PetRecord) -> str:
 
 
 class HuntMissButton(discord.ui.Button['HuntView']):
-    def __init__(self, *, row: int) -> None:
+    def __init__(self, ctx: Context, *, row: int) -> None:
         super().__init__(emoji=Emojis.space, row=row)
+        self.ctx = ctx
 
     async def callback(self, itx: TypedInteraction) -> None:
         self.style = discord.ButtonStyle.red
         self.view.finish()
 
+        self.view.followup_view.add_item(HuntHelpButton(self.ctx))
         await itx.response.edit_message(view=self.view)
         await itx.followup.send(
             'You missed the pet and it ran away! Better aim next time.', view=self.view.followup_view,
@@ -590,7 +602,7 @@ class HuntView(UserView):  # CHANGE TO UserView
     def __init__(self, ctx: Context, record: UserRecord, continuation: discord.ui.View | None = None) -> None:
         super().__init__(ctx.author, timeout=15)  # if this doesn't time out in 15 seconds, an error likely occured
         for i in range(20):
-            self.add_item(HuntMissButton(row=i % 5))
+            self.add_item(HuntMissButton(ctx, row=i % 5))
         self.ctx = ctx
         self.record = record
         self.followup_view: discord.ui.View | None = continuation
@@ -690,6 +702,7 @@ class FeedCustomModal(discord.ui.Modal):
             raise BadArgument('Very funny, division by 0.')
 
         await self.parent.do_feed(interaction, quantity)
+
 
 class FeedView(UserView):
     def __init__(self, ctx: Context, record: UserRecord, entry: PetRecord) -> None:

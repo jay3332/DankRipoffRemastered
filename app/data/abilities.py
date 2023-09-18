@@ -221,6 +221,7 @@ class Abilities:
     @insult.callback
     async def callback(self, ctx: BattleContext) -> Any:
         ctx.target.attack_stack.append(0.75, 2, types={AbilityType.attack})
+        ctx.player.tick_offensive(AbilityType.attack)
         ctx.add_buff_commentary(
             player=ctx.player,
             text=f'{ctx.player.user} **insults** {ctx.target.user}, lowering their motivation.',
@@ -287,12 +288,70 @@ class Abilities:
             buff=f'**Defense Debuff:** -25% for 2 attacks',
         )
 
+    swim = Ability(
+        key='swim',
+        name='Swim',
+        type=AbilityType.defense,
+        description='Swims around in the water, making them harder for the opponent to hit.',
+        effect='Adds a 25% defense buff against the next attack from the opponent.',
+        emoji='\U0001f3ca',
+        skins=dict(shark='<:shark_swim:1152430176236474379>'),
+    )
+
+    @swim.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        ctx.player.defense_stack.append(buff := 0.75, 1, types={AbilityType.attack})
+        ctx.player.tick_offensive(AbilityType.defense)
+        ctx.add_buff_commentary(
+            player=ctx.player,
+            text=f'{ctx.player.user} **swims** around in the water, making them hard to find.',
+            buff=f'**Next attack taken:** -{1 - buff:.1%} damage',
+        )
+
+    sonic_wave = Ability(
+        key='sonic_wave',
+        name='Sonic Wave',
+        type=AbilityType.attack,
+        description='The dolphin emits a powerful high-pitched sonic wave, disorienting the player.',
+        effect='Applies a 15% accuracy debuff for the next 3 attacks from the opponent.',
+        emoji='<:sonic_wave:1152977068901015616>',
+        exclusive_to=[Ref('dolphin', RefType.enemy)],
+    )
+
+    @sonic_wave.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        ctx.target.accuracy_stack.append(0.85, 3, types={AbilityType.attack})
+        ctx.player.tick_offensive(AbilityType.attack)
+        ctx.add_buff_commentary(
+            player=ctx.player,
+            text=f'{ctx.player.user} emits a high-pitched **sonic wave** at {ctx.target.user}, disorienting them.',
+            buff=f'**Accuracy Debuff:** -15% for 3 attacks',
+        )
+
+    blowhole = Ability(
+        key='blowhole',
+        name='Blowhole',
+        type=AbilityType.attack,
+        description='The dolphin uses its blowhole to spray water at the opponent, dealing damage.',
+        effect='Deals a small amount of damage to the opponent.',
+        emoji='<:blowhole:1152998628076564521>',
+        exclusive_to=[Ref('dolphin', RefType.enemy)],
+    )
+
+    @blowhole.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        damage = ctx.deal_attack(round(random.uniform(3, 7) * ctx.level ** 1.2))
+        ctx.add_attack_commentary(
+            damage=damage,
+            text=f'{ctx.player.user} uses their **blowhole** to spray water at {ctx.target.user} and deals **{damage} HP**',
+        )
+
     shark_bite = Ability(
         key='shark_bite',
         name='Shark Bite',
         type=AbilityType.attack,
         description='The shark lunges forward and bites the opponent; jaws snapping shut with immense force.',
-        effect='Deals a large amount of damage and slowly removes 3 HP per turn for the next 3 turns due to bleeding.',
+        effect='Deals a large amount of damage and slowly removes a small amount of HP per turn for the next 3 turns due to bleeding.',
         emoji='<:shark_bite:1152315697343500359>',
         exclusive_to=[Ref('shark', RefType.enemy)],
     )
@@ -305,7 +364,7 @@ class Abilities:
             )
 
         damage = ctx.deal_attack(round(random.uniform(5, 10) * ctx.level ** 1.1))
-        ctx.target.poison_stack.append(3, 3)
+        ctx.target.poison_stack.append(damage // 3, 3)
 
         ctx.add_attack_commentary(
             damage=damage,
@@ -334,35 +393,126 @@ class Abilities:
             buff=f'**Defense Debuff:** -25% for 2 attacks',
         )
 
-    swim = Ability(
-        key='swim',
-        name='Swim',
-        type=AbilityType.defense,
-        description='Swims around in the water, making them harder for the opponent to hit.',
-        effect='Adds a 25% defense buff against the next attack from the opponent.',
-        emoji='\U0001f3ca',
-        skins=dict(shark='<:shark_swim:1152430176236474379>'),
-    )
-
-    @swim.callback
-    async def callback(self, ctx: BattleContext) -> Any:
-        ctx.player.defense_stack.append(buff := 0.75, 1, types={AbilityType.attack})
-        ctx.player.tick_offensive(AbilityType.defense)
-        ctx.add_buff_commentary(
-            player=ctx.player,
-            text=f'{ctx.player.user} **swims** around in the water, making them hard to find.',
-            buff=f'**Next attack taken:** -{1 - buff:.1%} damage',
-        )
-
     mighty_splash = Ability(
         key='mighty_splash',
         name='Mighty Splash',
         type=AbilityType.attack,
         description='The whale leaps out of the water and crashes down, causing a massive splash that stuns the opponent.',
         effect='Deals a medium amount of damage and applies a 25% damage debuff for the next attack from the opponent.',
-        emoji='<:WHAT:1144780908315033711>',  # TODO
+        emoji='<:mighty_splash:1152616775175909469>',
         exclusive_to=[Ref('whale', RefType.enemy)],
     )
+
+    @mighty_splash.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        damage = ctx.deal_attack(round(random.uniform(4, 8) * ctx.level ** 1.1))
+        ctx.target.attack_stack.append(0.75, 1, types={AbilityType.attack})
+
+        ctx.add_attack_commentary(
+            damage=damage,
+            text=f'{ctx.player.user} leaps out of the water and crashes down, causing a **mighty splash** dealing **{damage} HP**',
+            buff=f'**Damage Debuff:** -25% for 1 attack',
+        )
+
+    echolocation = Ability(
+        key='echolocation',
+        name='Echolocation',
+        type=AbilityType.defense,
+        description='The whale uses echolocation to find the opponent, making them easier to hit.',
+        effect='Increases whale attack by 25% for its next 2 attacks.',
+        emoji='<:echolocation:1152616319825485864>',
+        exclusive_to=[Ref('whale', RefType.enemy)],
+    )
+
+    @echolocation.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        ctx.player.attack_stack.append(1.25, 2, types={AbilityType.attack})
+        ctx.player.tick_offensive(AbilityType.defense)
+        ctx.add_buff_commentary(
+            player=ctx.target,
+            text=f'{ctx.player.user} uses **echolocation** to find {ctx.target.user}, making them easier to hit.',
+            buff=f'**Attack Buff:** +50% for 2 attacks',
+        )
+
+    tidal_surge = Ability(
+        key='tidal_surge',
+        name='Tidal Surge',
+        type=AbilityType.attack,
+        description='The whale summons a tidal wave to crash down on the opponent, dealing damage and stunning them.',
+        effect='Deals a large amount of damage and applies a 50% accuracy debuff for the next attack from the opponent.',
+        emoji='<:tidal_surge:1153142496931631104>',
+        exclusive_to=[Ref('vibe_fish', RefType.enemy)],
+    )
+
+    @tidal_surge.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        if random.random() < 0.3 * ctx.player.accuracy:
+            return ctx.add_attack_commentary(
+                text=f'{ctx.player.user} tries to create a **tidal surge** to crash down on {ctx.target.user}, but fails!',
+            )
+
+        ctx.target.accuracy_stack.append(0.5, 1, types={AbilityType.attack})
+        damage = ctx.deal_attack(round(random.uniform(7, 12) * ctx.level ** 1.1))
+
+        ctx.add_attack_commentary(
+            damage=damage,
+            text=f'{ctx.player.user} summons a **tidal surge** to crash down on {ctx.target.user}, dealing **{damage} HP**',
+            buff=f'**Accuracy Debuff:** -50% for 1 attack',
+        )
+
+    electric_whirlpool = Ability(
+        key='electric_whirlpool',
+        name='Electric Whirlpool',
+        type=AbilityType.attack,
+        description='Summons a whirlpool and electrifies it, causing damage over time.',
+        effect='Slowly removes a medium amount of HP per turn for the next 3 turns due to electrocution.',
+        emoji='<:electric_whirlpool:1153147011374256180>',
+        exclusive_to=[Ref('vibe_fish', RefType.enemy)],  # TODO: and eel
+    )
+
+    @electric_whirlpool.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        if random.random() < 0.3 * ctx.player.accuracy:
+            return ctx.add_attack_commentary(
+                text=f'{ctx.player.user} tries to summon an **electric whirlpool** around {ctx.target.user}, but fails!',
+            )
+
+        ctx.target.poison_stack.append(amount := round(random.uniform(4, 6) * ctx.level ** 1.1), 3)
+        ctx.player.tick_offensive(AbilityType.attack)
+        ctx.add_buff_commentary(
+            player=ctx.target,
+            text=f'{ctx.player.user} summons an **electric whirlpool** around {ctx.target.user}',
+            buff=f'**You\'re Electrocuted!** -{amount:,} HP per turn for 3 turns',
+        )
+
+    vibe_blast = Ability(
+        key='vibe_blast',
+        name='Vibe Blast',
+        type=AbilityType.attack,
+        description=(
+            'The vibe fish charges up its vibe and eventually releases it in a powerful blast, '
+            'dealing massive damage and stunning the opponent.'
+        ),
+        effect='Deals a massive amount of damage and suppresses the next attack from the opponent.',
+        emoji='<:vibe_blast:1153149316110749746>',
+        exclusive_to=[Ref('vibe_fish', RefType.enemy)],
+    )
+
+    @vibe_blast.callback
+    async def callback(self, ctx: BattleContext) -> Any:
+        charge = ctx.metadata.setdefault('charge', 0)
+        if charge < 3:
+            ctx.metadata['charge'] += 1
+            return ctx.add_attack_commentary(text=f'{ctx.player.user} charges up its **vibe blast** ({charge + 1}/3)')
+
+        ctx.metadata['charge'] = 0
+        damage = ctx.deal_attack(round(random.uniform(20, 30) * ctx.level ** 1.1))
+        ctx.target.attack_stack.append(0, 1, types={AbilityType.attack})
+        ctx.add_attack_commentary(
+            damage=damage,
+            text=f'{ctx.player.user} releases its **vibe blast** and {ctx.target.user} is hit with immense force, dealing **{damage} HP**!',
+            buff=f'**Next move:** ATK suppressed to zero',
+        )
 
 
 _ABILITIES_INST = Abilities()

@@ -60,6 +60,19 @@ class Enemies:
         },
     )
 
+    dolphin = Enemy(
+        key='dolphin',
+        name='Dolphin',
+        description=Items.dolphin.description,
+        emoji=Items.dolphin.emoji,
+        base_hp=50,
+        abilities={
+            Abilities.swim: 0.8,
+            Abilities.sonic_wave: 0.4,
+            Abilities.blowhole: 0.4,
+        },
+    )
+
     shark = Enemy(
         key='shark',
         name='Shark',
@@ -70,5 +83,32 @@ class Enemies:
             Abilities.swim: 0.8,
             Abilities.serrated_fins: 0.4,
             Abilities.shark_bite: 0.2,
-        }
+        },
+    )
+
+    whale = Enemy(
+        key='whale',
+        name='Whale',
+        description=Items.whale.description,
+        emoji=Items.whale.emoji,
+        base_hp=80,
+        abilities={
+            Abilities.swim: 0.8,
+            Abilities.mighty_splash: 0.5,
+            Abilities.echolocation: 0.4,
+        },
+    )
+
+    vibe_fish = Enemy(
+        key='vibe_fish',
+        name='Vibe Fish',
+        description=Items.vibe_fish.description,
+        emoji=Items.vibe_fish.emoji,
+        base_hp=120,
+        abilities={
+            Abilities.swim: 1,
+            Abilities.tidal_surge: 0.8,
+            Abilities.electric_whirlpool: 0.8,
+            Abilities.vibe_blast: 0.6,
+        },
     )

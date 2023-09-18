@@ -917,6 +917,10 @@ class Profit(Cog):
         await game.remove_bait()
         yield '', game.make_embed(), game.prompt_embed(), game, EDIT
 
+        if not game.current:
+            await asyncio.sleep(1.2)
+            await game.advance(ctx)  # type: ignore
+
         await game.wait()
 
     RARE_DIG_ITEMS = {
@@ -1888,20 +1892,22 @@ class FishingButton(discord.ui.Button['FishingView']):
 
 
 class FishingView(UserView):
-    FISH: list[Item] = [item for item in Items.all() if item.type is ItemType.fish]
+    FISH: list[Item] = [
+        item for item in Items.all() if item.type is ItemType.fish and item.rarity is not ItemRarity.unobtainable
+    ]
     BASE_FISH_CHANCES: dict[Item | None, float] = {
-        None: 1.2,
+        None: 1.0,
         Items.fish: 0.4,
-        Items.sardine: 0.25,
-        Items.angel_fish: 0.175,
-        Items.blowfish: 0.125,
-        Items.crab: 0.05,
-        Items.lobster: 0.025,
-        Items.octopus: 0.01,
+        Items.sardine: 0.3,
+        Items.angel_fish: 0.2,
+        Items.blowfish: 0.15,
+        Items.crab: 0.1,
+        Items.lobster: 0.05,
+        Items.octopus: 0.03,
+        Items.axolotl: 0.015,
         Items.dolphin: 0.005,
-        Items.shark: 0.002,
-        Items.whale: 0.001,
-        Items.axolotl: 0.0004,
+        Items.shark: 0.003,
+        Items.whale: 0.0015,
     }
 
     def __init__(self, ctx: Context, *, record: UserRecord) -> None:
@@ -1971,6 +1977,9 @@ class FishingView(UserView):
         self.add_item(self.quit_fishing)
 
     async def advance(self, interaction: TypedInteraction) -> Any:
+        if self.is_finished():
+            return
+
         if self.current and isinstance(self.current.metadata, EnemyRef):
             game = PvEBattleView(
                 self.ctx,
@@ -2016,15 +2025,21 @@ class FishingView(UserView):
             self.collected[self.current] += 1
 
         self.update()
+        caller = interaction.maybe_edit if isinstance(interaction, Context) else (
+            interaction.response.edit_message if not interaction.response.is_done() else interaction.edit_original_response
+        )
         if self.count > self.max_count:
             self.stop()
             self.embed_color = Colors.success
             await self.give_prizes()
-            return await interaction.response.edit_message(embed=self.make_embed(), view=await self._shortcuts())
+            return await caller(embed=self.make_embed(), view=await self._shortcuts())
 
         await self.remove_bait()
-        caller = interaction.response.edit_message if not interaction.response.is_done() else interaction.edit_original_response
         await caller(embeds=[self.make_embed(), self.prompt_embed()], view=self)
+
+        if not self.current:
+            await asyncio.sleep(1.2)
+            await self.advance(interaction)
 
     async def remove_bait(self) -> None:
         if not self.previously_used_bait:
@@ -2087,9 +2102,11 @@ class FishingView(UserView):
         kwargs = {item.key: quantity for item, quantity in self.collected.items() if item}
         await self.record.inventory_manager.add_bulk(**kwargs)
 
-    @discord.ui.button(label='Continue Fishing', style=discord.ButtonStyle.primary)
+    @discord.ui.button(
+        label='Fishing in Progress...', style=discord.ButtonStyle.primary, emoji=Emojis.loading, disabled=True,
+    )
     async def continue_fishing(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:
-        await self.advance(interaction)
+        pass
 
     @discord.ui.button(label='Quit Fishing', style=discord.ButtonStyle.danger)
     async def quit_fishing(self, interaction: TypedInteraction, _button: discord.ui.Button) -> None:

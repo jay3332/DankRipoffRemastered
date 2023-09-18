@@ -12,6 +12,7 @@ from discord.ext.commands import CommandError, HybridCommandError
 from discord.utils import MISSING, async_all, maybe_coroutine as maybe_coro, maybe_coroutine
 
 from app.core.flags import ConsumeUntilFlag, FlagMeta, Flags
+from app.features.guide import GuideView
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.structures import TemporaryAttribute
 from app.util.types import TypedContext
@@ -140,6 +141,11 @@ class Context(TypedContext):
 
         self._message = result
         return result
+
+    async def send_guide(self, page: str = 'index') -> GuideView:
+        view = GuideView(self, page=page)
+        await self.reply(embed=view.render(), view=view)
+        return view
 
 
 class Cog(commands.Cog):

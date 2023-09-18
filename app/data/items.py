@@ -613,7 +613,7 @@ class Items:
         name='Fish Bait',
         emoji='\U0001fab1',
         description='When you fish while owning this, your chances of catching rarer fish will increase. Disposed every time you fish, no matter success or fail.',
-        price=150,
+        price=100,
         buyable=True,
     )
 
@@ -823,7 +823,27 @@ class Items:
         description='Octopuses have 3 hearts and 9 brains. And yes, that is the correct plural form of octopus.',
         rarity=ItemRarity.uncommon,
         sell=800,
-        energy=21,
+        energy=20,
+    )
+
+    legacy_axolotl = Fish(
+        key='legacy_axolotl',
+        name='Legacy Axolotl',
+        emoji='<:axolotl:935691745180667944>',
+        description='The old version of the axolotl when it was rarer. This is now unobtainable.',
+        rarity=ItemRarity.unobtainable,
+        sell=6000,
+        energy=70,
+    )
+
+    axolotl = Fish(
+        key='axolotl',
+        name='Axolotl',
+        emoji='<:axolotl:935691745180667944>',
+        description='The cool salamander',
+        rarity=ItemRarity.rare,
+        sell=1000,
+        energy=25,
     )
 
     dolphin = Fish(
@@ -832,8 +852,9 @@ class Items:
         emoji='<:dolphin:935294203364245601>',
         description='Dolphins are large aquatic mammals that are found in the ocean.',
         rarity=ItemRarity.rare,
-        sell=1050,
+        sell=1500,
         energy=30,
+        metadata=EnemyRef('dolphin'),
     )
 
     shark = Fish(
@@ -842,8 +863,8 @@ class Items:
         emoji='<:shark:935301959949365249>',
         description='Sharks are large predatory fish that are found in the ocean.',
         rarity=ItemRarity.rare,
-        sell=1250,
-        energy=36,
+        sell=2000,
+        energy=45,
         metadata=EnemyRef('shark'),
     )
 
@@ -852,19 +873,10 @@ class Items:
         name='Whale',
         emoji='<:whale:935305582846566410>',
         description='Whales are huge mammals that swim deep in the ocean. How do you even manage to catch these?',
-        rarity=ItemRarity.rare,
-        sell=1760,
-        energy=45,
-    )
-
-    axolotl = Fish(
-        key='axolotl',
-        name='Axolotl',
-        emoji='<:axolotl:935691745180667944>',
-        description='The cool salamander',
         rarity=ItemRarity.epic,
-        sell=3000,
-        energy=70,
+        sell=2500,
+        energy=60,
+        metadata=EnemyRef('whale'),
     )
 
     vibe_fish = Fish(
@@ -874,7 +886,8 @@ class Items:
         emoji='<a:vibe_fish:935293751604183060>',
         description='\uff56\uff49\uff42\uff45',  # "vibe" in full-width text
         rarity=ItemRarity.legendary,
-        sell=6500,
+        sell=7500,
+        metadata=EnemyRef('vibe_fish'),
     )
 
     eel = Fish(
@@ -900,19 +913,19 @@ class Items:
         buyable=True,
         metadata=FishingPoleMetadata(
             weights={
-                None: 1,
+                None: 0.8,
                 fish: 0.4,
-                sardine: 0.25,
-                angel_fish: 0.175,
-                blowfish: 0.125,
-                crab: 0.075,
-                lobster: 0.04,
-                octopus: 0.02,
-                dolphin: 0.0075,
-                shark: 0.004,
-                whale: 0.0015,
-                axolotl: 0.0005,
-                vibe_fish: 0.00025,
+                sardine: 0.3,
+                angel_fish: 0.2,
+                blowfish: 0.15,
+                crab: 0.1,
+                lobster: 0.08,
+                octopus: 0.04,
+                axolotl: 0.02,
+                dolphin: 0.01,
+                shark: 0.006,
+                whale: 0.003,
+                vibe_fish: 0.001,
             },
             durability=10,
         ),

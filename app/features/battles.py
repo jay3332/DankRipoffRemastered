@@ -10,17 +10,18 @@ from typing import Any, Generic, Iterator, NamedTuple, TypeAlias, TypeVar, TYPE_
 
 import discord
 
-from app.core import Context
 from app.core.helpers import MISSING
 from app.data.abilities import Ability, AbilityType, Abilities
 from app.data.items import Item
 from app.database import UserRecord
 from app.util.common import image_url_from_emoji, progress_bar
+from app.util.structures import DottedDict
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
     from typing import Self
 
+    from app.core import Context
     from app.data.enemies import Enemy
     from app.util.types import TypedInteraction
 
@@ -87,6 +88,7 @@ class Player:
     defense_stack: BuffStack[float] = field(default_factory=BuffStack)  # Note: this ticks when the OPPONENT moves
     accuracy_stack: BuffStack[float] = field(default_factory=BuffStack)
     poison_stack: BuffStack[int] = field(default_factory=BuffStack)
+    ability_metadata: defaultdict[Ability, DottedDict[Any]] = field(default_factory=lambda: defaultdict(DottedDict))
     max_hp: int = field(init=False)
     max_stamina: int = field(init=False)
 
@@ -158,6 +160,7 @@ class BattleContext(NamedTuple):
     target: Player  # the target opponent
     ability: Ability  # the ability used
     level: int  # the level of the ability
+    metadata: DottedDict[Any]  # the metadata for the ability
 
     @property
     def inner(self) -> Context:
@@ -246,6 +249,7 @@ class AbilityButton(discord.ui.Button):
 
         ctx = BattleContext(
             battle=self.parent, player=self.player, target=self.target, ability=self.ability, level=self.level,
+            metadata=self.player.ability_metadata[self.ability],
         )
         await self.ability.dispatch(ctx)
         self.parent.check_winner()
@@ -650,7 +654,10 @@ class PvEBattleView(BattleView):
             for ability, level in self.opponent_player.abilities.items()
         ))
         ability, level = random.choices(choices, weights=weights)[0]
-        await ability.dispatch(BattleContext(self, self.opponent_player, player, ability, level))
+        await ability.dispatch(BattleContext(
+            self, self.opponent_player, player, ability, level,
+            metadata=player.ability_metadata[ability],
+        ))
         self.check_winner()
 
     @discord.ui.button(label='Make a Move', style=discord.ButtonStyle.primary)
