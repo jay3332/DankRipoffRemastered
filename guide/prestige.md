@@ -13,7 +13,7 @@ To prestige, run {{/prestige}}. You will see a message containing prestige requi
 - Your inventory will be wiped, except for:
   - Any collectibles,
   - Any crates, and
-  - Any items of **Mythic** rarity.
+  - Any items of **Mythic** or **Unobtainable** rarity.
 - All crops will be wiped on your farm, however you will keep all claimed land.
 
 ## What will I keep?

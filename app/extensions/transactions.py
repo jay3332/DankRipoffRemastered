@@ -1138,7 +1138,7 @@ class Transactions(Cog):
         '- Your inventory will be wiped, except for:\n'
         '  - Any collectibles,\n'
         '  - Any crates, and\n'
-        '  - Any items of **Mythic** rarity.\n'
+        '  - Any items of **Mythic** or **Unobtainable** rarity.\n'
         '- All crops will be wiped on your farm, however you will keep all claimed land.'
     )
     PRESTIGE_WHAT_DO_I_KEEP = (
@@ -1268,7 +1268,7 @@ class PrestigeView(UserView):
                 for item, quantity in self.inventory.cached.items()
                 if quantity > 0 and (
                     item.type in (ItemType.collectible, ItemType.crate)
-                    or item.rarity is ItemRarity.mythic
+                    or item.rarity in (ItemRarity.mythic, ItemRarity.unobtainable)
                 )
             }
             await self.record.update(
