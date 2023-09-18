@@ -762,7 +762,7 @@ class Items:
         plural='Fish',
         emoji='<:fish:935002348361748491>',
         description='A normal fish. Commonly found in the ocean.',
-        sell=100,
+        sell=75,
         energy=3,
     )
 
@@ -771,7 +771,7 @@ class Items:
         name='Sardine',
         emoji='<:sardine:935265248091451493>',
         description='A nutritious fish. They are small and easy to catch.',
-        sell=150,
+        sell=100,
         energy=4,
     )
 
@@ -781,7 +781,7 @@ class Items:
         plural='Angel Fish',
         emoji='<:angel_fish:935265295000551475>',
         description='Angelfish are tropical freshwater fish that come in a variety of colors.',
-        sell=250,
+        sell=200,
         energy=6,
     )
 
