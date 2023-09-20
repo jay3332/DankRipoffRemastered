@@ -2013,7 +2013,7 @@ class FishingView(UserView):
                         await self.record.make_dead(reason='A fish bit your hand off')
                 # otherwise, 80% chance the fish damages the fishing pole
                 else:
-                    damage = random.randint(3, 6)
+                    damage = random.randint(*self.current.metadata.damage)
                     inventory = self.record.inventory_manager
                     remaining, broken = await inventory.deal_damage(self.tool, damage)
                     quantity = inventory.cached.quantity_of(self.tool)

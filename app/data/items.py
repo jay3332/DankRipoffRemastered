@@ -93,6 +93,7 @@ class OverrideQuantity(NamedTuple):
 
 class EnemyRef(NamedTuple):
     ref: str
+    damage: tuple[int, int]
 
     @property
     def resolved(self) -> Enemy:
@@ -875,7 +876,7 @@ class Items:
         rarity=ItemRarity.rare,
         sell=1500,
         energy=30,
-        metadata=EnemyRef('dolphin'),
+        metadata=EnemyRef('dolphin', damage=(2, 3)),
     )
 
     shark = Fish(
@@ -886,7 +887,7 @@ class Items:
         rarity=ItemRarity.rare,
         sell=2000,
         energy=45,
-        metadata=EnemyRef('shark'),
+        metadata=EnemyRef('shark', damage=(4, 5)),
     )
 
     whale = Fish(
@@ -897,7 +898,7 @@ class Items:
         rarity=ItemRarity.epic,
         sell=2500,
         energy=60,
-        metadata=EnemyRef('whale'),
+        metadata=EnemyRef('whale', damage=(4, 6)),
     )
 
     vibe_fish = Fish(
@@ -908,7 +909,7 @@ class Items:
         description='\uff56\uff49\uff42\uff45',  # "vibe" in full-width text
         rarity=ItemRarity.legendary,
         sell=7500,
-        metadata=EnemyRef('vibe_fish'),
+        metadata=EnemyRef('vibe_fish', damage=(5, 7)),
     )
 
     eel = Fish(
