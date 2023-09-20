@@ -861,8 +861,8 @@ class Transactions(Cog):
         keep_one='Whether to keep one of every item that would otherwise be sold.',
     )
     @app_commands.choices(
-        rarity=[app_commands.Choice(name=rarity.name.title(), value=rarity.name) for rarity in list(ItemRarity)],
-        category=[app_commands.Choice(name=cat.name.title(), value=cat.name) for cat in list(ItemType)],
+        rarity=[app_commands.Choice(name=rarity.name.title(), value=rarity.name) for rarity in ItemRarity],
+        category=[app_commands.Choice(name=cat.name.title(), value=cat.name) for cat in ItemType],
     )
     @app_commands.rename(keep_one='keep-one')
     async def sell_bulk_app_command(
@@ -937,6 +937,17 @@ class Transactions(Cog):
             app_commands.Choice(name=item.name, value=item.key)
             for item in query_collection_many(Items, Item, current)
         ]
+
+    @command(aliases={'rep', 'fix', 'repairshop'}, hybrid=True)
+    @simple_cooldown(3, 6)
+    @user_max_concurrency(1)
+    @lock_transactions
+    async def repair(self, ctx: Context, *, item: query_item = None):
+        """Repair a repairable item at the repair shop."""
+        record = await ctx.db.get_user_record(ctx.author.id)
+        
+        if item.durability is None:
+            return f'{}'
 
     @command(aliases={'give', 'gift', 'donate', 'pay'}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 30)

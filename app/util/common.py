@@ -228,7 +228,7 @@ def pluralize(text: str, /) -> str:
 def humanize_list(li: list[Any], *, joiner: str = 'and') -> str:
     """Takes a list and returns it joined."""
     if len(li) <= 2:
-        return " and ".join(li)
+        return f' {joiner} '.join(li)
 
     return ", ".join(li[:-1]) + f", {joiner} {li[-1]}"
 

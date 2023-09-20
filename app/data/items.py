@@ -122,12 +122,20 @@ class Item(Generic[T]):
     rarity: ItemRarity = ItemRarity.common
     metadata: T = None
     energy: int | None = None
+
     durability: int | None = None
+    repair_rate: int | None = None  # cost per damage to repair
+    repair_time: datetime.timedelta | None = None  # time per damage to repair
 
     usage_callback: UsageCallback | None = None
     removal_callback: RemovalCallback | None = None
 
     def __post_init__(self) -> None:
+        assert (
+            (self.durability is None) is (self.repair_rate is None) is (self.repair_time is None), 
+            'durability, repair_rate, and repair_time must be specified together',
+        )
+
         if not self.brief:
             self.brief = self.description.split('\n')[0]
 
@@ -876,7 +884,7 @@ class Items:
         rarity=ItemRarity.rare,
         sell=1500,
         energy=30,
-        metadata=EnemyRef('dolphin', damage=(2, 3)),
+        metadata=EnemyRef('dolphin', damage=(2, 4)),
     )
 
     shark = Fish(
@@ -887,7 +895,7 @@ class Items:
         rarity=ItemRarity.rare,
         sell=2000,
         energy=45,
-        metadata=EnemyRef('shark', damage=(4, 5)),
+        metadata=EnemyRef('shark', damage=(4, 6)),
     )
 
     whale = Fish(
@@ -898,7 +906,7 @@ class Items:
         rarity=ItemRarity.epic,
         sell=2500,
         energy=60,
-        metadata=EnemyRef('whale', damage=(4, 6)),
+        metadata=EnemyRef('whale', damage=(5, 7)),
     )
 
     vibe_fish = Fish(
@@ -909,7 +917,7 @@ class Items:
         description='\uff56\uff49\uff42\uff45',  # "vibe" in full-width text
         rarity=ItemRarity.legendary,
         sell=7500,
-        metadata=EnemyRef('vibe_fish', damage=(5, 7)),
+        metadata=EnemyRef('vibe_fish', damage=(7, 9)),
     )
 
     eel = Fish(
@@ -931,7 +939,7 @@ class Items:
             'Owning this will grant you access to more fish and better luck in the `fish` command - '
             'fish for fish and sell them for profit!'
         ),
-        price=10000,
+        price=12000,
         buyable=True,
         metadata=FishingPoleMetadata(
             weights={
@@ -954,6 +962,8 @@ class Items:
             iterations=5,
         ),
         durability=10,
+        repair_rate=1000,
+        repair_time=datetime.timedelta(minutes=2),
     )
 
     __fishing_poles__: tuple[Item[FishingPoleMetadata], ...] = (

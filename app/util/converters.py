@@ -316,6 +316,10 @@ def query_item(query: str, /, *, prioritizer: Callable[[Item], int] = lambda _: 
     raise BadArgument(f"I couldn't find a item named {query!r}.")
 
 
+def query_repairable_item(query: str, /) -> Item:
+    item = query_item(query, prioritizer=lambda )
+
+
 def query_crop(query: str, /) -> Item:
     try:
         crop = query_item(query.lower().removesuffix(' crop') + ' crop')
