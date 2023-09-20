@@ -195,6 +195,7 @@ class InventoryMapping(dict[Item, int]):
 class InventoryManager:
     def __init__(self, record: UserRecord) -> None:
         self.cached: InventoryMapping = InventoryMapping()
+        self.damage: InventoryMapping = InventoryMapping()  # stored separately to avoid breaking chances
 
         self._record: UserRecord = record
         self._task: asyncio.Task = record.db.loop.create_task(self.fetch_items())
@@ -208,7 +209,11 @@ class InventoryManager:
         records = await self._record.db.fetch(query, self._record.user_id)
 
         for record in records:
-            self.cached[record['item']] = record['count']
+            self.cached[item := record['item']] = record['count']
+
+            damage = record['damage']
+            if damage is not None:
+                self.damage[item] = damage
 
     async def add_item(self, item: Item | str, amount: int = 1, *, connection: asyncpg.Connection | None = None) -> None:
         await self.wait()
@@ -253,6 +258,38 @@ class InventoryManager:
                 ON CONFLICT (user_id, item) DO UPDATE SET count = items.count + $3
                 """
         await self._base_update(query, connection=connection, transform=lambda p, v: p + v, **items)
+
+    async def deal_damage(self, item: Item | str, damage: int, *, connection: asyncpg.Connection | None = None) -> tuple[int, bool]:
+        """Deals damage to the item, removing it and resetting damage if it breaks."""
+        await self.wait()
+        if isinstance(item, str):
+            item = get_by_key(Items, item)
+
+        assert item.durability is not None, f'Item {item!r} has no durability rating'
+        damage = self.damage.get(item, item.durability) - damage
+        quantity = self.cached.quantity_of(item)
+
+        if broken := damage <= 0:
+            damage = item.durability
+            quantity -= 1
+
+        query = "UPDATE items SET damage = $3, count = $4 WHERE user_id = $1 AND item = $2"
+        await (connection or self._record.db).execute(query, self._record.user_id, str(item), damage, quantity)
+        self.cached[item] = quantity
+        self.damage[item] = damage
+        return damage, broken
+
+    async def reset_damage(self, item: Item | str, *, to: int | None = None, connection: asyncpg.Connection | None = None) -> None:
+        await self.wait()
+        if isinstance(item, str):
+            item = get_by_key(Items, item)
+
+        assert item.durability is not None, f'Item {item!r} has no durability rating'
+        damage = to if to is not None else item.durability
+
+        query = "UPDATE items SET damage = $3 WHERE user_id = $1 AND item = $2"
+        await (connection or self._record.db).execute(query, self._record.user_id, str(item), damage)
+        self.damage[item] = damage
 
     async def wipe(self, *, connection: asyncpg.Connection | None = None) -> None:
         await self.wait()  # this is so the cache isn't prone to data races

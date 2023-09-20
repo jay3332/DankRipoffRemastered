@@ -125,14 +125,10 @@ class Player:
     def tick_offensive(self, last_used_ability_type: AbilityType) -> None:
         self.attack_stack.tick(last_used_ability_type)
         self.accuracy_stack.tick(last_used_ability_type)
-
-        self.hp -= self.poison_damage
         self.poison_stack.tick(last_used_ability_type)
 
     def tick_defensive(self, last_used_ability_type: AbilityType) -> None:
         self.defense_stack.tick(last_used_ability_type)
-
-        self.hp -= self.poison_damage
         self.poison_stack.tick(last_used_ability_type)
 
     def heal(self, hp: int) -> int:
@@ -653,6 +649,7 @@ class PvEBattleView(BattleView):
             ((ability, level), (3 if ability.type in favored else 1) * mapping[ability])
             for ability, level in self.opponent_player.abilities.items()
         ))
+        ability: Ability
         ability, level = random.choices(choices, weights=weights)[0]
         await ability.dispatch(BattleContext(
             self, self.opponent_player, player, ability, level,

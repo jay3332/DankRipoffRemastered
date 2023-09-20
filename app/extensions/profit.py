@@ -1898,8 +1898,10 @@ class FishingView(UserView):
     BASE_FISH_CHANCES: dict[Item | None, float] = {
         None: 1.0,
         Items.fish: 0.4,
+        Items.anchovy: 0.3,
         Items.sardine: 0.3,
         Items.angel_fish: 0.2,
+        Items.goldfish: 0.2,
         Items.blowfish: 0.15,
         Items.crab: 0.1,
         Items.lobster: 0.05,
@@ -1917,7 +1919,6 @@ class FishingView(UserView):
         self.record: UserRecord = record
         self.collected: defaultdict[Item, int] = defaultdict(int)
         self.count: int = 0
-        self.max_count: int = 5   # TODO: will be upgradable with prestige tokens
         self.embed_color: int = Colors.secondary
 
         inventory = record.inventory_manager
@@ -1928,6 +1929,7 @@ class FishingView(UserView):
 
         fishing_poles = (item for item in Items.__fishing_poles__ if inventory.cached.quantity_of(item) > 0)
         self.tool: Item[FishingPoleMetadata] | None = next(fishing_poles, None)
+        self.max_count: int = 4 if not self.tool else self.tool.metadata.iterations  # TODO: will be upgradable with prestige tokens
 
         weights = self.tool.metadata.weights if self.tool else self.BASE_FISH_CHANCES
         self.weights: dict[Item | None, float] = weights.copy()
@@ -1999,7 +2001,7 @@ class FishingView(UserView):
             if not game.won:
                 self.stop()
                 # bare hands? 75% chance they survive and pay medical fees. 25% chance they die
-                if not self.tool or random.random() < 0.3:
+                if not self.tool or random.random() < 0.2:
                     if random.random() < 0.75:
                         debt = max(
                             random.randint(500, 2500), int(self.record.wallet * random.uniform(0.05, 0.3)),
@@ -2009,10 +2011,24 @@ class FishingView(UserView):
                     else:
                         text = f'The fish defeats you and bites your head off! You died.'
                         await self.record.make_dead(reason='A fish bit your hand off')
-                # otherwise, 70% chance the fish damages the fishing pole
+                # otherwise, 80% chance the fish damages the fishing pole
                 else:
-                    text = f'Your {self.tool.display_name} was damaged in the battle.'
-                    # TODO damage fishing pole
+                    damage = random.randint(3, 6)
+                    inventory = self.record.inventory_manager
+                    remaining, broken = await inventory.deal_damage(self.tool, damage)
+                    quantity = inventory.cached.quantity_of(self.tool)
+                    # format the text differently if the pole broke
+                    text = (
+                        f'Your {self.tool.display_name} was damaged and it snapped in half! '
+                        f'What a shame.\n{Emojis.Expansion.standalone} You have '
+                        f'{self.tool.get_sentence_chunk(quantity or f"no more {self.tool.emoji} {self.tool.plural}")} remaining.'
+                        if broken else (
+                            f'Your {self.tool.display_name} was damaged in the battle.\n'
+                            f'{Emojis.Expansion.standalone} {damage:,} damage taken {Emojis.arrow} '
+                            f'**{remaining:,}/{self.tool.durability:,}** damage remaining '
+                            f'({remaining / self.tool.durability:.1%})'
+                        )
+                    )
 
                 embed = discord.Embed(color=Colors.error, timestamp=interaction.created_at)
                 embed.add_field(name=f'You were defeated by the {self.current.display_name}!', value=text)

@@ -76,6 +76,7 @@ class Ability:
         return func
 
     async def dispatch(self, ctx: BattleContext) -> Any:
+        ctx.player.hp -= ctx.player.poison_damage
         return await self._callback(_ABILITIES_INST, ctx)
 
     def __hash__(self) -> int:
@@ -107,7 +108,7 @@ class Abilities:
                 text=f'{ctx.player.user} tries to **punch** {ctx.target.user}, but {reason}',
             )
 
-        base = random.uniform(6, 18) * ctx.level ** 1.2
+        base = random.uniform(8, 16) * ctx.level ** 1.2
         area = random.choice((
             'face',
             'chest',
@@ -151,7 +152,7 @@ class Abilities:
                 text=f'{ctx.player.user} tries to **kick** {ctx.target.user}, but {reason}',
             )
 
-        base = random.uniform(8, 16) * ctx.level ** 1.2
+        base = random.uniform(10, 14) * ctx.level ** 1.2
         area = random.choice((
             'stomach',
             'arm',
@@ -241,7 +242,7 @@ class Abilities:
 
     @block.callback
     async def callback(self, ctx: BattleContext) -> Any:
-        buff = 0.5 * self._BLOCK_BUFF_CURVE_BASE ** (ctx.level - 1)
+        buff = 0.45 * self._BLOCK_BUFF_CURVE_BASE ** (ctx.level - 1)
         ctx.player.defense_stack.append(buff, 1, types={AbilityType.attack})
         ctx.player.tick_offensive(AbilityType.defense)
         ctx.add_buff_commentary(

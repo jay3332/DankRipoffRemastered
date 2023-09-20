@@ -84,7 +84,7 @@ class NetMetadata(NamedTuple):
 
 class FishingPoleMetadata(NamedTuple):
     weights: dict[Item, float]
-    durability: int
+    iterations: int
 
 
 class OverrideQuantity(NamedTuple):
@@ -121,6 +121,7 @@ class Item(Generic[T]):
     rarity: ItemRarity = ItemRarity.common
     metadata: T = None
     energy: int | None = None
+    durability: int | None = None
 
     usage_callback: UsageCallback | None = None
     removal_callback: RemovalCallback | None = None
@@ -766,6 +767,16 @@ class Items:
         energy=3,
     )
 
+    anchovy = Fish(
+        key='anchovy',
+        name='Anchovy',
+        plural='Anchovies',
+        emoji='<:anchovy:1153810370390143027>',
+        description='A small, common, yet nutrient-rich fish.',
+        sell=100,
+        energy=4,
+    )
+
     sardine = Fish(
         key='sardine',
         name='Sardine',
@@ -783,6 +794,16 @@ class Items:
         description='Angelfish are tropical freshwater fish that come in a variety of colors.',
         sell=200,
         energy=6,
+    )
+
+    goldfish = Fish(
+        key='goldfish',
+        name='Goldfish',
+        plural='Goldfish',
+        emoji='<:goldfish:1153859554040365056>',
+        description='Goldfish are a type of carp that are commonly kept as pets.',
+        sell=250,
+        energy=7,
     )
 
     blowfish = Fish(
@@ -915,8 +936,10 @@ class Items:
             weights={
                 None: 0.8,
                 fish: 0.4,
+                anchovy: 0.3,
                 sardine: 0.3,
                 angel_fish: 0.2,
+                goldfish: 0.2,
                 blowfish: 0.15,
                 crab: 0.1,
                 lobster: 0.08,
@@ -927,8 +950,9 @@ class Items:
                 whale: 0.003,
                 vibe_fish: 0.001,
             },
-            durability=10,
+            iterations=5,
         ),
+        durability=10,
     )
 
     __fishing_poles__: tuple[Item[FishingPoleMetadata], ...] = (
