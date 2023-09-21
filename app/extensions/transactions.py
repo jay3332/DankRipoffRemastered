@@ -885,10 +885,12 @@ class Transactions(Cog):
 
         embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
         embed.set_author(name=f'Successful Transaction: {ctx.author}', icon_url=ctx.author.display_avatar)
-        embed.description = (
-            f'Successfully sold **{count:,}** item{s} for {Emojis.coin} **{total:,}**:\n{friendly}'
+        description = (
+            f'Successfully sold **{count:,}** item{s} for {Emojis.coin} **{total:,}**:\n{{}}'
         )
-        return embed, REPLY
+
+        paginator = Paginator(ctx, LineBasedFormatter(embed, friendly, description, per_page=15))
+        return paginator, REPLY
 
     @sell_bulk.define_app_command()
     @app_commands.describe(
