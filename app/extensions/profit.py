@@ -1882,7 +1882,7 @@ class FishingButton(discord.ui.Button['FishingView']):
                 name=f'Wrong, that was {self.view.current.get_sentence_chunk()}!',
                 value=(
                     f'The {self.view.current.name} got away and your fishing session ended.\n'
-                    f'You can fish again later by using {self.view.fish_mention}.'
+                    f'You can fish again later by using {self.view.fish_mention}.\n\n{await self.view.damage_tool(1)}'
                 ),
             )
             return await interaction.response.edit_message(embeds=[self.view.make_embed(), embed], view=self.view)
@@ -1978,6 +1978,25 @@ class FishingView(UserView):
 
         self.add_item(self.quit_fishing)
 
+    async def damage_tool(self, damage: int, *, extra: str = '') -> str:
+        inventory = self.record.inventory_manager
+        remaining, broken = await inventory.deal_damage(self.tool, damage)
+        quantity = inventory.cached.quantity_of(self.tool)
+        repair = self.ctx.bot.tree.get_app_command('repair').mention
+        # format the text differently if the pole broke
+        return (
+            f'**Your {self.tool.display_name} was damaged{extra} and it snapped in half!**\n'
+            f'{Emojis.Expansion.standalone} You have '
+            f'{self.tool.get_sentence_chunk(quantity or f"no more {self.tool.emoji} {self.tool.plural}")} remaining.'
+            if broken else (
+                f'**Your {self.tool.display_name} was damaged{extra}!**\n'
+                f'{Emojis.Expansion.first} {damage:,} damage taken {Emojis.arrow} '
+                f'**{remaining:,}/{self.tool.durability:,}** damage remaining '
+                f'({remaining / self.tool.durability:.1%})\n'
+                f'{Emojis.Expansion.last} Repair the tool in the repair shop: {repair}'
+            )
+        )
+
     async def advance(self, interaction: TypedInteraction) -> Any:
         if self.is_finished():
             return
@@ -2014,21 +2033,7 @@ class FishingView(UserView):
                 # otherwise, 80% chance the fish damages the fishing pole
                 else:
                     damage = random.randint(*self.current.metadata.damage)
-                    inventory = self.record.inventory_manager
-                    remaining, broken = await inventory.deal_damage(self.tool, damage)
-                    quantity = inventory.cached.quantity_of(self.tool)
-                    # format the text differently if the pole broke
-                    text = (
-                        f'Your {self.tool.display_name} was damaged and it snapped in half! '
-                        f'What a shame.\n{Emojis.Expansion.standalone} You have '
-                        f'{self.tool.get_sentence_chunk(quantity or f"no more {self.tool.emoji} {self.tool.plural}")} remaining.'
-                        if broken else (
-                            f'Your {self.tool.display_name} was damaged in the battle.\n'
-                            f'{Emojis.Expansion.standalone} {damage:,} damage taken {Emojis.arrow} '
-                            f'**{remaining:,}/{self.tool.durability:,}** damage remaining '
-                            f'({remaining / self.tool.durability:.1%})'
-                        )
-                    )
+                    text = await self.damage_tool(damage, extra=' in the battle')
 
                 embed = discord.Embed(color=Colors.error, timestamp=interaction.created_at)
                 embed.add_field(name=f'You were defeated by the {self.current.display_name}!', value=text)
