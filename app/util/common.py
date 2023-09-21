@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import math
 import random
 import re
@@ -249,8 +250,10 @@ def humanize_small_duration(seconds: float, /) -> str:
     return "<1 ps"
 
 
-def humanize_duration(seconds, depth: int = 3):
+def humanize_duration(seconds: int | float | datetime.timedelta, depth: int = 3):
     """Formats a duration (in seconds) into one that is human-readable."""
+    if isinstance(seconds, datetime.timedelta):
+        seconds = seconds.total_seconds()
     if seconds < 1:
         return '<1 second'
 
@@ -316,7 +319,7 @@ def expansion_list(entries: Iterable[str]) -> str:
     return '\n'.join(result)
 
 
-def progress_bar(ratio: float, *, length: int = 8, u200b: bool = True) -> str:
+def progress_bar(ratio: float, *, length: int = 8, u200b: bool = True, provider: type = Emojis.ProgressBars) -> str:
     # noinspection PyTypeChecker
     ratio = min(1, max(0, ratio))
 
@@ -349,7 +352,7 @@ def progress_bar(ratio: float, *, length: int = 8, u200b: bool = True) -> str:
         else:
             start = 'mid'
 
-        result += getattr(Emojis.ProgressBars, f'{start}_{key}')
+        result += getattr(provider, f'{start}_{key}')
 
     if u200b:
         return result + "\u200b"

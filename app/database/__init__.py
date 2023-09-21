@@ -486,6 +486,19 @@ class NotificationData:
                 f'which saved your life and is now consumed. {remaining}'
             )
 
+    class RepairFinished(NamedTuple):
+        item: str
+
+        type = 10
+        title = 'Your item has been repaired!'
+        color = Colors.success
+        emoji = '\N{HAMMER}'
+
+        def describe(self, _: Bot) -> str:
+            return (
+                f'Your **{get_by_key(Items, self.item).display_name}** has been repaired! It has been returned to your inventory.'
+            )
+
     @classmethod
     def from_record(cls, record: asyncpg.Record) -> _NotificationData:
         type_ = record['type']

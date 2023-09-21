@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
+from collections import defaultdict
 from functools import partial
 from textwrap import dedent
-from typing import Any, Callable, Literal, TYPE_CHECKING, TypeAlias
+from typing import Any, Callable, Literal, NamedTuple, ValuesView, TYPE_CHECKING, TypeAlias
 
 import discord
 from discord import app_commands
@@ -14,7 +16,7 @@ from app.core import (
     Command,
     Context,
     EDIT,
-    HybridCommand,
+    ERROR, HybridCommand,
     HybridContext, NO_EXTRA,
     REPLY,
     command,
@@ -32,6 +34,7 @@ from app.util.common import (
     cutoff,
     get_by_key,
     image_url_from_emoji,
+    humanize_duration,
     humanize_list,
     progress_bar,
     query_collection,
@@ -52,14 +55,16 @@ from app.util.converters import (
     get_amount,
     query_item,
     query_recipe,
+    query_repairable_item,
     transform_item_and_quantity,
 )
-from app.util.pagination import FieldBasedFormatter, Paginator
+from app.util.pagination import ActiveRow, FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
 from app.util.structures import DottedDict, LockWithReason
 from app.util.views import CommandInvocableModal, ConfirmationView, ModalButton, StaticCommandButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
+    from app.core.timers import Timer
     from app.util.types import CommandResponse, TypedInteraction
 
 
@@ -476,10 +481,41 @@ class SellBulkFlags(Flags):
     keep_one = store_true(name='keep-one', aliases=('ko', 'keepone', 'keep-1', 'keep1', 'k1'), short='k')
 
 
+class ActiveRepairJob(NamedTuple):
+    item: Item
+    start: datetime.datetime
+    end: datetime.datetime
+
+
 class Transactions(Cog):
     """Commands that handle transactions between the bank or other users."""
 
     emoji = '\U0001f91d'
+
+    def __setup__(self) -> None:
+        self._fetch_active_repair_jobs_task = self.bot.loop.create_task(self._fetch_active_repair_jobs())
+        self.active_repair_jobs: defaultdict[int, dict[int, ActiveRepairJob]] = defaultdict(dict)
+
+    async def _fetch_active_repair_jobs(self) -> None:
+        query = """
+                SELECT
+                    id,
+                    (metadata->'user_id')::BIGINT AS user_id,
+                    metadata->>'item' AS item,
+                    created_at,
+                    expires
+                FROM timers
+                WHERE
+                    event = 'repair'
+                """
+
+        await self.bot.db.wait()
+        for record in await self.bot.db.fetch(query):
+            self.active_repair_jobs[record['user_id']][record['id']] = ActiveRepairJob(
+                item=get_by_key(Items, record['item']),
+                start=record['created_at'],
+                end=record['expires'],
+            )
 
     @discord.utils.cached_property
     def withdraw_modal(self) -> Callable[[TypedInteraction], BankTransactionModal]:
@@ -830,16 +866,16 @@ class Transactions(Cog):
         embed = discord.Embed(color=Colors.warning, timestamp=ctx.now)
         embed.set_author(name=f'Confirm Bulk Sell: {ctx.author}', icon_url=ctx.author.display_avatar)
 
-        friendly = '\n'.join(
+        friendly = [
             f'- {item.get_sentence_chunk(quantity)} worth {Emojis.coin} **{item.sell * quantity:,}**'
             for item, quantity in items.items()
-        )
+        ]
         s = 's' if count != 1 else ''
-        embed.description = (
-            f'You are about to sell **{count:,}** item{s} in bulk:\n{friendly}\nTotal: {Emojis.coin} **{total:,}**'
+        description = (
+            f'You are about to sell **{count:,}** item{s} in bulk:\n{{}}\nTotal: {Emojis.coin} **{total:,}**'
         )
-
-        if not await ctx.confirm(embed=embed, delete_after=True, true='Confirm Bulk Sell'):
+        paginator = Paginator(ctx, LineBasedFormatter(embed, friendly, description, per_page=15))
+        if not await ctx.confirm(paginator=paginator, delete_after=True, true='Confirm Bulk Sell'):
             return 'Alright, looks like we won\'t bulk sell today.', REPLY
 
         async with ctx.db.acquire() as conn:
@@ -942,12 +978,84 @@ class Transactions(Cog):
     @simple_cooldown(3, 6)
     @user_max_concurrency(1)
     @lock_transactions
-    async def repair(self, ctx: Context, *, item: query_item = None):
+    async def repair(self, ctx: Context, *, item: query_repairable_item = None) -> CommandResponse:
         """Repair a repairable item at the repair shop."""
+        item: Item
         record = await ctx.db.get_user_record(ctx.author.id)
-        
-        if item.durability is None:
-            return f'{}'
+        inventory = await record.inventory_manager.wait()
+        if item is None:
+            formatter = RepairListFormatter(record, self.active_repair_jobs[ctx.author.id].values())
+            return Paginator(ctx, formatter, other_components=[ActiveRepairRow()]), REPLY
+
+        if inventory.cached.quantity_of(item) <= 0:
+            return f'You do not have a **{item.display_name}** in your inventory to repair.', ERROR
+
+        damage = inventory.damage.get(item, item.durability)
+        remaining = item.durability - damage
+        if remaining <= 0:
+            return f'Your **{item.display_name}** is not damaged.', ERROR
+
+        price = item.repair_rate * remaining
+        if record.wallet < price:
+            return (
+                f'Repairing your {item.display_name} would cost {Emojis.coin} **{price:,}**, but you only have '
+                f'{Emojis.coin} **{record.wallet:,}** in your wallet.',
+                ERROR,
+            )
+
+        time = item.repair_time * remaining
+        last_line = (
+            f'{Emojis.Expansion.last} The *{item.name} will be temporarily removed from your inventory while it is being repaired.*'
+        )
+        if not await ctx.confirm(
+            f'Are you sure you want to repair your **{item.display_name}** for {Emojis.coin} **{price:,}**?\n'
+            f'{Emojis.Expansion.first} The repair will take **{humanize_duration(time)}** to complete.\n' + last_line,
+            reference=ctx.message,
+            delete_after=True,
+        ):
+            return 'Looks like we won\'t be repairing anything today.', REPLY
+
+        async with ctx.db.acquire() as conn:
+            await record.add(wallet=-price, connection=conn)
+            await inventory.add_item(item, -1, connection=conn)
+            await inventory.reset_damage(item, connection=conn)
+
+        timer = await ctx.bot.timers.create(time, 'repair', user_id=ctx.author.id, item=item.key)
+        self.active_repair_jobs[ctx.author.id][timer.id] = (
+            ActiveRepairJob(item=item, start=timer.created_at, end=timer.expires)
+        )
+
+        embed = discord.Embed(color=Colors.success, timestamp=ctx.now)
+        embed.set_author(name=f'Repairing Item: {ctx.author.name}', icon_url=ctx.author.display_avatar)
+        embed.set_thumbnail(url=image_url_from_emoji(item.emoji))
+        embed.description = (
+            f'**{item.display_name}** is now being repaired for {Emojis.coin} **{item.repair_rate:,}**.\n'
+            f'{Emojis.Expansion.first} The repair will finish {discord.utils.format_dt(timer.expires, "R")}.\n'
+            + last_line
+        )
+        view = discord.ui.View(timeout=120).add_item(
+            StaticCommandButton(label='View Repairs', style=discord.ButtonStyle.primary, command=ctx.command)
+        )
+        return embed, view, REPLY
+
+    @Cog.listener()
+    async def on_repair_timer_complete(self, timer: Timer) -> Any:
+        user_id = timer.metadata['user_id']
+        item = get_by_key(Items, key := timer.metadata['item'])
+
+        record = await self.bot.db.get_user_record(user_id)
+        await record.inventory_manager.add_item(item, 1)
+        self.active_repair_jobs[user_id].pop(timer.id, None)
+
+        await record.notifications_manager.add_notification(NotificationData.RepairFinished(key))
+
+    @repair.autocomplete('item')
+    async def repair_autocomplete(self, _, current: str) -> list[app_commands.Choice]:
+        return [
+            app_commands.Choice(name=item.name, value=item.key)
+            for item in query_collection_many(Items, Item, current)
+            if item.durability is not None
+        ]
 
     @command(aliases={'give', 'gift', 'donate', 'pay'}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 30)
@@ -1221,6 +1329,90 @@ class Transactions(Cog):
             ),
         )
         return embed, view, REPLY
+
+
+class RepairListFormatter(Formatter[Item | ActiveRepairJob]):
+    def __init__(self, record: UserRecord, active_repairs: ValuesView[ActiveRepairJob]) -> None:
+        assert record.inventory_manager._task.done(), 'inventory must be fetched'
+        self.record = record
+
+        self._cached = cached = record.inventory_manager.cached
+        self._damage = damage = record.inventory_manager.damage
+
+        now = discord.utils.utcnow()
+        # sort by damage ratio
+        entries = sorted(active_repairs, key=lambda r: r.end - now) + sorted(
+            (item for item, quantity in cached.items() if item.durability is not None and quantity > 0),
+            key=lambda item: damage[item] / item.durability if damage.get(item) else 1,
+        )
+
+        super().__init__(entries, per_page=5)
+
+    async def format_page(self, paginator: Paginator, entry: list[Item | ActiveRepairJob]) -> discord.Embed:
+        embed = discord.Embed(color=Colors.secondary, timestamp=paginator.ctx.now)
+        embed.description = (
+            '**Welcome to the repair shop!**\nHere you can repair your damaged items for a small fee.\n'
+        )
+
+        embed.set_author(name=f'Repair Shop: {paginator.ctx.author}', icon_url=paginator.ctx.author.display_avatar)
+        embed.set_thumbnail(url=image_url_from_emoji('\U0001f6e0'))
+
+        if not entry:
+            embed.description += 'You do not have any repairable items in your inventory.'
+            return embed
+        else:
+            embed.description += 'All repairable items you own are listed below.'
+
+        for item in entry:
+            if isinstance(item, ActiveRepairJob):
+                elapsed = paginator.ctx.now - item.start
+                duration = item.end - item.start
+                embed.add_field(
+                    name=f'**Currently Repairing:** {item.item.display_name}',
+                    value=f'\N{ALARM CLOCK} {progress_bar(elapsed / duration, length=6)} ({discord.utils.format_dt(item.end, "R")})',
+                    inline=False,
+                )
+                continue
+
+            damage = self._damage.get(item, item.durability)
+            remaining = item.durability - damage
+            if remaining <= 0:
+                text = f'{Emojis.Expansion.standalone} This item is not damaged yet.'
+                provider = Emojis.GreenProgressBars
+            else:
+                text = (
+                    f'{Emojis.Expansion.first} Repair Price: {Emojis.coin} **{item.repair_rate * remaining:,}**\n'
+                    f'{Emojis.Expansion.last} Repair Time: **{humanize_duration(item.repair_time * remaining)}**'
+                )
+                provider = Emojis.RedProgressBars
+
+            ratio = damage / item.durability
+            embed.add_field(
+                name=f'{item.display_name}',
+                value=f'Condition: {progress_bar(ratio, length=6, provider=provider)} ({ratio:.0%})\n{text}',
+                inline=False,
+            )
+
+        return embed
+
+
+class ActiveRepairButton(StaticCommandButton):
+    def __init__(self, paginator: Paginator, item: Item) -> None:
+        disabled = paginator.formatter._damage.get(item, item.durability) >= item.durability  # type: ignore
+        super().__init__(
+            style=discord.ButtonStyle.success, label=f'Repair {item.name}', emoji=item.emoji, disabled=disabled,
+            command=paginator.ctx.bot.get_command('repair'), command_kwargs={'item': item},
+            check=lambda itx: itx.user.id == paginator.ctx.author.id,
+        )
+        self.item = item
+
+
+class ActiveRepairRow(ActiveRow):
+    def __init__(self) -> None:
+        super().__init__(row=2)
+
+    async def active_update(self, paginator: Paginator, entry: list[Item | ActiveRepairJob]) -> list[discord.ui.Button]:
+        return [ActiveRepairButton(paginator, item) for item in entry if isinstance(item, Item)]
 
 
 class PrestigeView(UserView):

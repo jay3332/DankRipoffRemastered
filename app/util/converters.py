@@ -317,7 +317,11 @@ def query_item(query: str, /, *, prioritizer: Callable[[Item], int] = lambda _: 
 
 
 def query_repairable_item(query: str, /) -> Item:
-    item = query_item(query, prioritizer=lambda )
+    item = query_item(query, prioritizer=lambda i: i.durability is not None)
+    if item.durability is None:
+        raise BadArgument(f'{item.get_display_name(plural=True)} are not repairable.')
+
+    return item
 
 
 def query_crop(query: str, /) -> Item:

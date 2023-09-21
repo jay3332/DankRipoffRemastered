@@ -16,13 +16,14 @@ from app.features.guide import GuideView
 from app.util.ansi import AnsiColor, AnsiStringBuilder
 from app.util.structures import TemporaryAttribute
 from app.util.types import TypedContext
-from app.util.views import AnyUser, ConfirmationView
+from app.util.views import AnyUser, ConfirmationButton, ConfirmationView
 
 if TYPE_CHECKING:
     from typing import ClassVar
 
     from app.core.bot import Bot
     from app.database import Database
+    from app.util.pagination import Paginator
     from app.util.types import AsyncCallable, TypedInteraction
 
 
@@ -72,6 +73,7 @@ class Context(TypedContext):
         delete_after: bool = False,
         view: ConfirmationView = None,
         interaction: TypedInteraction = None,
+        paginator: Paginator = None,
         user: AnyUser = None,
         timeout: float = 60.,
         true: str = 'Yes',
@@ -80,14 +82,22 @@ class Context(TypedContext):
     ) -> bool:
         user = user or self.author
         view = view or ConfirmationView(user=user, true=true, false=false, timeout=timeout)
-        message = None
-        if interaction is not None:
+
+        if paginator is not None:
+            view = paginator._underlying_view
+            view._other_components.append(ConfirmationButton(toggle=True, label=true, row=4))
+            view._other_components.append(ConfirmationButton(toggle=False, label=false, row=4))
+            view._update_view()
+
+            message = await paginator.start(interaction=interaction, **kwargs)
+        elif interaction is not None:
             await interaction.response.send_message(content, view=view, **kwargs)
+            message = await interaction.original_response()
         else:
             message = await self.send(content, view=view, **kwargs)
 
         await view.wait()
-        if interaction is None:
+        if message is not None:
             if delete_after:
                 await message.delete(delay=0)
             else:
@@ -95,7 +105,7 @@ class Context(TypedContext):
         else:
             await interaction.edit_original_response(view=view)
 
-        return view.value
+        return view.__confirm_value__
 
     async def maybe_edit(self, message: discord.Message = MISSING, content: Any = None, **kwargs: Any) -> discord.Message | None:
         if message is MISSING:

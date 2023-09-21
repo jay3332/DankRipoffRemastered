@@ -50,36 +50,55 @@ class UserView(discord.ui.View):
         return True
 
 
+class ConfirmationButton(discord.ui.Button['ConfirmationView']):
+    def __init__(self, *, toggle: bool, **kwargs: Any) -> None:
+        self.toggle: bool = toggle
+        style = discord.ButtonStyle.success if toggle else discord.ButtonStyle.danger
+        super().__init__(style=style, **kwargs)
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.view.__confirm_value__ = self.toggle
+        for item in self.view.children:
+            item.disabled = True
+            if not isinstance(item, ConfirmationButton):
+                continue
+
+            if item.toggle is not self.toggle:
+                item.style = discord.ButtonStyle.secondary
+
+        self.view.__confirm_interaction__ = interaction
+        self.view.stop()
+
+
 class ConfirmationView(UserView):
+    if TYPE_CHECKING:
+        __confirm_value__: bool
+        __confirm_interaction__: TypedInteraction
+
     def __init__(self, *, user: AnyUser, true: str, false: str, timeout: float = None) -> None:
-        self.value: bool | None = None
         super().__init__(user, timeout=timeout)
 
-        self._true_button = discord.ui.Button(style=discord.ButtonStyle.success, label=true)
-        self._false_button = discord.ui.Button(style=discord.ButtonStyle.danger, label=false)
-
-        self._true_button.callback = self._make_callback(True)
-        self._false_button.callback = self._make_callback(False)
+        self.value: bool | None = None
         self.interaction: TypedInteraction | None = None
 
-        self.add_item(self._true_button)
-        self.add_item(self._false_button)
+        self.add_item(ConfirmationButton(label=true, toggle=True))
+        self.add_item(ConfirmationButton(label=false, toggle=False))
 
-    def _make_callback(self, toggle: bool) -> Callable[[discord.Interaction], Awaitable[None]]:
-        async def callback(itx: discord.Interaction) -> None:
-            self.value = toggle
-            self._true_button.disabled = True
-            self._false_button.disabled = True
+    @property
+    def value(self) -> bool | None:
+        return self.__confirm_value__
 
-            if toggle:
-                self._false_button.style = discord.ButtonStyle.secondary
-            else:
-                self._true_button.style = discord.ButtonStyle.secondary
+    @value.setter
+    def value(self, value: bool | None) -> None:
+        self.__confirm_value__ = value
 
-            self.interaction = itx
-            self.stop()
+    @property
+    def interaction(self) -> TypedInteraction | None:
+        return self.__confirm_interaction__
 
-        return callback
+    @interaction.setter
+    def interaction(self, interaction: TypedInteraction | None) -> None:
+        self.__confirm_interaction__ = interaction
 
 
 async def _dummy_parse_arguments(_ctx: Context) -> None:

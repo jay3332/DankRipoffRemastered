@@ -265,10 +265,9 @@ class Profit(Cog):
 
         return s[0].upper() + s[1:]
 
-    _SHORTCUT_CANDIDATES: list[str] = ['beg', 'search', 'hunt', 'trivia']
+    _SHORTCUT_CANDIDATES: list[str] = ['beg', 'search', 'hunt', 'trivia', 'fish']
     _COOLDOWN_ONLY_CANDIDATES: list[str] = ['hourly', 'daily', 'weekly']
     _TOOL_MAPPING: dict[Item | tuple[Item, ...], str] = {
-        Items.fishing_pole: 'fish',
         Items.__pickaxes__: 'mine',
         Items.__shovels__: 'dig',
         Items.axe: 'chop',
@@ -1906,6 +1905,7 @@ class FishingView(UserView):
         Items.crab: 0.1,
         Items.lobster: 0.05,
         Items.octopus: 0.03,
+        Items.seahorse: 0.02,
         Items.axolotl: 0.015,
         Items.dolphin: 0.005,
         Items.shark: 0.003,

@@ -131,9 +131,8 @@ class Item(Generic[T]):
     removal_callback: RemovalCallback | None = None
 
     def __post_init__(self) -> None:
-        assert (
-            (self.durability is None) is (self.repair_rate is None) is (self.repair_time is None), 
-            'durability, repair_rate, and repair_time must be specified together',
+        assert (self.durability is None) is (self.repair_rate is None) is (self.repair_time is None), (
+            'durability, repair_rate, and repair_time must be specified together'
         )
 
         if not self.brief:
@@ -835,6 +834,8 @@ class Items:
         energy=12,
     )
 
+    # TODO: turtle
+
     lobster = Fish(
         key='lobster',
         name='Lobster',
@@ -856,6 +857,16 @@ class Items:
         energy=20,
     )
 
+    seahorse = Fish(
+        key='seahorse',
+        name='Seahorse',
+        emoji='<:seahorse:1154192117485285407>',
+        description='Seahorses are known for their unique appearance. They have a horse-like head and swim vertically.',
+        rarity=ItemRarity.rare,
+        sell=1200,
+        energy=23,
+    )
+
     legacy_axolotl = Fish(
         key='legacy_axolotl',
         name='Legacy Axolotl',
@@ -872,8 +883,8 @@ class Items:
         emoji='<:axolotl:935691745180667944>',
         description='The cool salamander',
         rarity=ItemRarity.rare,
-        sell=1000,
-        energy=25,
+        sell=1400,
+        energy=26,
     )
 
     dolphin = Fish(
@@ -882,7 +893,7 @@ class Items:
         emoji='<:dolphin:935294203364245601>',
         description='Dolphins are large aquatic mammals that are found in the ocean.',
         rarity=ItemRarity.rare,
-        sell=1500,
+        sell=1700,
         energy=30,
         metadata=EnemyRef('dolphin', damage=(2, 4)),
     )
@@ -934,7 +945,7 @@ class Items:
         type=ItemType.tool,
         key='fishing_pole',
         name='Fishing Pole',
-        emoji='<:fishing_pole:935298127353745499>',
+        emoji='<:fishing_pole:1154170469688283247>',
         description=(
             'Owning this will grant you access to more fish and better luck in the `fish` command - '
             'fish for fish and sell them for profit!'
@@ -953,6 +964,7 @@ class Items:
                 crab: 0.1,
                 lobster: 0.08,
                 octopus: 0.04,
+                seahorse: 0.03,
                 axolotl: 0.02,
                 dolphin: 0.01,
                 shark: 0.006,

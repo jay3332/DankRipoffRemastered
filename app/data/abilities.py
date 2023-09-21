@@ -467,7 +467,7 @@ class Abilities:
         type=AbilityType.attack,
         description='Summons a whirlpool and electrifies it, causing damage over time.',
         effect='Slowly removes a medium amount of HP per turn for the next 3 turns due to electrocution.',
-        emoji='<:electric_whirlpool:1153147011374256180>',
+        emoji='<:electric_whirlpool:1154193433037111336>',
         exclusive_to=[Ref('vibe_fish', RefType.enemy)],  # TODO: and eel
     )
 

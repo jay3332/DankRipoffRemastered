@@ -4,15 +4,14 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Collection, Generic, TYPE_CHECKING, TypeVar
 
+import discord
 from discord import ButtonStyle, Embed, File, Interaction
-from discord.ui import Button, Modal, TextInput
+from discord.ui import Button, Item, Modal, TextInput
 
 from app.util.views import UserView
 from config import Emojis
 
 if TYPE_CHECKING:
-    from discord.ui import Item
-
     from app.core.models import Context
     from app.util.types import TypedInteraction
 
@@ -94,12 +93,15 @@ class _PageInputModal(Modal, title='Select Page'):
 
 
 class PaginatorView(UserView):
+    _other_components: list[Item]
+    _active_rows: dict[int, ActiveRow]
+
     def __init__(
         self,
         paginator: Paginator,
         *,
         center_button: Button | None = None,
-        other_components: Collection[Item] = None,
+        other_components: Collection[Item | ActiveRow] = None,
         row: int | None = None,
         timeout: float = 360,
     ) -> None:
@@ -108,8 +110,16 @@ class PaginatorView(UserView):
         self.dont_render_pagination_buttons: bool = False
 
         self._center_button: Button | None = center_button or _PageInputButton(self.paginator, row=row)
-        self._other_components: Collection[Item] = other_components or ()
         self._row: int | None = row
+
+        if other_components:
+            self._other_components: list[Item] = [item for item in other_components if isinstance(item, Item)]
+            self._active_rows: dict[int, ActiveRow] = {
+                row.row: row for row in other_components if isinstance(row, ActiveRow)
+            }
+        else:
+            self._other_components = []
+            self._active_rows = {}
 
     def _update_view(self) -> None:
         # Super weird implementation, but it's the best I could do
@@ -153,6 +163,11 @@ class PaginatorView(UserView):
         for child in self.children:
             if isinstance(child, ActiveItem):
                 await child.active_update(self.paginator, entries)
+
+        for row, active_row in self._active_rows.items():
+            for child in await active_row.active_update(self.paginator, entries):
+                child.row = row
+                self.add_item(child)
         # Update self
         return await self.paginator.formatter.format_page(self.paginator, entries)
 
@@ -174,7 +189,7 @@ class Paginator:
         *,
         page: int = 0,
         center_button: Button | None = None,
-        other_components: Collection[Item] = None,
+        other_components: Collection[Item | ActiveRow] = None,
         row: int | None = None,
         timeout: float = 360,
     ) -> None:
@@ -200,7 +215,7 @@ class Paginator:
         page: int = None,
         interaction: Interaction | TypedInteraction = None,
         **send_kwargs,
-    ) -> None:
+    ) -> discord.Message:
         if page is not None:
             self.current_page = page
 
@@ -225,13 +240,19 @@ class Paginator:
                 self._underlying_view.stop()
                 del self._underlying_view
 
-                await responder(**send_kwargs)
-                return  # To abide by return annotation
+                message = await responder(**send_kwargs)
+                if interaction is None:
+                    return message
+                return await interaction.original_response()
 
             self._underlying_view.dont_render_pagination_buttons = True
 
         await self._underlying_view.update()
-        await responder(view=self._underlying_view, **send_kwargs)
+        message = await responder(view=self._underlying_view, **send_kwargs)
+        if interaction is None:
+            return message
+
+        return await interaction.original_response()
 
 
 class Formatter(ABC, Generic[T]):
@@ -265,11 +286,13 @@ class LineBasedFormatter(Formatter[str]):
         self,
         embed: Embed,
         lines: list[str],
+        formatting: str = '{}',
         *,
         per_page: int = 10,
         field_name: str | None = None,
         insert_field_at: int | None = None,
     ) -> None:
+        self.formatting: str = formatting
         self.embed: Embed = embed
         self.field_name: str | None = field_name
         self.insert_field_at: int | None = insert_field_at
@@ -280,7 +303,7 @@ class LineBasedFormatter(Formatter[str]):
         embed = Embed.from_dict(deepcopy(self.embed.to_dict()))
 
         if self.field_name is None:
-            embed.description = '\n'.join(lines)
+            embed.description = self.formatting.format('\n'.join(lines))
         else:
             kwargs = dict(name=self.field_name, value='\n'.join(lines), inline=False)
             if self.insert_field_at is None:
@@ -320,5 +343,14 @@ class ActiveItem(Generic[T]):
     """Mixin to allow updating a component when a paginator updates."""
 
     async def active_update(self, paginator: Paginator, entry: T | list[T]) -> None:
+        """Callback for when the paginator updates."""
+        pass
+
+
+class ActiveRow:
+    def __init__(self, row: int | None = None) -> None:
+        self.row: int | None = row
+
+    async def active_update(self, paginator: Paginator, entry: T | list[T]) -> list[Item]:
         """Callback for when the paginator updates."""
         pass
