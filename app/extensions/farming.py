@@ -24,7 +24,7 @@ from app.core import (
 )
 from app.data.items import Item, ItemType, Items
 from app.database import CropInfo, CropManager, UserRecord
-from app.util.common import cutoff, humanize_duration, image_url_from_emoji
+from app.util.common import cutoff, humanize_duration, image_url_from_emoji, query_collection_many
 from app.util.converters import query_crop
 from app.util.types import CommandResponse, TypedInteraction
 from app.util.views import StaticCommandButton, UserView
@@ -410,7 +410,7 @@ class Farming(Cog):
             )
         ]
 
-    @command(aliases={'pl', 'grow'})
+    @command(aliases={'pl', 'grow'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 4)
     @user_max_concurrency(1)
     @lock_transactions
@@ -471,6 +471,23 @@ class Farming(Cog):
 
         coordinate = coordinates[0]
         return f'Planted {crop.get_sentence_chunk(1)} at coordinate **{CropInfo.into_coordinates(*coordinate)}**.', REPLY
+
+    @plant.define_app_command()
+    @app_commands.describe(
+        coordinates='The coordinates to plant at. Can be a single coordinate ("A1") or multiple coordinates ("A1 A2 A3").',
+        crop='The name of the crop to plant.'
+    )
+    async def plant_app_command(self, ctx: HybridContext, coordinates: str, crop: str) -> None:
+        crop = query_crop(crop)
+        await ctx.invoke(ctx.command, coordinates=[parse_coordinate(c) for c in coordinates.split()], crop=crop)
+
+    @plant.autocomplete('crop')
+    async def plant_autocomplete(self, _: TypedInteraction, current: str):
+        return [
+            app_commands.Choice(name=crop.name, value=crop.key)
+            for crop in query_collection_many(Items, Item, current, prioritizer=lambda c: c.type is ItemType.crop)
+            if crop.type is ItemType.crop
+        ]
 
     @command(aliases={'har', 'ha', 'hv', 'gather', 'collect'}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 15)
