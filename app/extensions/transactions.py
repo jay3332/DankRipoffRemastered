@@ -1007,7 +1007,7 @@ class Transactions(Cog):
 
         time = item.repair_time * remaining
         last_line = (
-            f'{Emojis.Expansion.last} The *{item.name} will be temporarily removed from your inventory while it is being repaired.*'
+            f'{Emojis.Expansion.last} The *{item.name}* will be temporarily removed from your inventory while it is being repaired.'
         )
         if not await ctx.confirm(
             f'Are you sure you want to repair your **{item.display_name}** for {Emojis.coin} **{price:,}**?\n'
