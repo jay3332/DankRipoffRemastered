@@ -108,9 +108,14 @@ class CubicCurve(NamedTuple):
     b: float = 0
     c: float = 0
     d: float = 0
+    threshold: float | None = None
+
+    @property
+    def solve_threshold(self) -> float:
+        return (self.a + self.b + self.c + self.d) / 2 if self.threshold is None else self.threshold
 
     def __call__(self, x: float) -> float:
-        return self.a * x ** 3 + self.b * x ** 2 + self.c * x + self.d
+        return max(self.solve_threshold, self.a * x ** 3 + self.b * x ** 2 + self.c * x + self.d)
 
 
 DEFAULT_CURVE = CubicCurve(0.25, 11.75, 88)
