@@ -914,7 +914,7 @@ class Profit(Cog):
         await asyncio.sleep(random.uniform(2., 4.))
 
         await game.remove_bait()
-        yield '', game.make_embed(), game.prompt_embed(), game, EDIT
+        await ctx.maybe_edit(content='', embeds=[game.make_embed(), game.prompt_embed()], view=game)
 
         if not game.current:
             await asyncio.sleep(1.2)
@@ -1885,6 +1885,7 @@ class FishingButton(discord.ui.Button['FishingView']):
                     f'You can fish again later by using {self.view.fish_mention}.\n\n{await self.view.damage_tool(1)}'
                 ),
             )
+            await self.view.give_prizes()
             return await interaction.response.edit_message(embeds=[self.view.make_embed(), embed], view=self.view)
 
         await self.view.advance(interaction)
