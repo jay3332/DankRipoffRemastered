@@ -72,6 +72,8 @@ class EventsCog(Cog, name='Events'):
 
     def __setup__(self) -> None:
         self._channel_event_locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._global_stats: dict[str, int] | None = None
+        self._global_stats_expiry: datetime.datetime | None = None
 
     @discord.utils.cached_property
     def _cooldowns_remind_command(self) -> Any:
@@ -408,6 +410,21 @@ class EventsCog(Cog, name='Events'):
             f'They received {item.get_sentence_chunk()} for their vote. Thank you!{weekend}{reward}',
             view=view,
         )
+
+    @Server.route()
+    async def global_stats(self, _) -> dict[str, int]:
+        """Returns global statistics regarding Coined"""
+        if self._global_stats_expiry and self._global_stats_expiry > discord.utils.utcnow():
+            return self._global_stats
+
+        await self.bot.db.wait()
+        self._global_stats = {
+            'users': len(self.bot.users),
+            'guilds': len(self.bot.guilds),
+            'coins': sum(record.wallet + record.bank for record in self.bot.db.user_records.values()),
+        }
+        self._global_stats_expiry = discord.utils.utcnow() + datetime.timedelta(minutes=10)
+        return self._global_stats
 
     @Cog.listener()
     async def on_command_completion(self, ctx: Context) -> Any:

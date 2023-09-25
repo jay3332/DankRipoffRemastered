@@ -32,6 +32,12 @@ async def dbl(request: web.Request) -> web.Response:
     return web.Response()
 
 
+@routes.get('/global')
+async def global_(_request: web.Request) -> web.Response:
+    response = await ipc.request('global_stats')
+    return web.json_response(response.data)
+
+
 if __name__ == '__main__':
     app = web.Application()
     app.add_routes(routes)
