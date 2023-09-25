@@ -35,7 +35,7 @@ async def dbl(request: web.Request) -> web.Response:
 @routes.get('/global')
 async def global_(_request: web.Request) -> web.Response:
     response = await ipc.request('global_stats')
-    return web.json_response(response.data)
+    return web.json_response(response.response)
 
 
 if __name__ == '__main__':
