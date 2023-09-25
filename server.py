@@ -1,3 +1,4 @@
+import aiohttp_cors
 import discord.utils
 from aiohttp import web
 from aiohttplimiter import Limiter, default_keyfunc
@@ -50,5 +51,13 @@ async def user_data(request: web.Request) -> web.Response:
 
 if __name__ == '__main__':
     app = web.Application()
+    cors = aiohttp_cors.setup(app, defaults={
+        '*': aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers='*',
+            allow_headers='*',
+        ),
+    })
+
     app.add_routes(routes)
     web.run_app(app, port=8090)
