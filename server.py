@@ -51,6 +51,8 @@ async def user_data(request: web.Request) -> web.Response:
 
 if __name__ == '__main__':
     app = web.Application()
+    app.add_routes(routes)
+
     cors = aiohttp_cors.setup(app, defaults={
         '*': aiohttp_cors.ResourceOptions(
             allow_credentials=True,
@@ -58,6 +60,7 @@ if __name__ == '__main__':
             allow_headers='*',
         ),
     })
+    for route in list(app.router.routes()):
+        cors.add(route)
 
-    app.add_routes(routes)
     web.run_app(app, port=8090)
