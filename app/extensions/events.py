@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import functools
+import json
 import random
 import re
 from collections import defaultdict
@@ -425,6 +426,38 @@ class EventsCog(Cog, name='Events'):
         }
         self._global_stats_expiry = discord.utils.utcnow() + datetime.timedelta(minutes=10)
         return self._global_stats
+
+    @Server.route()
+    async def user_data(self, data: ClientPayload) -> dict[str, Any]:
+        """Returns user-specific statistics"""
+        def serializer(value):
+            if isinstance(value, datetime.datetime):
+                return value.timestamp()
+            raise TypeError(f'Type {type(value)} is not serializable')
+
+        def transform_pet_record(entry: Any) -> Any:
+            entry = vars(entry).copy()
+            del entry['manager']
+            entry['pet'] = entry['pet'].key
+            return entry
+
+        user = self.bot.get_user(data.user_id)
+        if not user:
+            return {}
+
+        record = await self.bot.db.get_user_record(data.user_id)
+        await record.inventory_manager.wait()
+        await record.skill_manager.wait()
+        await record.pet_manager.wait()
+
+        base = record.data.copy()
+        base['user'] = user._to_minimal_user_json()
+        base['inventory'] = {
+            item.key: quantity for item, quantity in record.inventory_manager.cached.items() if quantity
+        }
+        base['skills'] = [skill._asdict() for skill in record.skill_manager.cached.values()]
+        base['pets'] = [transform_pet_record(pet) for pet in record.pet_manager.cached.values()]
+        return json.loads(json.dumps(base, default=serializer))  # inefficient hack
 
     @Cog.listener()
     async def on_command_completion(self, ctx: Context) -> Any:

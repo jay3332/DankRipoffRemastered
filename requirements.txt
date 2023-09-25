@@ -11,4 +11,5 @@ numpy
 Pillow
 better-ipc
 aiohttp_cors
+aiohttp-ratelimiter
 better_exceptions
