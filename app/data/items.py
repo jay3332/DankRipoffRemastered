@@ -3,18 +3,31 @@ from __future__ import annotations
 import asyncio
 import datetime
 import random
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from textwrap import dedent
-from typing import Any, Awaitable, Callable, Generator, Generic, NamedTuple, TYPE_CHECKING, TypeAlias, TypeVar
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Collection,
+    Generator,
+    Generic,
+    NamedTuple,
+    TYPE_CHECKING,
+    TypeAlias,
+    TypeVar,
+)
 
 from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
 from app.data.pets import Pet, Pets
 from app.util.common import get_by_key, humanize_duration, ordinal, pluralize
+from app.util.structures import DottedDict
 from config import Emojis
 
 if TYPE_CHECKING:
@@ -60,6 +73,21 @@ class ItemRarity(Enum):
             return NotImplemented
         return self.value < other.value
 
+    def __gt__(self, other: Any):
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.value > other.value
+
+    def __le__(self, other: Any):
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.value <= other.value
+
+    def __ge__(self, other: Any):
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.value >= other.value
+
 
 class CrateMetadata(NamedTuple):
     minimum: int
@@ -85,6 +113,59 @@ class NetMetadata(NamedTuple):
 class FishingPoleMetadata(NamedTuple):
     weights: dict[Item, float]
     iterations: int
+    
+    
+def fish_weights(
+    local_ns: dict[str, Any], *, exclude: Collection[Item] = (), **rarity_weights: float,
+) -> dict[Item, float]:
+    items = DottedDict(local_ns)
+    # base weights
+    weights = {
+        None: 1,
+        items.fish: 0.4,
+        items.anchovy: 0.3,
+        items.sardine: 0.3,
+        items.catfish: 0.25,
+        items.clownfish: 0.25,
+        items.angel_fish: 0.2,
+        items.goldfish: 0.2,
+        items.blowfish: 0.15,
+        items.crab: 0.1,
+        items.turtle: 0.09,
+        items.lobster: 0.08,
+        items.squid: 0.06,
+        items.octopus: 0.04,
+        items.seahorse: 0.03,
+        items.axolotl: 0.02,
+        items.jellyfish: 0.015,
+        items.dolphin: 0.01,
+        items.swordfish: 0.008,
+        items.siamese_fighting_fish: 0.007,
+        items.shark: 0.006,
+        items.rainbow_trout: 0.004,
+        items.whale: 0.003,
+        items.vibe_fish: 0.001,
+    }
+
+    # remove excluded items
+    for item in exclude:
+        try:
+            del weights[item]
+        except KeyError:
+            warnings.warn(f'Excluded item not found in default fish weights: {item}')
+
+    for rarity, weight in rarity_weights.items():
+        if rarity == 'none':
+            weights[None] *= weight
+            continue
+
+        rarity = ItemRarity[rarity]
+        # update all items with this rarity
+        for item in weights:
+            if item and item.rarity >= rarity:
+                weights[item] *= weight
+
+    return weights
 
 
 class OverrideQuantity(NamedTuple):
@@ -794,6 +875,26 @@ class Items:
         energy=4,
     )
 
+    catfish = Fish(
+        key='catfish',
+        name='Catfish',
+        plural='Catfish',
+        emoji='<:catfish:1155175023770869860>',
+        description='Catfish are bottom-dwelling fish with whisker-like barbels.',
+        sell=125,
+        energy=4,
+    )
+
+    clownfish = Fish(
+        key='clownfish',
+        name='Clownfish',
+        plural='Clownfish',
+        emoji='<:clownfish:1155174977608372265>',
+        description='These fish better stop clowning around!! \U0001f606 \U0001f606',
+        sell=150,
+        energy=5,
+    )
+
     angel_fish = Fish(
         key='angel_fish',
         name='Angel Fish',
@@ -834,7 +935,15 @@ class Items:
         energy=12,
     )
 
-    # TODO: turtle
+    turtle = Fish(
+        key='turtle',
+        name='Turtle',
+        emoji='<:turtle:1154555029605318727>',
+        description='A sea turtle. They have a hard shell that protects them from predators.',
+        rarity=ItemRarity.uncommon,
+        sell=500,
+        energy=13,
+    )
 
     lobster = Fish(
         key='lobster',
@@ -844,6 +953,16 @@ class Items:
         rarity=ItemRarity.uncommon,
         sell=575,
         energy=15,
+    )
+
+    squid = Fish(
+        key='squid',
+        name='Squid',
+        emoji='<:squid:1155335076389863555>',
+        description='Squidward Tentacles',
+        rarity=ItemRarity.uncommon,
+        sell=650,
+        energy=17,
     )
 
     octopus = Fish(
@@ -887,6 +1006,17 @@ class Items:
         energy=26,
     )
 
+    jellyfish = Fish(
+        key='jellyfish',
+        name='Jellyfish',
+        plural='Jellyfish',
+        emoji='<:jellyfish:1154427991951163554>',
+        description='No eyes, no heart, no brain. Yet they still manage to defeat you',
+        rarity=ItemRarity.rare,
+        sell=1500,
+        energy=28,
+    )
+
     dolphin = Fish(
         key='dolphin',
         name='Dolphin',
@@ -898,6 +1028,28 @@ class Items:
         metadata=EnemyRef('dolphin', damage=(2, 4)),
     )
 
+    swordfish = Fish(
+        key='swordfish',
+        name='Swordfish',
+        plural='Swordfish',
+        emoji='<:swordfish:1155275855602384958>',
+        description='Swordfish are large predatory fish with a long, flat bill shaped like a sword.',
+        rarity=ItemRarity.rare,
+        sell=1800,
+        energy=35,
+    )
+
+    siamese_fighting_fish = Fish(
+        key='siamese_fighting_fish',
+        name='Siamese Fighting Fish',
+        plural='Siamese Fighting Fish',
+        emoji='<:siamese_fighting_fish:1155982071345467493>',
+        description='Also known as betta fish, these are among the most popular freshwater aquarium fish.',
+        rarity=ItemRarity.rare,
+        sell=1900,
+        energy=40,
+    )
+
     shark = Fish(
         key='shark',
         name='Shark',
@@ -907,6 +1059,17 @@ class Items:
         sell=2000,
         energy=45,
         metadata=EnemyRef('shark', damage=(4, 6)),
+    )
+
+    rainbow_trout = Fish(
+        key='rainbow_trout',
+        name='Rainbow Trout',
+        plural='Rainbow Trout',
+        emoji='<:rainbow_trout:1155335013093609542>',
+        description='Colorful freshwater fish known for their virabnt hues.',
+        rarity=ItemRarity.epic,
+        sell=2300,
+        energy=50,
     )
 
     whale = Fish(
@@ -952,33 +1115,61 @@ class Items:
         ),
         price=12000,
         buyable=True,
-        metadata=FishingPoleMetadata(
-            weights={
-                None: 0.8,
-                fish: 0.4,
-                anchovy: 0.3,
-                sardine: 0.3,
-                angel_fish: 0.2,
-                goldfish: 0.2,
-                blowfish: 0.15,
-                crab: 0.1,
-                lobster: 0.08,
-                octopus: 0.04,
-                seahorse: 0.03,
-                axolotl: 0.02,
-                dolphin: 0.01,
-                shark: 0.006,
-                whale: 0.003,
-                vibe_fish: 0.001,
-            },
-            iterations=5,
-        ),
-        durability=10,
+        metadata=FishingPoleMetadata(weights=fish_weights(locals()), iterations=5),
+        durability=5,
         repair_rate=1000,
         repair_time=datetime.timedelta(minutes=2),
     )
 
+    durable_fishing_pole = Item(
+        type=ItemType.tool,
+        key='durable_fishing_pole',
+        name='Durable Fishing Pole',
+        emoji='<:durable_fishing_pole:1154575940203069470>',
+        rarity=ItemRarity.rare,
+        description='A fishing pole that is more durable than the regular fishing pole.',
+        price=30000,
+        metadata=FishingPoleMetadata(weights=fish_weights(locals(), none=0.9, rare=1.1), iterations=6),
+        durability=15,
+        repair_rate=1750,
+        repair_time=datetime.timedelta(minutes=5),
+    )
+
+    golden_fishing_pole = Item(
+        type=ItemType.tool,
+        key='golden_fishing_pole',
+        name='Golden Fishing Pole',
+        emoji='<:golden_fishing_pole:1154605742968537139>',
+        rarity=ItemRarity.legendary,
+        description='It\'s golden...',
+        price=100000,
+        metadata=FishingPoleMetadata(weights=fish_weights(locals(), none=0.85, rare=1.15, epic=1.3), iterations=7),
+        durability=30,
+        repair_rate=3000,
+        repair_time=datetime.timedelta(minutes=10),
+    )
+
+    diamond_fishing_pole = Item(
+        type=ItemType.tool,
+        key='diamond_fishing_pole',
+        name='Diamond Fishing Pole',
+        emoji='<:diamond_fishing_pole:1154744323020177418>',
+        rarity=ItemRarity.mythic,
+        description='A fishing pole made out of pure diamond.',
+        price=1000000,
+        metadata=FishingPoleMetadata(
+            weights=fish_weights(locals(), none=0.8, rare=1.2, epic=1.4, legendary=1.6),
+            iterations=8,
+        ),
+        durability=50,
+        repair_rate=15000,
+        repair_time=datetime.timedelta(minutes=30),
+    )
+
     __fishing_poles__: tuple[Item[FishingPoleMetadata], ...] = (
+        diamond_fishing_pole,
+        golden_fishing_pole,
+        durable_fishing_pole,
         fishing_pole,
     )
 

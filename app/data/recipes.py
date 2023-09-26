@@ -18,6 +18,51 @@ class Recipe(NamedTuple):
 
 
 class Recipes:
+    durable_fishing_pole = Recipe(
+        key="durable_fishing_pole",
+        name="Durable Fishing Pole",
+        description=Items.durable_fishing_pole.description,
+        emoji=Items.durable_fishing_pole.emoji,
+        price=10_000,
+        ingredients={
+            Items.fishing_pole: 3,
+            Items.iron: 3,
+        },
+        result={
+            Items.durable_fishing_pole: 1,
+        },
+    )
+
+    golden_fishing_pole = Recipe(
+        key="golden_fishing_pole",
+        name="Golden Fishing Pole",
+        description=Items.golden_fishing_pole.description,
+        emoji=Items.golden_fishing_pole.emoji,
+        price=60_000,
+        ingredients={
+            Items.fishing_pole: 5,
+            Items.gold: 3,
+        },
+        result={
+            Items.golden_fishing_pole: 1,
+        },
+    )
+
+    diamond_fishing_pole = Recipe(
+        key="diamond_fishing_pole",
+        name="Diamond Fishing Pole",
+        description=Items.diamond_fishing_pole.description,
+        emoji=Items.diamond_fishing_pole.emoji,
+        price=750_000,
+        ingredients={
+            Items.fishing_pole: 10,
+            Items.diamond: 3,
+        },
+        result={
+            Items.diamond_fishing_pole: 1,
+        },
+    )
+
     durable_shovel = Recipe(
         key="durable_shovel",
         name="Durable Shovel",

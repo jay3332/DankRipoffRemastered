@@ -243,6 +243,7 @@ class Profit(Cog):
         "{0} scooped up {1} from the toilet and handed it to you.",
         "{0} made {1} magically appear into your possesion.",
         "{0} vomitted out {1} and gave it to you.",
+        "{0} pulls out {1} from their rectum and gives it to you. Gross.",
         "{0}: Poor soul. Here's {1}",
         "{0} gave you {1} because they felt bad for you.",
         "{0} gave you {1} because they felt like it.",
@@ -256,6 +257,8 @@ class Profit(Cog):
         Items.cheese: 0.05,
         Items.banknote: 0.05,
         Items.common_crate: 0.03,
+        Items.uncommon_crate: 0.005,
+        Items.nineteen_dollar_fortnite_card: 0.001,
     }
 
     @staticmethod
@@ -1412,7 +1415,7 @@ class Profit(Cog):
         return entry
 
     @command(aliases={'steal', 'ripoff'}, hybrid=True, with_app_command=False)
-    @simple_cooldown(1, 90)
+    @simple_cooldown(1, 300)
     @user_max_concurrency(1)
     @lock_transactions
     async def rob(self, ctx: Context, *, user: CaseInsensitiveMemberConverter):
@@ -1438,7 +1441,7 @@ class Profit(Cog):
             return
 
         if entry := self._recent_robs.get(user.id):
-            if ctx.now - entry.timestamp < timedelta(minutes=3):
+            if ctx.now - entry.timestamp < timedelta(minutes=5):
                 yield 'That user has recently been robbed, let\'s give them a break.', BAD_ARGUMENT
                 return
 

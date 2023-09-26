@@ -1423,7 +1423,8 @@ class UserRecord(BaseRecord):
 
     async def make_dead(self, *, reason: str | None = None, connection: asyncpg.Connection | None = None) -> None:
         inventory = await self.inventory_manager.wait()
-        if quantity := inventory.cached.quantity_of('lifesaver'):
+        quantity = inventory.cached.quantity_of('lifesaver')
+        if quantity > 0:
             await inventory.add_item('lifesaver', -1, connection=connection)
 
             await self.notifications_manager.add_notification(
