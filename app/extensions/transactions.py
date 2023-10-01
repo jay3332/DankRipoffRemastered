@@ -876,7 +876,7 @@ class Transactions(Cog):
         )
         paginator = Paginator(ctx, LineBasedFormatter(embed, friendly, description, per_page=15))
         if not await ctx.confirm(paginator=paginator, true='Confirm Bulk Sell'):
-            return 'Alright, looks like we won\'t bulk sell today.', EDIT
+            return 'Alright, looks like we won\'t bulk sell today.', EDIT, dict(view=None)
 
         async with ctx.db.acquire() as conn:
             payload = {item.key: -quantity for item, quantity in items.items()}
