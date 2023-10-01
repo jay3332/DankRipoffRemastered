@@ -875,7 +875,7 @@ class Transactions(Cog):
             f'You are about to sell **{count:,}** item{s} in bulk:\n{{}}\nTotal: {Emojis.coin} **{total:,}**'
         )
         paginator = Paginator(ctx, LineBasedFormatter(embed, friendly, description, per_page=15))
-        if not await ctx.confirm(paginator=paginator, delete_after=True, true='Confirm Bulk Sell'):
+        if not await ctx.confirm(paginator=paginator, true='Confirm Bulk Sell'):
             return 'Alright, looks like we won\'t bulk sell today.', REPLY
 
         async with ctx.db.acquire() as conn:
@@ -890,7 +890,7 @@ class Transactions(Cog):
         )
 
         paginator = Paginator(ctx, LineBasedFormatter(embed, friendly, description, per_page=15))
-        return paginator, REPLY
+        return paginator, EDIT
 
     @sell_bulk.define_app_command()
     @app_commands.describe(

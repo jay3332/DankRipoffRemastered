@@ -909,15 +909,14 @@ class Profit(Cog):
         await record.add_random_bank_space(12, 20, chance=0.6)
 
         game = FishingView(ctx, record=record)
-        yield (
+        message = await ctx.reply(
             f'{Emojis.loading} Casting your {game.tool.display_name}...'
-            if game.tool else f'{Emojis.loading} Fishing with your bare hands...',
-            REPLY,
+            if game.tool else f'{Emojis.loading} Fishing with your bare hands...'
         )
         await asyncio.sleep(random.uniform(2., 4.))
 
         await game.remove_bait()
-        await ctx.maybe_edit(content='', embeds=[game.make_embed(), game.prompt_embed()], view=game)
+        await ctx.maybe_edit(message, content='', embeds=[game.make_embed(), game.prompt_embed()], view=game)
 
         if not game.current:
             await asyncio.sleep(1.2)

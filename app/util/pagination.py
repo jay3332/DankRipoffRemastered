@@ -229,9 +229,13 @@ class Paginator:
         if interaction is not None:
             send_kwargs.pop('reference', None)
         if edit:
-            responder = self.ctx.maybe_edit if interaction is None else interaction.response.edit_message
+            responder = self.ctx.maybe_edit if interaction is None else (
+                interaction.edit_original_response if interaction.response.is_done() else interaction.response.edit_message
+            )
         else:
-            responder = self.ctx.send if interaction is None else interaction.response.send_message
+            responder = self.ctx.send if interaction is None else (
+                interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
+            )
 
         # If there is only one page,
         # only send the embed
