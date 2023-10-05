@@ -59,8 +59,8 @@ def create_graph(x, y, **kwargs):
     spline = make_interp_spline(date_num, value_arr, k=1)
     value_np_smooth = spline(date_num_smooth)
 
-    line, = axes.plot(adjusted := mdates.num2date(date_num_smooth), value_np_smooth, color=color)
-    plt.step(adjusted, value_np_smooth, where='post', label='step')
+    line, = axes.plot(_adjusted := mdates.num2date(date_num_smooth), value_np_smooth, color=color)
+    # plt.step(adjusted, value_np_smooth, where='post', label='step')
 
     alpha = line.get_alpha()
     if alpha is None:
