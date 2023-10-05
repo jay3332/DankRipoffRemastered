@@ -69,8 +69,8 @@ def create_graph(x, y, **kwargs):
     z = create_gradient_array(color, alpha_max=alpha)
     xmin, xmax, ymin, ymax = (
         date_num.min(), date_num.max(),
-        max(0, value_arr.min() * 0.8, value_arr.min() - MAX_PADDING),  # type: ignore
-        min(value_arr.max() * 1.15, value_arr.max() + MAX_PADDING),  # type: ignore
+        max(0, value_arr.min() * 0.9, value_arr.min() - MAX_PADDING),  # type: ignore
+        min(value_arr.max() * 1.07, value_arr.max() + MAX_PADDING),  # type: ignore
     )
     payload = dict(aspect='auto', extent=(xmin, xmax, ymin, ymax), origin='lower', zorder=line.get_zorder())
     im = axes.imshow(z, **payload)
