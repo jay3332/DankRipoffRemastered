@@ -1031,7 +1031,7 @@ class Transactions(Cog):
         embed.set_author(name=f'Repairing Item: {ctx.author.name}', icon_url=ctx.author.display_avatar)
         embed.set_thumbnail(url=image_url_from_emoji(item.emoji))
         embed.description = (
-            f'**{item.display_name}** is now being repaired for {Emojis.coin} **{item.repair_rate:,}**.\n'
+            f'**{item.display_name}** is now being repaired for {Emojis.coin} **{price:,}**.\n'
             f'{Emojis.Expansion.first} The repair will finish {discord.utils.format_dt(timer.expires, "R")}.\n'
             + last_line
         )
