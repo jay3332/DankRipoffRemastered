@@ -32,5 +32,5 @@ To prestige, run {{/prestige}}. You will see a message containing prestige requi
 - 50% faster bank space gain,
 - extra 25% XP multiplier,
 - extra 25% coin multiplier,
-- extra 10% extra space from banknotes, and
+- extra 20% extra space from banknotes, and
 - <:prestige1:722846087622164560> Special prestige badge

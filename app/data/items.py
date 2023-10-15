@@ -526,7 +526,7 @@ class Items:
         record = await ctx.db.get_user_record(ctx.author.id)
 
         profit = sum(random.randint(1500, 3500) for _ in range(quantity))  # simulate random distribution
-        additional = int(profit * record.prestige * 0.1)
+        additional = int(profit * record.prestige * 0.2)
         await record.add(max_bank=profit + additional)
 
         extra = ''
