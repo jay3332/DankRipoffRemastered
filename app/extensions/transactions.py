@@ -1486,7 +1486,7 @@ class PrestigeView(UserView):
             # Replenish promised items
             await inventory.update(**keep)
             await inventory.add_item(Items.banknote, self.next_prestige, connection=conn)
-            await inventory.add_item(Items.legendary_crate, 1, connection=conn)
+            await inventory.add_item(crate, 1, connection=conn)
 
         self.stop()
         await view.interaction.response.send_message(
