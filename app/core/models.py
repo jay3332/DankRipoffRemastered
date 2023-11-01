@@ -105,7 +105,7 @@ class Context(TypedContext):
         else:
             await interaction.edit_original_response(view=view)
 
-        return view.__confirm_value__
+        return getattr(view, '__confirm_value__', False)
 
     async def maybe_edit(self, message: discord.Message = MISSING, content: Any = None, **kwargs: Any) -> discord.Message | None:
         if message is MISSING:

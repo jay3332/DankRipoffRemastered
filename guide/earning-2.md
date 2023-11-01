@@ -10,8 +10,7 @@ Commands that are listed here are *high-risk* commands that can be used to make 
 ## Fishing
 
 - {{/fish}} – Go fishing for a wide variety of fish and other marine animals!
-  They can be sold for coins, added to your *Aquarium* for passive profit, and some can even be
-  adopted into pets.
+  They can be sold for coins, added to your *Aquarium* for passive profit, and some can even be adopted into pets.
   - A **<:fishing_pole:935298127353745499> Fishing Pole** is recommended for protection against death.
 
 ## Tool-based Profit Commands
@@ -27,8 +26,8 @@ Commands that are listed here are unlocked once you obtain and own a tool in you
 
 ## Repairing Tools
 
-Most tools have a **durability rating** which wears over time or due to misuse, for example
-misidentitfying a fish while fishing. When your tool is damaged, you can *repair* it using the
+Most tools have a **durability rating** which wears over time or due to misuse, for example \
+misidentitfying a fish while fishing. When your tool is damaged, you can *repair* it using the \
 {{/repair}} command.
 
 ## The Casino
