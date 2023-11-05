@@ -81,6 +81,7 @@ class Miscellaneous(Cog):
 
         self._guides: dict[str, list[str]] = {}
         self._cooldown_reminder_exists = defaultdict[int, dict[str, CooldownReminderMetadata]](dict)
+        self._vote_reminder_exists = dict[int, CooldownReminderMetadata]()
         self.__cooldown_reminder_fetch_task = self.bot.loop.create_task(self._fetch_cooldown_reminders())
 
     def get_guide_source_lines(self, page: str) -> list[str]:
@@ -104,11 +105,16 @@ class Miscellaneous(Cog):
                 FROM timers
                 WHERE
                     event = 'cooldown_reminder'
+                    OR event = 'vote_reminder'
                 """
         for record in await self.bot.db.fetch(query):
-            self._cooldown_reminder_exists[record['user_id']][record['command']] = CooldownReminderMetadata(
+            metadata = CooldownReminderMetadata(
                 channel_id=record['channel_id'], jump_url=record['jump_url'], timer_id=record['id'],
             )
+            if cmd := record['command']:
+                self._cooldown_reminder_exists[record['user_id']][cmd] = metadata
+            else:
+                self._vote_reminder_exists[record['user_id']] = metadata
 
     @command(name='help', aliases={'guide', 'start'}, hybrid=True, with_app_command=False)
     async def help(self, ctx: Context, *, entity: str = None) -> None:
@@ -239,12 +245,19 @@ class Miscellaneous(Cog):
                     value=f'You can vote again {format_dt(vote_again, "R")}!',
                     inline=True,
                 )
-                button = discord.ui.Button(
-                    label='Remind me when I can vote again',
-                    emoji='\N{ALARM CLOCK}',
-                    style=discord.ButtonStyle.primary,
-                )
-                button.callback = functools.partial(self._vote_button_callback, vote_again)
+                if reminder := self._vote_reminder_exists.get(ctx.author.id):
+                    button = discord.ui.Button(
+                        label='Vote reminder active!',
+                        emoji='\N{ALARM CLOCK}',
+                        url=reminder.jump_url,
+                    )
+                else:
+                    button = discord.ui.Button(
+                        label='Remind me when I can vote again',
+                        emoji='\N{ALARM CLOCK}',
+                        style=discord.ButtonStyle.primary,
+                    )
+                    button.callback = functools.partial(self._vote_button_callback, vote_again)
                 view.add_item(button)
 
         if is_weekend:
@@ -277,27 +290,25 @@ class Miscellaneous(Cog):
         return embed, view, REPLY
 
     async def _vote_button_callback(self, vote_again: datetime.datetime, interaction: TypedInteraction) -> None:  # noqa
-        await interaction.response.send_message(
-            'Voting reminders have been disabled for now (they\'re a bit buggy).', ephemeral=True,
+        timer = await self.bot.timers.create(
+            when=vote_again,
+            event='vote_reminder',
+            user_id=interaction.user.id,
+            channel_id=interaction.channel.id,
+            jump_url=interaction.message.jump_url,
         )
-        # FIXME
-        # await self.bot.timers.create(
-        #     when=vote_again,
-        #     event='vote_reminder',
-        #     metadata={
-        #         'user_id': interaction.user.id,
-        #         'channel_id': interaction.channel.id,
-        #         'jump_url': interaction.message.jump_url,
-        #     },
-        # )
-        # await interaction.response.send_message(
-        #     f"Alright, I'll remind you to vote again {format_dt(vote_again, 'R')}!",
-        #     ephemeral=True,
-        # )
+        self._vote_reminder_exists[interaction.user.id] = CooldownReminderMetadata.from_timer(timer)
+
+        await interaction.response.send_message(
+            f"Alright, I'll remind you to vote again {format_dt(vote_again, 'R')}!",
+            ephemeral=True,
+        )
 
     @Cog.listener()
     async def on_vote_reminder_timer_complete(self, timer: Timer) -> None:
+        user_id = timer.metadata["user_id"]
         channel = self.bot.get_partial_messageable(timer.metadata['channel_id'])
+        self._vote_reminder_exists.pop(user_id, None)
 
         view = discord.ui.View()
         view.add_item(discord.ui.Button(
@@ -307,7 +318,7 @@ class Miscellaneous(Cog):
         view.add_item(discord.ui.Button(label='Jump to Context', url=timer.metadata['jump_url']))
 
         await channel.send(
-            f'Hey <@{timer.metadata["user_id"]}>, you can vote again!',
+            f'Hey <@{user_id}>, you can vote again!',
             allowed_mentions=discord.AllowedMentions(users=True),
             view=view,
         )
