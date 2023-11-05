@@ -290,6 +290,9 @@ class Miscellaneous(Cog):
         return embed, view, REPLY
 
     async def _vote_button_callback(self, vote_again: datetime.datetime, interaction: TypedInteraction) -> None:  # noqa
+        if interaction.user.id in self._vote_reminder_exists:
+            return await interaction.response.send_message('Vote reminder already active.', ephemeral=True)
+
         timer = await self.bot.timers.create(
             when=vote_again,
             event='vote_reminder',
