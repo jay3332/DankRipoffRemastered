@@ -1880,11 +1880,12 @@ class FishingButton(discord.ui.Button['FishingView']):
 
             self.view.embed_color = Colors.secondary
             embed = discord.Embed(color=Colors.secondary, timestamp=interaction.created_at)
+            extra = await self.view.damage_tool(1) if self.view.tool is not None else ''
             embed.add_field(
                 name=f'Wrong, that was {self.view.current.get_sentence_chunk()}!',
                 value=(
                     f'The {self.view.current.name} got away and your fishing session ended.\n'
-                    f'You can fish again later by using {self.view.fish_mention}.\n\n{await self.view.damage_tool(1)}'
+                    f'You can fish again later by using {self.view.fish_mention}.\n\n{extra}'
                 ),
             )
             await self.view.give_prizes()
