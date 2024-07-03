@@ -285,9 +285,10 @@ class Stats(Cog):
         worth = sum(item.price * quantity for item, quantity in inventory.cached.items())
 
         embed = discord.Embed(color=color, timestamp=ctx.now)
+        owner = 'you' if user == ctx.author else 'they'
         embed.description = dedent(f"""
             {'Your' if user == ctx.author else f"{user.name}'s"} inventory is worth {Emojis.coin} **{worth:,}**.
-            Additionally, you own **{len(fields):,}** out of {len(list(Items.all())):,} unique items.
+            Additionally, {owner} own **{len(fields):,}** out of {len(list(Items.all())):,} unique items.
         """)
         embed.set_author(name=f'{user.name}\'s Inventory', icon_url=user.display_avatar)
 

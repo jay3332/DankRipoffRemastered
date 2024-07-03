@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -6,6 +5,7 @@ import functools
 import random
 from collections import defaultdict
 from enum import Enum
+from math import comb
 from textwrap import dedent
 from typing import Any, ClassVar, Final, Generic, Iterable, Iterator, NamedTuple, TYPE_CHECKING, TypeVar
 
@@ -13,10 +13,15 @@ import discord
 from discord import app_commands
 from discord.utils import format_dt
 
-from app.core import Cog, Context, EDIT, REPLY, command, lock_transactions, simple_cooldown, user_max_concurrency
+from app.core import (
+    Cog, Context, EDIT, HybridContext, REPLY, command, lock_transactions, simple_cooldown,
+    user_max_concurrency,
+)
+from app.core.flags import Flags, flag
 from app.data.items import Items
 from app.util.common import pluralize
 from app.util.converters import CasinoBet
+from app.util.structures import DottedDict
 from app.util.types import CommandResponse, TypedInteraction
 from app.util.views import FollowUpButton, UserView
 from config import Colors, Emojis
@@ -567,6 +572,147 @@ SLOTS_DOUBLE_MULTIPLIERS: Final[dict[SlotsCell, int | float]] = {
 }
 
 
+class MinesGemButton(discord.ui.Button['MinesView']):
+    def __init__(self, *, row: int) -> None:
+        super().__init__(label='\u200b', row=row)
+
+    def reveal(self) -> None:
+        self.style = discord.ButtonStyle.success
+        self.label = '\U0001f48e'  # Gem
+        self.disabled = True
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.view.gems += 1
+        self.reveal()
+        self.view.cash_out.disabled = False
+
+        embed = self.view.base_embed
+        embed.add_field(name='Return', value=self.view.return_expansion, inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
+        if self.view.gems >= self.view.max_gems:
+            self.view.stop()
+
+
+class MinesSkullButton(discord.ui.Button['MinesView']):
+    def __init__(self, *, row: int) -> None:
+        super().__init__(label='\u200b', row=row)
+
+    def reveal(self) -> None:
+        self.style = discord.ButtonStyle.danger
+        self.label = '\U0001f480'  # Skull
+        self.disabled = True
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.view.lost = True
+        for child in self.view.children:
+            if isinstance(child, (MinesGemButton, MinesSkullButton)):
+                child.reveal()
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+
+        embed = self.view.base_embed
+        embed.description = ''
+        embed.add_field(name='You hit a mine!', inline=False, value=(
+            f'You lost {Emojis.coin} **{self.view.bet:,}**.\n'
+            f'{Emojis.Expansion.single} You now have {Emojis.coin} **{self.view.record.wallet:,}**.'
+        ))
+        embed.colour = Colors.error
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
+        self.view.stop()
+
+
+class MinesView(UserView):
+    """Implements a game of mines and gems."""
+
+    HOUSE_EDGE = 0.02
+
+    def __init__(self, ctx: Context, record: UserRecord, *, bet: int, size: int = 4, mines: int = 1) -> None:
+        super().__init__(ctx.author, timeout=300)
+        self.ctx: Context = ctx
+        self.record: UserRecord = record
+        self.bet: int = bet
+        self.gems: int = 0
+        self.mines: int = mines
+        self.size: int = size
+        self.lost: bool = False
+
+        self.remove_item(self.cash_out)
+        locations = random.sample(range(self.cells), mines)
+        for idx in range(self.cells):
+            row = idx // self.size
+            self.add_item(MinesSkullButton(row=row) if idx in locations else MinesGemButton(row=row))
+
+        self.cash_out.row = self.size
+        self.cash_out.disabled = True
+        self.add_item(self.cash_out)
+
+    @discord.ui.button(label='Cash Out', emoji='\U0001f4b8', style=discord.ButtonStyle.primary)
+    async def cash_out(self, interaction: TypedInteraction, _button: discord.ui.Button['MinesView']) -> None:
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+
+        if self.lost:
+            raise RuntimeError('should never have gotten here')
+
+        await self.record.add(wallet=round(self.bet * self.multiplier))
+
+        expansion = (
+            self.return_expansion.replace(Emojis.Expansion.single, Emojis.Expansion.first)
+            + f'\n{Emojis.Expansion.last} You now have {Emojis.coin} **{self.record.wallet:,}**.'
+        )
+        embed = self.base_embed.add_field(name='Profit', value=expansion, inline=False)
+        embed.description = ''
+        embed.colour = Colors.success
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.stop()
+
+
+    _GAME_INSTRUCTIONS = (
+        'Click on cells to collect gems. If you hit a mine (denoted with a \U0001f480), you will lose your bet.'
+    )
+
+    @property
+    def base_embed(self) -> discord.Embed:
+        embed = discord.Embed(color=Colors.secondary, description=self._GAME_INSTRUCTIONS, timestamp=self.ctx.now)
+        embed.add_field(name='Bet', value=f'{Emojis.coin} **{self.bet:,}**')
+        embed.add_field(
+            name='Configuration',
+            value=f'{self.size}x{self.size} grid, {pluralize(f"{self.mines} mines")}'
+        )
+
+        embed.set_author(name=f'{self.ctx.author.name}: Mines', icon_url=self.ctx.author.display_avatar)
+        return embed
+
+    @property
+    def return_expansion(self) -> str:
+        profit_multiplier = self.multiplier - 1
+        return (
+            f'\U0001f48e {self.gems} {Emojis.arrow} **{self.multiplier:.02f}x** (+{profit_multiplier:.02%})\n'
+            f'{Emojis.Expansion.single} {Emojis.coin} **+{round(profit_multiplier * self.bet):,}**'
+        )
+
+    @property
+    def max_gems(self) -> int:
+        return self.cells - self.mines
+
+    @property
+    def cells(self) -> int:
+        return self.size * self.size
+
+    @property
+    def multiplier(self) -> float:
+        edge = 1 - self.HOUSE_EDGE if self.cells else 1
+        return edge * comb(self.cells, self.gems) / comb(self.max_gems, self.gems)
+
+
+class MinesFlags(Flags):
+    size: int = flag(short='s', default=4)
+    mines: int = flag(short='m', default=1)
+
+
 class Casino(Cog):
     """Gamble off all of your coins at the casino!"""
 
@@ -753,6 +899,44 @@ class Casino(Cog):
 
         yield game.make_embed(), game, REPLY
         await game.wait()
+
+    @command(aliases={'skulls', 'mn'}, hybrid=True, with_app_command=False)
+    @simple_cooldown(1, 25)
+    @user_max_concurrency(1)
+    async def mines(self, ctx: Context, *, bet: CasinoBet(100), flags: MinesFlags) -> Any:
+        """Win big by collecting as many gems as possible without hitting any mines.
+
+        By default, you will receive a 4x4 grid with one mine where you can win up to a ~15x multiplier, however
+        you can use flags (documented below) to alter the size of the grid and amount of mines planted.
+
+        Flags:
+        - ``--size <2|3|4>``: The size of the grid (you will get a ``size x size`` grid). Defaults to `4` (as in ``4x4``)
+        - ``--mines <N>``: Indicates that N mines will be planted. N must be less than ``size * size``.
+        """
+        if not 2 <= flags.size <= 4:
+            yield 'Grid size must be either 2, 3, or 4'
+            return
+
+        if flags.mines >= flags.size * flags.size:
+            yield f'For a {flags.size}x{flags.size} grid, there must be less than {flags.size * flags.size} mines.'
+            return
+
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.add(wallet=-bet)
+
+        game = MinesView(ctx, record, bet=bet)
+        yield game.base_embed, game, REPLY
+        await game.wait()
+
+    @mines.define_app_command()
+    @app_commands.describe(
+        bet='The amount of coins to bet. Must be between 100 and 500,000. Use "max" to bet as many coins as possible.',
+        size='The size of the grid (you will get a NxN grid). Defaults to 4.',
+        mines='The number of mines planted. Must be less than (size * size). Defaults to 1.',
+    )
+    async def mines_app_command(self, ctx: HybridContext, bet: int, size: int, mines: int) -> Any:
+        flags: Any = DottedDict(size=size, mines=mines)
+        await ctx.invoke(self.command, bet=bet, flags=flags)
 
 
 setup = Casino.simple_setup
