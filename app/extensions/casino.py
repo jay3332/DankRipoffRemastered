@@ -586,13 +586,12 @@ class MinesGemButton(discord.ui.Button['MinesView']):
         self.reveal()
         self.view.cash_out.disabled = False
 
-        embed = self.view.base_embed
-        embed.add_field(name='Return', value=self.view.return_expansion, inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=self.view)
         if self.view.gems >= self.view.max_gems:
             await self.view.cash_out.callback(interaction)
-            self.view.stop()
+        else:
+            embed = self.view.base_embed
+            embed.add_field(name='Return', value=self.view.return_expansion, inline=False)
+            await interaction.response.edit_message(embed=embed, view=self.view)
 
 
 class MinesSkullButton(discord.ui.Button['MinesView']):
