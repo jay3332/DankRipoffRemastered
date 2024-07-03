@@ -14,7 +14,7 @@ from discord import app_commands
 from discord.utils import format_dt
 
 from app.core import (
-    Cog, Context, EDIT, HybridContext, REPLY, command, lock_transactions, simple_cooldown,
+    BAD_ARGUMENT, Cog, Context, EDIT, HybridContext, REPLY, command, lock_transactions, simple_cooldown,
     user_max_concurrency,
 )
 from app.core.flags import Flags, flag
@@ -916,15 +916,18 @@ class Casino(Cog):
         - ``--mines <N>``: Indicates that N mines will be planted. N must be less than ``size * size``.
         """
         if not 2 <= flags.size <= 4:
-            yield 'Grid size must be either 2, 3, or 4'
+            yield 'Grid size must be either 2, 3, or 4', BAD_ARGUMENT
             return
 
         if flags.mines < 1:
-            yield 'Mines must be greater than or equal to 1'
+            yield 'Mines must be greater than or equal to 1', BAD_ARGUMENT
             return
 
         if flags.mines >= flags.size * flags.size:
-            yield f'For a {flags.size}x{flags.size} grid, there must be less than {flags.size * flags.size} mines.'
+            yield (
+                f'For a {flags.size}x{flags.size} grid, there must be less than {flags.size * flags.size} mines.',
+                BAD_ARGUMENT,
+            )
             return
 
         record = await ctx.db.get_user_record(ctx.author.id)
