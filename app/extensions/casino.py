@@ -919,6 +919,10 @@ class Casino(Cog):
             yield 'Grid size must be either 2, 3, or 4'
             return
 
+        if flags.mines < 1:
+            yield 'Mines must be greater than or equal to 1'
+            return
+
         if flags.mines >= flags.size * flags.size:
             yield f'For a {flags.size}x{flags.size} grid, there must be less than {flags.size * flags.size} mines.'
             return
