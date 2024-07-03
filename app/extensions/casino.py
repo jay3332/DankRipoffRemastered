@@ -591,6 +591,7 @@ class MinesGemButton(discord.ui.Button['MinesView']):
 
         await interaction.response.edit_message(embed=embed, view=self.view)
         if self.view.gems >= self.view.max_gems:
+            await self.view.cash_out.callback(interaction)
             self.view.stop()
 
 
