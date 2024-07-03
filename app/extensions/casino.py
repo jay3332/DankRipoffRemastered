@@ -605,11 +605,7 @@ class MinesSkullButton(discord.ui.Button['MinesView']):
 
     async def callback(self, interaction: TypedInteraction) -> None:
         self.view.lost = True
-        for child in self.view.children:
-            if isinstance(child, (MinesGemButton, MinesSkullButton)):
-                child.reveal()
-            if isinstance(child, discord.ui.Button):
-                child.disabled = True
+        self.view.reveal_all()
 
         embed = self.view.base_embed
         embed.description = ''
@@ -648,11 +644,16 @@ class MinesView(UserView):
         self.cash_out.disabled = True
         self.add_item(self.cash_out)
 
-    @discord.ui.button(label='Cash Out', emoji='\U0001f4b8', style=discord.ButtonStyle.primary)
-    async def cash_out(self, interaction: TypedInteraction, _button: discord.ui.Button['MinesView']) -> None:
+    def reveal_all(self) -> None:
         for child in self.children:
+            if isinstance(child, (MinesGemButton, MinesSkullButton)):
+                child.reveal()
             if isinstance(child, discord.ui.Button):
                 child.disabled = True
+
+    @discord.ui.button(label='Cash Out', emoji='\U0001f4b8', style=discord.ButtonStyle.primary)
+    async def cash_out(self, interaction: TypedInteraction, _button: discord.ui.Button['MinesView']) -> None:
+        self.reveal_all()
 
         if self.lost:
             raise RuntimeError('should never have gotten here')
