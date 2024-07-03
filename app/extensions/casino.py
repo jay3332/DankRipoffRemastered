@@ -678,9 +678,10 @@ class MinesView(UserView):
     def base_embed(self) -> discord.Embed:
         embed = discord.Embed(color=Colors.secondary, description=self._GAME_INSTRUCTIONS, timestamp=self.ctx.now)
         embed.add_field(name='Bet', value=f'{Emojis.coin} **{self.bet:,}**')
+        s = 's' if self.mines != 1 else ''
         embed.add_field(
             name='Configuration',
-            value=f'{self.size}x{self.size} grid, {pluralize(f"{self.mines} mines")}'
+            value=f'{self.size}x{self.size} grid, {self.mines} mine{s}'
         )
 
         embed.set_author(name=f'{self.ctx.author.name}: Mines', icon_url=self.ctx.author.display_avatar)
