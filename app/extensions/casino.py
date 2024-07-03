@@ -904,7 +904,7 @@ class Casino(Cog):
     @command(aliases={'skulls', 'mn'}, hybrid=True, with_app_command=False)
     @simple_cooldown(1, 25)
     @user_max_concurrency(1)
-    async def mines(self, ctx: Context, *, bet: CasinoBet(100), flags: MinesFlags) -> Any:
+    async def mines(self, ctx: Context, bet: CasinoBet(100), *, flags: MinesFlags) -> Any:
         """Win big by collecting as many gems as possible without hitting any mines.
 
         By default, you will receive a 4x4 grid with one mine where you can win up to a ~15x multiplier, however
