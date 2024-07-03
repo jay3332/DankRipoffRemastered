@@ -925,7 +925,7 @@ class Casino(Cog):
         record = await ctx.db.get_user_record(ctx.author.id)
         await record.add(wallet=-bet)
 
-        game = MinesView(ctx, record, bet=bet)
+        game = MinesView(ctx, record, bet=bet, size=flags.size, mines=flags.mines)
         yield game.base_embed, game, REPLY
         await game.wait()
 
