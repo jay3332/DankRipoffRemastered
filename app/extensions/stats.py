@@ -244,6 +244,7 @@ class Stats(Cog):
         return embed, REPLY
 
     @command(aliases={"rich", "lb", "top", "richest", "wealthiest"}, hybrid=True)
+    @app_commands.allowed_installs(guilds=True, users=False)
     @simple_cooldown(2, 5)
     async def leaderboard(self, ctx: Context):
         """View the richest people in terms of coins in your server.

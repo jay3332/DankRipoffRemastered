@@ -943,7 +943,7 @@ class Casino(Cog):
         size='The size of the grid (you will get a NxN grid). Defaults to 4.',
         mines='The number of mines planted. Must be less than (size * size). Defaults to 1.',
     )
-    async def mines_app_command(self, ctx: HybridContext, bet: int, size: int, mines: int) -> Any:
+    async def mines_app_command(self, ctx: HybridContext, bet: str, size: int = 4, mines: int = 1) -> Any:
         flags: Any = DottedDict(size=size, mines=mines)
         await ctx.invoke(self.command, bet=bet, flags=flags)
 

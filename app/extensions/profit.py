@@ -1692,6 +1692,7 @@ class Profit(Cog):
 
     @rob.define_app_command()
     @app_commands.describe(victim='The victim of your robbery.')
+    @app_commands.allowed_installs(guilds=True, users=False)
     async def rob_app_command(self, ctx: HybridContext, victim: discord.Member) -> None:
         await ctx.invoke(ctx.command, user=victim)
 

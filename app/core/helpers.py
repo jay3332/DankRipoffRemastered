@@ -239,6 +239,24 @@ def lock_transactions(func: callable) -> callable:
     return commands.check(check)(wrapper)
 
 
+def _installation_wrapper(deco):
+    @wraps(deco)
+    def wrapper(func):
+        func.__discord_app_commands_installation_types__ = getattr(
+            func,
+            '__discord_app_commands_installation_types__',
+            discord.app_commands.AppInstallationType(guild=True, user=True),
+        )
+        func.__discord_app_commands_contexts__ = getattr(
+            func,
+            '__discord_app_commands_contexts__',
+            discord.app_commands.AppCommandContext(guild=True, dm_channel=True, private_channel=True),
+        )
+        return deco(func)
+
+    return wrapper
+
+
 # noinspection PyShadowingBuiltins
 def _resolve_command_kwargs(
     cls: type,
@@ -331,6 +349,8 @@ def command(
     if isinstance(hybrid, AppCommand):
         result.app_command = hybrid
 
+    result = _installation_wrapper(result)
+
     if easy_callback:
         return lambda func: result(easy_command_callback(func))
 
@@ -390,7 +410,7 @@ def group(
         name=name, alias=alias, aliases=aliases, brief=brief, help=help, usage=usage,
     )
     kwargs['invoke_without_command'] = iwc
-    result = commands.group(**kwargs, **other_kwargs)
+    result = _installation_wrapper(commands.group(**kwargs, **other_kwargs))
 
     if easy_callback:
         return lambda func: result(easy_command_callback(func))

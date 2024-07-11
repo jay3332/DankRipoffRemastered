@@ -623,6 +623,16 @@ class HybridCommand(Command, commands.HybridCommand):
     def define_app_command(self, **kwargs: Any) -> Callable[[AsyncCallable[..., Any]], None]:
         def decorator(func: AsyncCallable[..., Any]) -> None:
             parent = kwargs.pop('parent', False)
+            allowed_installs = getattr(
+                func,
+                '__discord_app_commands_installation_types__',
+                discord.app_commands.AppInstallationType(user=True, guild=True),
+            )
+            allowed_contexts = getattr(
+                func,
+                '__discord_app_commands_contexts__',
+                discord.app_commands.AppCommandContext(guild=True, dm_channel=True, private_channel=True),
+            )
             command = _AppCommandOverride(
                 self,
                 name=kwargs.pop('name', self.name),
@@ -631,6 +641,8 @@ class HybridCommand(Command, commands.HybridCommand):
                     self.parent.app_command if isinstance(self.parent, HybridGroupCommand) else None
                 ),
                 callback=func,  # type: ignore
+                allowed_installs=allowed_installs,
+                allowed_contexts=allowed_contexts,
                 **kwargs,
             )
             if parent:
@@ -681,6 +693,16 @@ class HybridGroupCommand(GroupCommand, commands.HybridGroup):
             guild_only = getattr(self.callback, '__discord_app_commands_guild_only__', False)
             default_permissions = getattr(self.callback, '__discord_app_commands_default_permissions__', None)
             nsfw = getattr(self.callback, '__discord_app_commands_is_nsfw__', False)
+            allowed_installs = getattr(
+                self.callback,
+                '__discord_app_commands_installation_types__',
+                discord.app_commands.AppInstallationType(user=True, guild=True),
+            )
+            allowed_contexts = getattr(
+                self.callback,
+                '__discord_app_commands_contexts__',
+                discord.app_commands.AppCommandContext(guild=True, dm_channel=True, private_channel=True),
+            )
             self.app_command = app_commands.Group(
                 name=self._locale_name or self.name,
                 description=self._locale_description or self.description or self.short_doc or '…',
@@ -688,6 +710,8 @@ class HybridGroupCommand(GroupCommand, commands.HybridGroup):
                 guild_only=guild_only,
                 default_permissions=default_permissions,
                 nsfw=nsfw,
+                allowed_installs=allowed_installs,
+                allowed_contexts=allowed_contexts,
             )
 
             parent = kwargs.pop('parent', None)
