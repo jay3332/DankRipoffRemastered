@@ -945,7 +945,7 @@ class Casino(Cog):
     )
     async def mines_app_command(self, ctx: HybridContext, bet: str, size: int = 4, mines: int = 1) -> Any:
         flags: Any = DottedDict(size=size, mines=mines)
-        await ctx.invoke(self.command, bet=bet, flags=flags)
+        await ctx.invoke(ctx.command, bet=bet, flags=flags)
 
 
 setup = Casino.simple_setup
