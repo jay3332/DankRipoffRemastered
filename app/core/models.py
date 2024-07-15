@@ -211,6 +211,9 @@ class PermissionSpec(NamedTuple):
         if ctx.bot.bypass_checks and self._is_owner(ctx.bot, ctx.author):
             return True
 
+        if not ctx.guild or ctx.interaction:
+            return True
+
         other = ctx.channel.permissions_for(ctx.author)
         missing = [perm for perm, value in other if perm in self.user and not value]
 
