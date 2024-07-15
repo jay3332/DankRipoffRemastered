@@ -267,7 +267,7 @@ class RaiseButton(discord.ui.Button['PokerEphemeralView']):
             return
 
         difference = self.bet - self.view.state.invested
-        self.view.base_raise = self.bet - self.view.game.bet
+        self.view.game.base_raise = self.bet - self.view.game.bet
         self.view.game.bet = self.bet
         state = self.view.game.current_turn
         state.raise_bet(difference)
@@ -557,11 +557,9 @@ class Poker(discord.ui.View):
 
     def next_turn(self) -> None:
         """Advances the turn to the next player."""
-        actionable = sum(not player.folded for player in self.players)
-        if actionable <= 1:
-            self.next_round()
 
-        elif all(player.done or player.all_in for player in self.players):
+        actionable = sum(not player.folded and not player.all_in for player in self.players)
+        if all(player.done or player.all_in for player in self.players) or actionable <= 1:
             self.next_round()
 
         self.ctx.bot.loop.create_task(self.refresh_card_views())
