@@ -11,6 +11,7 @@ from typing import Any, ClassVar, Final, Generic, Iterable, Iterator, NamedTuple
 
 import discord
 from discord import app_commands
+from discord.ext.commands import max_concurrency, BucketType
 from discord.utils import format_dt
 
 from app.core import (
@@ -256,6 +257,13 @@ class CardRank(Enum):
 
     def __repr__(self) -> str:
         return f'<CardRank.{self.name}>'
+
+    def __lt__(self, other: CardRank) -> bool:
+        return self.value < other.value
+
+    @property
+    def poker_rank(self) -> int:
+        return self.value if self is not CardRank.ace else 14
 
     @property
     def rank_value(self) -> int:
@@ -715,6 +723,11 @@ class MinesFlags(Flags):
     mines: int = flag(short='m', default=1)
 
 
+class PokerFlags(Flags):
+    small_blind: int = flag(short='s', aliases=('sb', 'small-blind'), converter=CasinoBet(5, 5000))
+    big_blind: int = flag(short='b', aliases=('bb', 'big-blind'), converter=CasinoBet(10, 10000))
+
+
 class Casino(Cog):
     """Gamble off all of your coins at the casino!"""
 
@@ -947,6 +960,51 @@ class Casino(Cog):
         flags: Any = DottedDict(size=size, mines=mines)
         bet = await CasinoBet(100)().convert(ctx, bet)
         await ctx.invoke(ctx.command, bet=bet, flags=flags)
+
+    @command(aliases={'holdem', 'hold\'em', 'pok'}, hybrid=True, with_app_command=False)
+    @simple_cooldown(1, 25)
+    @max_concurrency(1, BucketType.channel)
+    async def poker(self, ctx: Context, buy_in: CasinoBet(500), *, flags: PokerFlags) -> CommandResponse:
+        """Play a game of Texas Hold'em Poker with your friends."""
+        from app.features.poker import Poker
+
+        if flags.small_blind:
+            if not flags.big_blind:
+                s, b = flags.small_blind, flags.small_blind * 2
+            elif flags.small_blind >= flags.big_blind:
+                yield 'The small blind must be less than the big blind.', BAD_ARGUMENT
+                return
+            else:
+                s, b = flags.small_blind, flags.big_blind
+        elif flags.big_blind:
+            s, b = flags.big_blind // 2, flags.big_blind
+        else:
+            s, b = buy_in // 100, buy_in // 50
+
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.add(wallet=-buy_in)
+        game = Poker(ctx, buy_in=buy_in, small_blind=s, big_blind=b)
+        yield game.pregame_embed, game, REPLY
+        await game.wait()
+
+    @poker.define_app_command()
+    @app_commands.describe(
+        buy_in='The amount of coins the players should start with. Must be between 500 and 500,000.',
+        small_blind='The amount of coins the small blind should be. Must be between 10 and 5,000',
+        big_blind='The amount of coins the big blind should be. Must be between 20 and 10,000',
+    )
+    async def poker_app_command(
+        self,
+        ctx: HybridContext,
+        buy_in: str,
+        small_blind: str | None = None,
+        big_blind: str | None = None,
+    ) -> Any:
+        buy_in = await CasinoBet(500)().convert(ctx, buy_in)
+        small_blind = await CasinoBet(5, 5000)().convert(ctx, small_blind) if small_blind else None
+        big_blind = await CasinoBet(10, 10000)().convert(ctx, big_blind) if big_blind else None
+        flags: Any = DottedDict(small_blind=small_blind, big_blind=big_blind)
+        await ctx.invoke(ctx.command, buy_in=buy_in, flags=flags)
 
 
 setup = Casino.simple_setup

@@ -14,6 +14,7 @@ from app.core.models import Command, GroupCommand, HybridCommand, HybridGroupCom
 from app.util.common import format_line, sentinel
 from app.util.pagination import Paginator
 from app.util.structures import LockWithReason
+from config import Emojis
 
 if TYPE_CHECKING:
     from app.core.models import Context, Cog
@@ -152,6 +153,16 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
 
         else:
             kwargs['content'] = str(part)
+
+    if not ctx.guild or not ctx.channel.permissions_for(ctx.guild.me).external_emojis:
+        if content := kwargs.get('content'):
+            kwargs['content'] = content.replace(Emojis.coin, '\U0001fa99')
+
+        for embed in kwargs.get('embeds', []):
+            embed.description = embed.description.replace(Emojis.coin, '\U0001fa99')
+            for field in embed.fields:
+                field.name = field.name.replace(Emojis.coin, '\U0001fa99')
+                field.value = field.value.replace(Emojis.coin, '\U0001fa99')
 
     if error:
         raise GenericError(**kwargs)
