@@ -539,7 +539,7 @@ class Poker(discord.ui.View):
             self.show_hands()
             return
 
-        if all(p.folded or p.all_in for p in self.players):
+        if sum(p.done and not p.folded and not p.all_in for p in self.players) <= 1:
             self.draw_community_cards(5 - len(self.community_cards))
             return self.calculate_hands()
 
@@ -558,7 +558,7 @@ class Poker(discord.ui.View):
     def next_turn(self) -> None:
         """Advances the turn to the next player."""
 
-        actionable = sum(not player.folded and not player.all_in for player in self.players)
+        actionable = sum(player.done and not player.folded and not player.all_in for player in self.players)
         if all(player.done or player.all_in for player in self.players) or actionable <= 1:
             self.next_round()
 
