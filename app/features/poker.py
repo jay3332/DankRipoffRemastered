@@ -559,8 +559,7 @@ class Poker(discord.ui.View):
     def next_turn(self) -> None:
         """Advances the turn to the next player."""
 
-        actionable = sum(not player.folded and not player.all_in for player in self.players)
-        if all(player.done or player.all_in for player in self.players) or actionable <= 1:
+        if all(player.done or player.all_in for player in self.players):
             self.next_round()
 
         self.ctx.bot.loop.create_task(self.refresh_card_views())
