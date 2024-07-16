@@ -391,7 +391,8 @@ class Poker(discord.ui.View):
         self.ctx: Context = ctx
         self.coin = (
             Emojis.coin
-            if ctx.guild and ctx.channel.permissions_for(ctx.guild.me).external_emojis
+            if not ctx.interaction and ctx.guild and ctx.channel.permissions_for(ctx.guild.me).external_emojis
+            or ctx.interaction and ctx.interaction.app_permissions.external_emojis
             else '\U0001fa99'
         )
         self.host: discord.User = ctx.author

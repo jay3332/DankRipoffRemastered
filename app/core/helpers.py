@@ -154,7 +154,10 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
         else:
             kwargs['content'] = str(part)
 
-    if not ctx.guild or not ctx.channel.permissions_for(ctx.guild.me).external_emojis:
+    if not (
+        not ctx.interaction and ctx.guild and ctx.channel.permissions_for(ctx.guild.me).external_emojis
+        or ctx.interaction and ctx.interaction.app_permissions.external_emojis
+    ):
         if content := kwargs.get('content'):
             kwargs['content'] = content.replace(Emojis.coin, '\U0001fa99')
 
