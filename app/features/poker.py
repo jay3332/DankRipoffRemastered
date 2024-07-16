@@ -683,7 +683,13 @@ class Poker(discord.ui.View):
 
         await record.add(wallet=-self.buy_in)
         self.queue[interaction.user] = interaction
-        await interaction.response.edit_message(embed=self.pregame_embed)
+        if not self.players:
+            await interaction.response.edit_message(embed=self.pregame_embed)
+        else:
+            await interaction.response.send_message(
+                'You have joined the game. You will play next round',
+                ephemeral=True
+            )
 
     async def cash_out(self, state: PokerState) -> discord.Embed:
         record = self.ctx.db.get_user_record(state.user.id, fetch=False)
