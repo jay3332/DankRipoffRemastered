@@ -162,7 +162,9 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
             kwargs['content'] = content.replace(Emojis.coin, '\U0001fa99')
 
         for embed in kwargs.get('embeds', []):
-            embed.description = embed.description.replace(Emojis.coin, '\U0001fa99')
+            if embed.description:
+                embed.description = embed.description.replace(Emojis.coin, '\U0001fa99')
+
             for field in embed.fields:
                 field.name = field.name.replace(Emojis.coin, '\U0001fa99')
                 field.value = field.value.replace(Emojis.coin, '\U0001fa99')
