@@ -311,7 +311,7 @@ class PokerEphemeralView(discord.ui.View):
         self.add_item(self.fold_button)
 
         for item in self.children:
-            item.disabled = self.game.current_turn != self.state or self.state.folded
+            item.disabled = self.game.current_turn != self.state or self.state.folded or self.game.show
 
         if self.state.folded:
             self.add_item(self.show_button)
