@@ -456,6 +456,25 @@ class Items:
         await record.update(last_alcohol_usage=None)
         await ctx.reply(f'{item.emoji} Removed the effects of alcohol; you are no longer drunk.')
 
+    meth = Item(
+        type=ItemType.tool,
+        rarity=ItemRarity.unobtainable,
+        key='meth',
+        name='Meth',
+        plural='Meth',
+        emoji='<:meth:1262851173250240604>',
+        description='kill',
+        price=100000000,
+        buyable=False,
+        dispose=True,
+    )
+
+    @meth.to_use
+    async def use_meth(self, ctx: Context, item: Item) -> None:
+        record = await ctx.db.get_user_record(ctx.author.id)
+        await record.make_dead(reason='meth')
+        await ctx.reply(f'{item.emoji} You died')
+
     padlock = Item(
         type=ItemType.tool,
         key='padlock',
