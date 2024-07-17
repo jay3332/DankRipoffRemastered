@@ -561,14 +561,12 @@ class Poker(discord.ui.View):
 
         if all(player.done or player.all_in for player in self.players):
             self.next_round()
+        else:
+            self.turn_idx += 1
+            while self.current_turn.folded:
+                self.turn_idx += 1
 
         self.ctx.bot.loop.create_task(self.refresh_card_views())
-        if self.show:
-            return
-
-        self.turn_idx += 1
-        while self.current_turn.folded:
-            self.turn_idx += 1
 
     def __contains__(self, item: discord.User) -> bool:
         return any(player.user == item for player in self.players) or item in self.queue
