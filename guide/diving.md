@@ -15,7 +15,7 @@ the dive.
 
 ## Diving Deeper
 
-Diving deeper is how you can find more coins and items while diving. The deeper you diving, the more coins you get and \
+Diving deeper is how you can find more coins and items while diving. The deeper you dive, the more coins you get and \
 the rarer the items you can find.
 However, make sure keep track of a few things while diving:
 - **Your oxygen level** – If you run out of oxygen, you will die.

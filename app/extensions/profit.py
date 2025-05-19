@@ -1232,7 +1232,7 @@ class Profit(Cog):
     @simple_cooldown(1, 20)
     @user_max_concurrency(1)
     async def trivia(self, ctx: Context):
-        """Answer trivia questions for coins!"""
+        """Answer trivia questions to gain coins and intelligence!"""
         question = await self.pop_trivia_question()
         prize = random.randint(*self.TRIVIA_PRIZE_MAPPING[question.difficulty])
 
@@ -1260,8 +1260,14 @@ class Profit(Cog):
             await record.add_random_exp(10, 15, chance=0.65, ctx=ctx, connection=conn)
 
             if view.choice == question.correct_answer:
-                profit = await record.add_coins(prize)
-                yield f'Correct! You earned {Emojis.coin} **{profit:,}**.', cont, REPLY
+                async with ctx.db.acquire() as conn:
+                    profit = await record.add_coins(prize, connection=conn)
+                    await record.add(iq=1, connection=conn)
+
+                yield (
+                    f'Correct! You earned {Emojis.coin} **{profit:,}**.\n'
+                    f'-# \U0001f9e0 **+1 IQ** \u2014 You now have **{record.iq:,}** IQ.'
+                ), cont, REPLY
                 return
 
         yield f'Wrong, the correct answer was **{question.correct_answer}**', cont, REPLY

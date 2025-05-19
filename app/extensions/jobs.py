@@ -83,7 +83,7 @@ class JobListFormatter(Formatter):
             if job.work_experience_required:
                 expanded.append(f'\N{CRYSTAL BALL} Experience Required: {job.work_experience_required:,} total shifts')
             if job.intelligence_required:
-                expanded.append(f'\N{BRAIN} Intelligence Required: **{job.intelligence_required:,} IQ*')
+                expanded.append(f'\N{BRAIN} Intelligence Required: **{job.intelligence_required:,} IQ**')
 
             record = await paginator.ctx.db.get_user_record(paginator.ctx.author.id)
             lock = (
@@ -142,7 +142,7 @@ class JobsCog(Cog, name='Jobs'):
             )
 
         info = record.job.job
-        minigame = random.choice(info.minigames)
+        minigame = info.random_minigame()
 
         embed = discord.Embed(color=Colors.primary, timestamp=ctx.now, title=f'Working as {info.chunk}')
         embed.set_author(name=f'{ctx.author.name}: Work', icon_url=ctx.author.display_avatar)
@@ -316,7 +316,7 @@ class JobsCog(Cog, name='Jobs'):
         if job.work_experience_required:
             expanded.append(f'\N{CRYSTAL BALL} Experience Required: {job.work_experience_required:,} total shifts')
         if job.intelligence_required:
-            expanded.append(f'\N{BRAIN} Intelligence Required: **{job.intelligence_required:,} IQ*')
+            expanded.append(f'\N{BRAIN} Intelligence Required: **{job.intelligence_required:,} IQ**')
         if expanded:
             embed.add_field(name='Requirements', value=expansion_list(expanded))
 
@@ -353,9 +353,11 @@ class JobsCog(Cog, name='Jobs'):
             )
 
         if record.iq < job.intelligence_required:
+            trivia_mention = ctx.bot.tree.get_app_command('trivia').mention
             return (
                 f'**You don\'t have enough IQ to apply for this job!** '
-                f'You need **{job.intelligence_required:,}** IQ, but you only have {record.iq:,} IQ.',
+                f'You need **{job.intelligence_required:,}** IQ, but you only have {record.iq:,} IQ.\n'
+                f'-# You can increase your IQ by playing {trivia_mention}.\n',
                 ERROR,
             )
         

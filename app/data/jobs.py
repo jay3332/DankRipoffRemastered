@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import datetime
 import math
+import operator
 import random
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, NamedTuple, TypeAlias, TYPE_CHECKING
+from typing import Any, Callable, Final, NamedTuple, TypeAlias, TYPE_CHECKING
 
 import discord
 
@@ -29,6 +30,9 @@ class Minigame(NamedTuple):
     name: str
     callback: MinigameCallback
     multiplier: float = 1.0
+
+    def __hash__(self) -> int:
+        return hash(self.name)
 
 
 def minigame(name: str, *, multiplier: float = 1.0) -> Callable[[MinigameCallback], Minigame]:
@@ -507,14 +511,14 @@ async def sliding_game(ctx: Context, embed: discord.Embed, _job: Job) -> discord
     embed.add_field(
         name='Sliding Game',
         value=(
-            'Slide the numbers to get them in order! You have 60 seconds.\n'
-            '*Hint: Click on an enabled button to swap it with the empty cell*'
+            'Slide the numbers to get them in order! You have 2 minutes.\n'
+            '-# *Hint: Click on an enabled button to swap it with the empty cell*'
         ),
     )
 
     message = await ctx.maybe_edit(embed=embed, view=game)
     try:
-        await asyncio.wait_for(game.wait(), timeout=60)
+        await asyncio.wait_for(game.wait(), timeout=120)
     except asyncio.TimeoutError:
         game.winner = False
         game.stop()
@@ -530,6 +534,141 @@ async def sliding_game(ctx: Context, embed: discord.Embed, _job: Job) -> discord
     return message
 
 
+_EMOJI_ALGEBRA_POPULATION: Final[list[str]] = [
+    '\U0001f34e', '\U0001f34c', '\U0001f352', '\U0001f347',
+    '\U0001f349', '\U0001f951', '\U0001f95d', '\U0001f34d',
+    '\U0001f351', '\U0001f353',
+]
+_EMOJI_ALGEBRA_OPERATIONS: Final[dict[Any, str]] = {
+    operator.add: '+',
+    operator.sub: '-',
+    operator.mul: '\xd7',
+    operator.truediv: '/',
+}
+_EMOJI_ALGEBRA_VALID_OPERATIONS: Final[list[Any]] = [operator.add, operator.sub, operator.mul]
+
+
+def _generate_emoji_eqn(e1: str, e2: str, e3: str, mapping: dict[str, int]) -> tuple[str, int]:
+    op1 = random.choice(_EMOJI_ALGEBRA_VALID_OPERATIONS)  # avoid division for now
+    op2 = random.choice(_EMOJI_ALGEBRA_VALID_OPERATIONS)
+
+    # a OP1 b OP2 c = ?
+    a, b, c = mapping[e1], mapping[e2], mapping[e3]
+
+    # which operator has higher precedence?
+    result = (
+        op1(a, op2(b, c))
+        if op1 in (operator.add, operator.sub) and op2 in (operator.mul, operator.truediv)
+        else op2(op1(a, b), c)
+    )
+    return f'{e1} {_EMOJI_ALGEBRA_OPERATIONS[op1]} {e2} {_EMOJI_ALGEBRA_OPERATIONS[op2]} {e3}',  result
+
+
+class EmojiAlgebraButton(discord.ui.Button['EmojiAlgebraView']):
+    def __init__(self, *, label: str, choice: int) -> None:
+        super().__init__(style=discord.ButtonStyle.primary, label=label)
+        self.choice = choice
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        if self.choice == self.view.answer:
+            self.view.winner = True
+        else:
+            self.style = discord.ButtonStyle.danger
+
+        for child in self.view.children:
+            child: EmojiAlgebraButton
+            if child.choice == self.view.answer:
+                child.style = discord.ButtonStyle.success
+            elif child.choice != self.choice:
+                child.style = discord.ButtonStyle.secondary
+            child.disabled = True
+
+        self.view.stop()
+        await interaction.response.edit_message(view=self.view)
+
+
+class EmojiAlgebraView(UserView):
+    def __init__(self, ctx: Context, *, answer: int) -> None:
+        super().__init__(ctx.author, timeout=120)
+        self.ctx = ctx
+        self.answer = answer
+        self.winner = False
+
+        start = answer + random.randint(-3, 0)
+        for i in range(start, start + 4):
+            self.add_item(EmojiAlgebraButton(label=str(i), choice=i))
+
+    async def interaction_check(self, interaction: TypedInteraction) -> bool:
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message(
+                'You are not the one who started this game, you cannot play it.',
+                ephemeral=True,
+            )
+            return False
+        return True
+
+
+@minigame('Emoji Algebra', multiplier=1.3)
+async def emoji_algebra(ctx: Context, embed: discord.Embed, _job: Job) -> discord.Message:
+    emojis = e1, e2, e3 = random.sample(_EMOJI_ALGEBRA_POPULATION, k=3)
+    values = a, b, c = random.sample(range(1, 8), k=3)
+    mapping = dict(zip(emojis, values))
+    final_choice = random.randint(0, 3)
+
+    if final_choice == 3:
+        # ensure (a + b) is divisible by c
+        mapping[e3] = c = random.choice([x for x in range(1, 10) if (a + b) % x == 0])
+
+    # generate the equations
+    eq1, eq1_res = _generate_emoji_eqn(e1, e1, e1, mapping)
+    eq2, eq2_res = _generate_emoji_eqn(e1, e2, e1, mapping)
+    eq3, eq3_res = _generate_emoji_eqn(e3, e2, e2, mapping)
+
+    # generate the final equation
+    match final_choice:
+        case 0:
+            answer = a + b + c
+            expr = f'{e1} + {e2} + {e3} = ?'
+        case 1:
+            answer = a - b + c
+            expr = f'{e1} - {e2} + {e3} = ?'
+        case 2:
+            answer = a + b * c
+            expr = f'{e1} + {e2} * {e3} = ?'
+        case 3:
+            answer = (a + b) // c
+            expr = f'({e1} + {e2}) / {e3} = ?'
+        case _:
+            raise ValueError('Invalid final choice')
+
+    embed.add_field(
+        name='Emoji Algebra',
+        value=(
+            'Solve the following puzzle:\n\n'
+            f'{eq1} = {eq1_res}\n'
+            f'{eq2} = {eq2_res}\n'
+            f'{eq3} = {eq3_res}\n'
+            f'{expr}\n\n'
+            '-# Click on the correct answer. You have 2 minutes.'
+        ),
+    )
+    game = EmojiAlgebraView(ctx, answer=answer)
+
+    response = await ctx.maybe_edit(embed=embed, view=game)
+    try:
+        await asyncio.wait_for(game.wait(), timeout=120)
+    except asyncio.TimeoutError:
+        game.winner = False
+        game.stop()
+        raise MinigameFailure("You didn't finish the game in time, so you failed work for today.")
+
+    if not game.winner:
+        await ctx.maybe_edit(view=game)
+        raise MinigameFailure(f"Wrong, the correct answer was **{answer}**. You failed work today.")
+
+    return response
+
+
 class Job(NamedTuple):
     name: str
     key: str
@@ -537,7 +676,7 @@ class Job(NamedTuple):
     emoji: str
     keywords: list[str]
     phrases: list[str]
-    minigames: list[Minigame]
+    minigames: dict[Minigame, float]  # weights
     base_salary: int
     cooldown: datetime.timedelta
     items: dict[Item | None, float]
@@ -562,6 +701,9 @@ class Job(NamedTuple):
     @property
     def display(self) -> str:
         return f'{self.emoji} {self.name}'
+
+    def random_minigame(self) -> Minigame:
+        return random.choices(list(self.minigames.keys()), weights=list(self.minigames.values()))[0]
 
     def __repr__(self) -> str:
         return f'<Job name={self.name!r} key={self.key!r}>'
@@ -599,7 +741,7 @@ class Jobs:
             'rule 1: no disrespecting admins',
             'shower? never heard of it',
         ],
-        minigames=[unscramble, retype, tic_tac_toe],
+        minigames={unscramble: 2, retype: 2, tic_tac_toe: 1, emoji_algebra: 0.2},
         base_salary=750,
         cooldown=datetime.timedelta(minutes=30),
         work_experience_required=0,
@@ -638,9 +780,9 @@ class Jobs:
             'i got demonetized again',
             'hey guys, welcome back to another vlog',
         ],
-        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        minigames={unscramble: 4, retype: 4, tic_tac_toe: 4, logic_game: 1, emoji_algebra: 0.5},
         base_salary=800,
-        cooldown=datetime.timedelta(minutes=30),
+        cooldown=datetime.timedelta(minutes=32),
         work_experience_required=0,
         items={
             None: 1,
@@ -676,9 +818,9 @@ class Jobs:
             'is there broken glass in this bag?',
             'this bag absolutely stinks',
         ],
-        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        minigames={unscramble: 4, retype: 4, tic_tac_toe: 4, logic_game: 2, emoji_algebra: 1.5},
         base_salary=850,
-        cooldown=datetime.timedelta(minutes=30),
+        cooldown=datetime.timedelta(minutes=35),
         work_experience_required=0,
         items={
             None: 1,  # todo
@@ -716,10 +858,10 @@ class Jobs:
             'number 15: burger king foot lettuce',
             'we\'ll have a number 9 large coming right up',
         ],
-        minigames=[unscramble, retype, tic_tac_toe, logic_game],
+        minigames={unscramble: 4, retype: 4, tic_tac_toe: 4, logic_game: 3,  emoji_algebra: 2},
         base_salary=900,
-        cooldown=datetime.timedelta(minutes=30),
-        work_experience_required=0,
+        cooldown=datetime.timedelta(minutes=35),
+        work_experience_required=2,
         items={
             None: 1,  # todo
             Items.cheese: 0.05,
@@ -762,12 +904,14 @@ class Jobs:
             'alright next in line please',
             'will we be using cash or card today?',
         ],
-        minigames=[unscramble, retype, tic_tac_toe, logic_game, sliding_game],
+        minigames={unscramble: 4, retype: 4, tic_tac_toe: 4, logic_game: 3, emoji_algebra: 2, sliding_game: 1},
         base_salary=950,
-        cooldown=datetime.timedelta(minutes=29),
-        work_experience_required=0,
+        cooldown=datetime.timedelta(minutes=35),
+        work_experience_required=3,
         items={
             None: 1,  # todo
+            Items.milk: 0.05,
+            Items.banknote: 0.05,
         },
     )
 
@@ -803,12 +947,13 @@ class Jobs:
             'looks like a coolant leak. i\'ll patch it up',
             'the check engine light is on, what could be the problem?'
         ],
-        minigames=[unscramble, retype, tic_tac_toe, logic_game, sliding_game],
+        minigames={unscramble: 2, retype: 2, tic_tac_toe: 2, logic_game: 2, emoji_algebra: 2, sliding_game: 1},
         base_salary=1000,
-        cooldown=datetime.timedelta(minutes=28),
+        cooldown=datetime.timedelta(minutes=30),
         work_experience_required=5,
         items={
             None: 1,  # todo
+            Items.dirt: 0.1,
         }
     )
 
@@ -846,11 +991,178 @@ class Jobs:
             'are you in a hurry?',
             'please buckle your seatbelt',
         ],
-        minigames=[unscramble, retype, tic_tac_toe, logic_game, sliding_game],
-        base_salary=1100,
+        minigames={unscramble: 3, retype: 3, tic_tac_toe: 3, logic_game: 3, emoji_algebra: 3, sliding_game: 2},
+        base_salary=1200,
+        cooldown=datetime.timedelta(minutes=27),
+        work_experience_required=8,
+        items={
+            None: 1,  # todo
+            Items.banknote: 0.05,
+            Items.key: 0.05,
+        },
+    )
+
+    barista = Job(
+        name='Barista',
+        key='barista',
+        description='Serve coffee and warm smiles to customers',
+        emoji='\u2615',
+        keywords=[
+            'barista',
+            'coffee',
+            'espresso',
+            'latte',
+            'cappuccino',
+            'milk froth',
+            'brew',
+            'grind',
+            'mug',
+            'customer service',
+            'cafe',
+            'barista machine',
+        ],
+        phrases=[
+            'one caramel macchiato coming right up',
+            'would you like that iced or hot?',
+            'what name should I put on the cup?',
+            'grinding fresh beans now',
+            'i love the smell of coffee in the morning',
+            'just steaming the milk now',
+            'enjoy your drink!',
+            'watch out, it\'s hot!',
+            'we ran out of oat milk again...',
+            'tip jar’s looking empty today',
+            'another day, another latte',
+        ],
+        minigames={unscramble: 2, retype: 2, emoji_algebra: 2, logic_game: 1, sliding_game: 1, tic_tac_toe: 1},
+        base_salary=1400,
         cooldown=datetime.timedelta(minutes=26),
         work_experience_required=10,
         items={
-            None: 1,  # todo
+            None: 1,  # TODO
+            Items.banknote: 0.05,
+            Items.milk: 0.05,
+            Items.glass_of_water: 0.05,
+        }
+    )
+
+    librarian = Job(
+        name='Librarian',
+        key='librarian',
+        description='Watch the library and manage a bunch of books',
+        emoji='\U0001f4da',
+        keywords=[
+            'library', 'book', 'catalog', 'quiet', 'archive', 'library card', 'reference',
+            'fiction', 'nonfiction', 'dewey decimal', 'reading room',
+        ],
+        phrases=[
+            'please return books by the due date', 'let me check the bookshelves', 'shhh, quiet please',
+            'that book is on the second floor', 'we just got that one in!', 'do you have your library card?',
+            "please don't rip the books", 'storytime begins at 10 am', 'computers are at the back',
+            'magazines are over here'
+        ],
+        minigames={unscramble: 3, retype: 1, emoji_algebra: 2, logic_game: 2, sliding_game: 1, tic_tac_toe: 1},
+        base_salary=1500,
+        cooldown=datetime.timedelta(minutes=28),
+        work_experience_required=12,
+        intelligence_required=5,
+        items={
+            None: 1,
+            Items.sheet_of_paper: 0.02,
+            Items.banknote: 0.04,
+            Items.key: 0.04,
+        }
+    )
+
+    technician = Job(
+        name='Technician',
+        key='technician',
+        description='Repair and maintain electronic devices',
+        emoji='\U0001f9d1\u200d\U0001f4bb',
+        keywords=[
+            'repair', 'fix', 'device', 'troubleshoot', 'wiring', 'hardware', 'circuit',
+            'solder', 'voltage', 'multimeter', 'diagnostic'
+        ],
+        phrases=[
+            'this might need a new board', 'have you tried restarting it?', "i'll run a diagnostic check",
+            'this capacitor is fried', 'screwdriver please', 'should be working now',
+            'i need to order a replacement part', 'this might take a while', 'everything’s connected properly',
+            'let me test the voltage again'
+        ],
+        minigames={logic_game: 3, emoji_algebra: 3, unscramble: 2, retype: 1, sliding_game: 1, tic_tac_toe: 1},
+        base_salary=2000,
+        cooldown=datetime.timedelta(minutes=30),
+        work_experience_required=15,
+        intelligence_required=30,
+        items={
+            None: 1,
+            Items.banknote: 0.05,
+            Items.key: 0.04,
+            Items.silver: 0.04,
+        }
+    )
+
+    chef = Job(
+        name='Chef',
+        key='chef',
+        description='Cook gourmet meals for a high-end restaurant',
+        emoji='\U0001f9d1\u200d\U0001f373',
+        keywords=[
+            'chef', 'cook', 'kitchen', 'ingredients', 'recipe', 'menu', 'plating',
+            'garnish', 'grill', 'sautee', 'prep station', 'boil', 'simmer',
+        ],
+        phrases=[
+            'order up!', "where's my sous chef?", 'this needs more seasoning',
+            "don't overcook the pasta!", 'time to plate the dish', 'make it look fancy',
+            'what’s today’s special?', 'clean your station', 'fire up the grill',
+            'we’re out of basil!', "where's the lamb sauce?",
+        ],
+        minigames={emoji_algebra: 3, logic_game: 2, unscramble: 2, retype: 2, sliding_game: 1, tic_tac_toe: 1},
+        base_salary=3000,
+        cooldown=datetime.timedelta(minutes=30),
+        work_experience_required=25,
+        intelligence_required=50,
+        items={
+            None: 1,
+            Items.banknote: 0.05,
+            Items.tomato: 0.1,
+            Items.potato: 0.1,
+            Items.cheese: 0.08,
+            Items.milk: 0.08,
+            Items.corn: 0.1,
+            Items.lobster: 0.05,
+            Items.fish: 0.1,
+            Items.sardine: 0.1,
         },
+    )
+
+    nurse = Job(
+        name='Nurse',
+        key='nurse',
+        description='Care for patients and assist doctors',
+        emoji='\U0001f9d1\u200d\u2695\ufe0f',
+        keywords=[
+            'hospital', 'patient', 'bandage', 'medicine', 'injection', 'care', 'vitals',
+            'nurse station', 'blood pressure', 'iv drip', 'scrubs', 'saline solution',
+            'stethoscope', 'thermometer', 'medical history',
+        ],
+        phrases=[
+            'let me take your vitals', "it'll just be a small pinch", 'doctor will be in shortly',
+            'time for your medication', 'let me check your chart', 'we need to clean this wound',
+            'your blood pressure looks good', 'temperature is slightly high', 'we’ll run more tests',
+            'how are you feeling today?'
+        ],
+        minigames={emoji_algebra: 3, logic_game: 2, unscramble: 2, retype: 2, sliding_game: 1, tic_tac_toe: 1},
+        base_salary=4000,
+        cooldown=datetime.timedelta(minutes=28),
+        work_experience_required=35,
+        intelligence_required=75,
+        items={
+            None: 1,
+            Items.banknote: 0.05,
+            Items.key: 0.04,
+            Items.silver: 0.04,
+            Items.cup: 0.05,
+            Items.glass_of_water: 0.05,
+        }
     )
