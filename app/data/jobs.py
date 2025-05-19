@@ -634,7 +634,7 @@ async def emoji_algebra(ctx: Context, embed: discord.Embed, _job: Job) -> discor
             expr = f'{e1} - {e2} + {e3} = ?'
         case 2:
             answer = a + b * c
-            expr = f'{e1} + {e2} * {e3} = ?'
+            expr = f'{e1} + {e2} \xd7 {e3} = ?'
         case 3:
             answer = (a + b) // c
             expr = f'({e1} + {e2}) / {e3} = ?'
