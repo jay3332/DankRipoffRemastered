@@ -339,7 +339,7 @@ class Stats(Cog):
 
         assert sort_by in ('wallet', 'bank', 'total_coins', 'total_exp')
         population = (
-            ctx.db.user_records.items()
+            ctx.db.user_records.values()
             if flags.is_global
             else (ctx.db.user_records[id] for id in ctx.guild._members if id in ctx.db.user_records)
         )
