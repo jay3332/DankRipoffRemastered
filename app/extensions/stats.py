@@ -314,7 +314,8 @@ class Stats(Cog):
     @command(aliases={"rich", "lb", "top", "richest", "wealthiest"}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
     async def leaderboard(
-        self, ctx: Context,
+        self,
+        ctx: Context,
         sort_by: str | None = None,
         *,
         flags: LeaderboardFlags,
@@ -336,17 +337,18 @@ class Stats(Cog):
 
         if not flags.is_global and not ctx.guild:
             flags.is_global = True
-        if flags.is_global:
-            predicate = lambda _: True
-        else:
-            predicate = lambda key: key in ctx.guild._members
 
         assert sort_by in ('wallet', 'bank', 'total_coins', 'total_exp')
+        population = (
+            islice(ctx.db.user_records.items(), 100)
+            if flags.is_global
+            else (ctx.db.user_records.get(id) for id in ctx.guild._members if id in ctx.db.user_records)
+        )
         records = sorted(
             (
                 (record, ctx.guild and ctx.guild.get_member(key) or ctx.bot.get_user(key))
-                for key, record in islice(ctx.db.user_records.items(), 100)
-                if predicate(key) and getattr(record, sort_by) > 0
+                for key, record in population
+                if getattr(record, sort_by) > 0
             ),
             key=lambda r: getattr(r[0], sort_by),
             reverse=True,
