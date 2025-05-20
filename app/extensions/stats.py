@@ -3,7 +3,6 @@ from __future__ import annotations
 from bisect import bisect_left
 from datetime import datetime, timedelta
 from io import BytesIO
-from itertools import islice
 from textwrap import dedent
 from typing import Any, Iterable, Literal, TYPE_CHECKING
 
@@ -340,7 +339,7 @@ class Stats(Cog):
 
         assert sort_by in ('wallet', 'bank', 'total_coins', 'total_exp')
         population = (
-            islice(ctx.db.user_records.items(), 100)
+            ctx.db.user_records.items()
             if flags.is_global
             else (ctx.db.user_records[id] for id in ctx.guild._members if id in ctx.db.user_records)
         )
@@ -352,6 +351,8 @@ class Stats(Cog):
             key=lambda r: getattr(r[0], sort_by),
             reverse=True,
         )
+        if flags.is_global:
+            records = records[:100]  # TODO: perf improvements here
 
         if not records:
             message = "I don't see anyone in the cache with any coins"
