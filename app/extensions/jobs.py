@@ -178,6 +178,7 @@ class JobsCog(Cog, name='Jobs'):
             async with ctx.db.acquire() as conn:
                 await record.add(job_fails=1, connection=conn)
                 await record.update(job_cooldown_expires_at=expiry, connection=conn)
+                await record.add_random_exp(8, 15, connection=conn)
             return str(exc), shortcuts, REPLY
 
         message = message or ctx._message
@@ -186,6 +187,7 @@ class JobsCog(Cog, name='Jobs'):
         async with ctx.db.acquire() as conn:
             await record.add(job_hours=1, work_experience=1, job_salary=raise_amount, connection=conn)
             await record.update(job_cooldown_expires_at=expiry, connection=conn)
+            await record.add_random_exp(12, 20, connection=conn)
             raise_text = (
                 f'\n\u2934\ufe0f **You got a raise!** Your base salary is now {Emojis.coin} **{record.job.salary:,}**.'
                 if raise_amount else ''
