@@ -379,8 +379,8 @@ class Stats(Cog):
     @app_commands.choices(sort_by=[
         Choice(name='Wallet', value='wallet'),
         Choice(name='Bank', value='bank'),
-        Choice(name='Total', value='total'),
-        Choice(name='Level/EXP', value='level'),
+        Choice(name='Total', value='total_coins'),
+        Choice(name='Level/EXP', value='total_exp'),
     ])
     async def leaderboard_app_command(
         self, ctx: HybridContext, sort_by: str = 'wallet', is_global: bool = False,
