@@ -1402,7 +1402,14 @@ class UserRecord(BaseRecord):
 
         return False
 
-    async def add_random_bank_space(self, minimum: int, maximum: int, *, chance: float = 1, connection: asyncpg.Connection | None = None) -> int:
+    async def add_random_bank_space(
+        self,
+        minimum: int,
+        maximum: int,
+        *,
+        chance: float = 1,
+        connection: asyncpg.Connection | None = None,
+    ) -> int:
         if random.random() > chance:
             return 0
 
@@ -1606,6 +1613,10 @@ class UserRecord(BaseRecord):
     @property
     def dm_notifications(self) -> bool:
         return self.data['dm_notifications']
+
+    @property
+    def anonymous_mode(self) -> bool:
+        return self.data['anonymous_mode']
 
     @property
     def max_equipped_pets(self) -> int:

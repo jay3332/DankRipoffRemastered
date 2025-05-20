@@ -3,6 +3,7 @@ from __future__ import annotations
 from bisect import bisect_left
 from datetime import datetime, timedelta
 from io import BytesIO
+from itertools import islice
 from textwrap import dedent
 from typing import Any, Iterable, Literal, TYPE_CHECKING
 
@@ -22,6 +23,7 @@ from app.util.common import cutoff, humanize_duration, image_url_from_emoji, pro
 from app.util.converters import CaseInsensitiveMemberConverter, IntervalConverter
 from app.util.graphs import send_graph_to
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
+from app.util.structures import DottedDict
 from app.util.views import ModalButton, StaticCommandButton, invoke_command
 from config import Colors, Emojis, multiplier_guilds
 
@@ -30,11 +32,39 @@ if TYPE_CHECKING:
     from app.util.types import CommandResponse, TypedInteraction
 
 
+class LeaderboardFlags(Flags):
+    is_global = store_true(
+        name='global', short='g',
+        description='Show the global leaderboard instead of the server leaderboard.',
+    )
+
+
 class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
+    def __init__(
+        self,
+        records: list[tuple[UserRecord, discord.Member]],
+        *,
+        per_page: int,
+        is_global: bool,
+        attr: str,
+    ) -> None:
+        self.is_global = is_global
+        self.attr = attr
+
+        super().__init__(records, per_page=per_page)
+        self.records = records
+
+    ATTR_TEXT: dict[str, str] = {
+        'wallet': 'Sorted by coins in wallet',
+        'bank': 'Sorting by coins in bank',
+        'total_coins': 'Sorted by total coins',
+        'total_exp': 'Sorted by level and EXP',
+    }
+
     async def format_page(self, paginator: Paginator, entries: list[tuple[UserRecord, discord.Member]]) -> discord.Embed:
         result = []
 
-        for i, (record, member) in enumerate(entries, start=paginator.current_page * 10):
+        for i, (record, user) in enumerate(entries, start=paginator.current_page * 10):
             match i:
                 case 0:
                     start = '\U0001f3c6'
@@ -46,16 +76,28 @@ class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
                     start = '<:bullet:934890293902327838>'
 
             record: UserRecord
+            anonymize = self.is_global and record.anonymous_mode and not (
+                paginator.ctx.guild and record.user_id in paginator.ctx.guild._members
+                or record.user_id == paginator.ctx.author.id
+            )
+            name = '*Anonymous User*' if anonymize else discord.utils.escape_markdown(str(user))
+            stat = (
+                f'**Level {record.level:,}** \u2022 {record.exp:,}/{record.exp_requirement} XP'
+                if self.attr == 'total_exp'
+                else f'{Emojis.coin} **{getattr(record, self.attr):,}**'
+            )
             result.append(
-                f'{start} {Emojis.coin} **{record.wallet:,}** \u2014 '
-                f'{discord.utils.escape_markdown(str(member))} {Emojis.get_prestige_emoji(record.prestige)}'
+                f'{start} {stat} \u2014 {name} {Emojis.get_prestige_emoji(record.prestige)}'
             )
 
         embed = discord.Embed(color=Colors.primary, description='\n'.join(result), timestamp=paginator.ctx.now)
         # noinspection PyTypeChecker
-        embed.set_author(name=f'Leaderboard: {paginator.ctx.guild.name}', icon_url=paginator.ctx.guild.icon)
-        embed.set_footer(text=f'Page {paginator.current_page + 1}/{paginator.max_pages}')
+        if self.is_global:
+            embed.set_author(name='Coined: Global Leaderboard (Top 100)')
+        else:
+            embed.set_author(name=f'Leaderboard: {paginator.ctx.guild.name}', icon_url=paginator.ctx.guild.icon)
 
+        embed.set_footer(text=self.ATTR_TEXT[self.attr])
         return embed
 
 
@@ -100,7 +142,7 @@ class RefreshInventoryButton(discord.ui.Button):
         self.inventory = inventory
         self.color = color
 
-    async def callback(self, interaction: TypedInteraction) -> None:
+    async def callback(self, interaction: TypedInteraction) -> Any:
         if interaction.user != self.ctx.author:
             return await interaction.response.send_message(
                 'You cannot refresh someone else\'s inventory view.', ephemeral=True,
@@ -174,7 +216,7 @@ class Stats(Cog):
 
     @command(aliases={'lvl', 'lv', 'l', 'xp', 'exp'}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
-    async def level(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> tuple[discord.Embed, Any, Any]:
+    async def level(self, ctx: Context, *, user: CaseInsensitiveMemberConverter | None = None) -> CommandResponse:
         """View your current level and experience, or optionally, someone elses."""
         user = user or ctx.author
         data = await ctx.db.get_user_record(user.id)
@@ -183,12 +225,21 @@ class Stats(Cog):
         embed.set_author(name=f"Level: {user}", icon_url=user.avatar.url)
 
         level, exp, requirement = data.level_data
+        extra = ''
+        if multi := data.exp_multiplier_in_ctx(ctx) - 1:
+            extra = f'-# XP Multiplier: **+{multi:.1%}**'
+
         embed.add_field(
             name=f"Level {level:,}",
-            value=f'{exp:,}/{requirement:,} XP ({exp / requirement:.1%})\n{progress_bar(exp / requirement)}',
+            value=f'{exp:,}/{requirement:,} XP ({exp / requirement:.1%})\n{progress_bar(exp / requirement)}\n' + extra,
         )
 
-        return embed, REPLY, NO_EXTRA
+        view = discord.ui.View(timeout=60)
+        view.add_item(StaticCommandButton(
+            command=ctx.bot.get_command('multiplier'),
+            label='View Multipliers', style=discord.ButtonStyle.primary, emoji='\U0001f4c8',
+        ))
+        return embed, view, REPLY, NO_EXTRA
 
     @level.define_app_command()
     @app_commands.describe(user='The user to view the level of.')
@@ -243,35 +294,90 @@ class Stats(Cog):
 
         return embed, REPLY
 
-    @command(aliases={"rich", "lb", "top", "richest", "wealthiest"}, hybrid=True)
-    @app_commands.allowed_installs(guilds=True, users=False)
+    _LB_SORT_BY_MAPPING: dict[str | None, str] = {
+        None: 'wallet',
+        'wallet': 'wallet',
+        'w': 'wallet',
+        'pocket': 'wallet',
+        'bank': 'bank',
+        'b': 'bank',
+        'total': 'total_coins',
+        'total_coins': 'total_coins',
+        't': 'total_coins',
+        'xp': 'total_exp',
+        'level': 'total_exp',
+        'lvl': 'total_exp',
+        'l': 'total_exp',
+        'exp': 'total_exp',
+    }
+
+    @command(aliases={"rich", "lb", "top", "richest", "wealthiest"}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
-    async def leaderboard(self, ctx: Context):
-        """View the richest people in terms of coins in your server.
+    async def leaderboard(
+        self, ctx: Context,
+        sort_by: str | None = None,
+        *,
+        flags: LeaderboardFlags,
+    ) -> CommandResponse:
+        """View the richest people in terms of coins (or level) in your server.
 
         A few things to note:
-        - This leaderboard is for *guild only*.
+        - In a server, this leaderboard defaults to *server only* unless `--global` is specified.
         - This leaderboard only shows *cached users*: if a user has not used the bot since the last startup, they will not be shown here.
-        - This leaderboard shows the richest users by their *wallet.*
+        - This leaderboard shows the richest users by their *wallet* unless specified otherwise.
 
-        This is prone to change in the future when flags are implemented. For now, there are limitations.
+        Valid arguments for `sort_by`: `wallet` (default), `bank`, `total`, or `level`.
+
+        Flags:
+        - `--global`: Show the global leaderboard instead of the server leaderboard. If specified, this will only show the top 100 users.
+          This is by default off in servers but on for direct messages ad user-installed apps.
         """
-        members = ctx.guild._members
+        sort_by = self._LB_SORT_BY_MAPPING.get(sort_by, 'wallet')
 
+        if not flags.is_global and not ctx.guild:
+            flags.is_global = True
+        if flags.is_global:
+            predicate = lambda _: True
+        else:
+            predicate = lambda key: key in ctx.guild._members
+
+        assert sort_by in ('wallet', 'bank', 'total_coins', 'total_exp')
         records = sorted(
             (
-                (record, ctx.guild.get_member(key))
-                for key, record in ctx.db.user_records.items()
-                if key in members and record.wallet
+                (record, ctx.guild and ctx.guild.get_member(key) or ctx.bot.get_user(key))
+                for key, record in islice(ctx.db.user_records.items(), 100)
+                if predicate(key) and getattr(record, sort_by) > 0
             ),
-            key=lambda r: r[0].wallet,
+            key=lambda r: getattr(r[0], sort_by),
             reverse=True,
         )
 
         if not records:
-            return "I don't see anyone in the cache that's in this server."
+            message = "I don't see anyone in the cache with any coins"
+            if not flags.is_global:
+                message += " who is in this server"
+            return message + '.'
 
-        return Paginator(ctx, LeaderboardFormatter(records, per_page=10), timeout=120), REPLY
+        fmt = LeaderboardFormatter(records, per_page=10, is_global=flags.is_global, attr=sort_by)
+        return Paginator(ctx, fmt, timeout=120), REPLY
+
+    @leaderboard.define_app_command()
+    @app_commands.rename(is_global='global')
+    @app_commands.describe(
+        sort_by='Sorts by this field (default: Wallet)',
+        is_global='Whether to show the global leaderboard instead of the server leaderboard.',
+    )
+    @app_commands.choices(sort_by=[
+        Choice(name='Wallet', value='wallet'),
+        Choice(name='Bank', value='bank'),
+        Choice(name='Total', value='total'),
+        Choice(name='Level/EXP', value='level'),
+    ])
+    async def leaderboard_app_command(
+        self, ctx: HybridContext, sort_by: str = 'wallet', is_global: bool = False,
+    ) -> None:
+        flags = DottedDict(is_global=is_global)
+        await ctx.invoke(ctx.command, sort_by=sort_by, flags=flags)  # type: ignore
 
     @staticmethod
     def _refresh_inventory_paginator(

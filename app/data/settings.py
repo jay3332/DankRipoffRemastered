@@ -29,3 +29,11 @@ class Settings:
         name='DM Notifications',
         description='When enabled, I will direct message you whenever you receive a notification.',
     )
+
+    anonymous = Setting(
+        key='anonymous_mode',
+        name='Anonymous Mode',
+        description=(
+            'Your username will not be shown in global leaderboards (it will be replaced with *Anonymous User*).'
+        ),
+    )

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from typing import ClassVar
 
     from app.core.bot import Bot
-    from app.database import Database
+    from app.database import Database, UserRecord
     from app.util.pagination import Paginator
     from app.util.types import AsyncCallable, TypedInteraction
 
@@ -156,6 +156,15 @@ class Context(TypedContext):
         view = GuideView(self, page=page)
         await self.reply(embed=view.render(), view=view)
         return view
+
+    async def fetch_author_record(self) -> UserRecord:
+        """Fetches the author's record from the database."""
+        return await self.db.get_user_record(self.author.id)
+
+    async def add_random_exp(self, minimum: int, maximum: int, **kwargs) -> int:
+        """Adds random EXP to the author."""
+        record = await self.fetch_author_record()
+        return await record.add_random_exp(minimum, maximum, ctx=self, **kwargs)
 
 
 class Cog(commands.Cog):

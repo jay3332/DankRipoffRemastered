@@ -145,7 +145,7 @@ class StaticCommandButton(discord.ui.Button):
         self.command_kwargs = command_kwargs or {}
         self.check = check
 
-    async def callback(self, interaction: TypedInteraction) -> None:
+    async def callback(self, interaction: TypedInteraction) -> Any:
         if self.check is not None and not self.check(interaction):
             return await interaction.response.send_message(
                 f'You can\'t use this button, run `{self.command.qualified_name}` instead to use this command',

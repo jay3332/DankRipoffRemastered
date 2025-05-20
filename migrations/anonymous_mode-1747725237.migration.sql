@@ -1,0 +1,2 @@
+ALTER TABLE users
+ADD COLUMN anonymous_mode BOOLEAN NOT NULL DEFAULT false

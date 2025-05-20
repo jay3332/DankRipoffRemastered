@@ -1380,13 +1380,14 @@ class Profit(Cog):
     @active_pet(Pets.bee, energy=60, verb='produce honey')
     async def honey(self, ctx: Context) -> CommandResponse:
         """Claim honey from your bee."""
-        record = await ctx.db.get_user_record(ctx.author.id)
+        record = await ctx.fetch_author_record()
         inventory = await record.inventory_manager.wait()
 
         bee = record.pet_manager.cached[Pets.bee]
         async with ctx.db.acquire() as conn:
             await bee.add_energy(-60, connection=conn)
             await inventory.add_item(item := Items.jar_of_honey, connection=conn)
+            await ctx.add_random_exp(10, 15, connection=conn)
 
         return (
             f'{Pets.bee.emoji} Your **bee** produces {item.get_sentence_chunk()} and stores it in your inventory.',
@@ -1407,6 +1408,7 @@ class Profit(Cog):
         async with ctx.db.acquire() as conn:
             await cow.add_energy(-100, connection=conn)
             await inventory.add_item(item := Items.milk, connection=conn)
+            await record.add_random_exp(10, 15, ctx=ctx, connection=conn)
 
         return (
             f'{Pets.cow.emoji} Your **cow** produces {item.get_sentence_chunk()} and stores it in your inventory.',
