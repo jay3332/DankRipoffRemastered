@@ -349,7 +349,7 @@ class Stats(Cog):
                 (record, ctx.guild and ctx.guild.get_member(record.user_id) or ctx.bot.get_user(record.user_id))
                 for record in population if getattr(record, sort_by) > 0
             ),
-            key=lambda record: getattr(record, sort_by),
+            key=lambda r: getattr(r[0], sort_by),
             reverse=True,
         )
 
