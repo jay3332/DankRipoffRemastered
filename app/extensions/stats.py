@@ -342,15 +342,14 @@ class Stats(Cog):
         population = (
             islice(ctx.db.user_records.items(), 100)
             if flags.is_global
-            else (ctx.db.user_records.get(id) for id in ctx.guild._members if id in ctx.db.user_records)
+            else (ctx.db.user_records[id] for id in ctx.guild._members if id in ctx.db.user_records)
         )
         records = sorted(
             (
-                (record, ctx.guild and ctx.guild.get_member(key) or ctx.bot.get_user(key))
-                for key, record in population
-                if getattr(record, sort_by) > 0
+                (record, ctx.guild and ctx.guild.get_member(record.user_id) or ctx.bot.get_user(record.user_id))
+                for record in population if getattr(record, sort_by) > 0
             ),
-            key=lambda r: getattr(r[0], sort_by),
+            key=lambda record: getattr(record, sort_by),
             reverse=True,
         )
 
