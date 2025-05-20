@@ -9,6 +9,7 @@ from typing import Any, Iterable, Literal, TYPE_CHECKING
 import discord
 from discord import app_commands
 from discord.app_commands import Choice
+from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 from PIL import Image
 
@@ -18,7 +19,7 @@ from app.core.flags import Flags, flag, store_true
 from app.data.items import ItemType, Items
 from app.database import InventoryManager, Multiplier, UserHistoryEntry, UserRecord
 from app.extensions.transactions import query_item_type
-from app.util.common import cutoff, humanize_duration, image_url_from_emoji, progress_bar
+from app.util.common import converter, cutoff, humanize_duration, image_url_from_emoji, progress_bar
 from app.util.converters import CaseInsensitiveMemberConverter, IntervalConverter
 from app.util.graphs import send_graph_to
 from app.util.pagination import FieldBasedFormatter, Formatter, LineBasedFormatter, Paginator
@@ -29,6 +30,30 @@ from config import Colors, Emojis, multiplier_guilds
 if TYPE_CHECKING:
     from app.extensions.transactions import Transactions
     from app.util.types import CommandResponse, TypedInteraction
+
+_LB_SORT_BY_MAPPING: dict[str | None, str] = {
+    None: 'wallet',
+    'wallet': 'wallet',
+    'w': 'wallet',
+    'pocket': 'wallet',
+    'bank': 'bank',
+    'b': 'bank',
+    'total': 'total_coins',
+    'total_coins': 'total_coins',
+    't': 'total_coins',
+    'xp': 'total_exp',
+    'level': 'total_exp',
+    'lvl': 'total_exp',
+    'l': 'total_exp',
+    'exp': 'total_exp',
+}
+
+
+@converter
+async def LeaderboardSortByConverter(_ctx: Context, argument: str) -> str:
+    if alias := _LB_SORT_BY_MAPPING.get(argument.lower()):
+        return alias
+    raise BadArgument()
 
 
 class LeaderboardFlags(Flags):
@@ -81,7 +106,7 @@ class LeaderboardFormatter(Formatter[tuple[UserRecord, discord.Member]]):
             )
             name = '*Anonymous User*' if anonymize else discord.utils.escape_markdown(str(user))
             stat = (
-                f'**Level {record.level:,}** \u2022 {record.exp:,}/{record.exp_requirement} XP'
+                f'**Level {record.level:,}** \u2022 {record.exp:,} XP'
                 if self.attr == 'total_exp'
                 else f'{Emojis.coin} **{getattr(record, self.attr):,}**'
             )
@@ -293,29 +318,12 @@ class Stats(Cog):
 
         return embed, REPLY
 
-    _LB_SORT_BY_MAPPING: dict[str | None, str] = {
-        None: 'wallet',
-        'wallet': 'wallet',
-        'w': 'wallet',
-        'pocket': 'wallet',
-        'bank': 'bank',
-        'b': 'bank',
-        'total': 'total_coins',
-        'total_coins': 'total_coins',
-        't': 'total_coins',
-        'xp': 'total_exp',
-        'level': 'total_exp',
-        'lvl': 'total_exp',
-        'l': 'total_exp',
-        'exp': 'total_exp',
-    }
-
     @command(aliases={"rich", "lb", "top", "richest", "wealthiest"}, hybrid=True, with_app_command=False)
     @simple_cooldown(2, 5)
     async def leaderboard(
         self,
         ctx: Context,
-        sort_by: str | None = None,
+        sort_by: LeaderboardSortByConverter | None = None,
         *,
         flags: LeaderboardFlags,
     ) -> CommandResponse:
@@ -332,8 +340,7 @@ class Stats(Cog):
         - `--global`: Show the global leaderboard instead of the server leaderboard. If specified, this will only show the top 100 users.
           This is by default off in servers but on for direct messages ad user-installed apps.
         """
-        sort_by = self._LB_SORT_BY_MAPPING.get(sort_by, 'wallet')
-
+        sort_by = sort_by or 'wallet'
         if not flags.is_global and not ctx.guild:
             flags.is_global = True
 
