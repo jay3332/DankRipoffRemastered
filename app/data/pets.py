@@ -57,7 +57,7 @@ class Pets:
         emoji='<:dog:1134641292245205123>',
         rarity=PetRarity.common,
         description="A descendant of the wolf and a man's best friend.",
-        energy_per_minute=0.2,
+        energy_per_minute=0.05,
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.3:g}% coins from begging\n'
@@ -71,7 +71,7 @@ class Pets:
         emoji='<:cat:1134641341092089948>',
         rarity=PetRarity.common,
         description='A small, domesticated, carnivorous mammal.',
-        energy_per_minute=0.2,
+        energy_per_minute=0.05,
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.2:g}% weight on finding rarer items when fishing\n'
@@ -85,7 +85,7 @@ class Pets:
         emoji='\U0001f426',
         rarity=PetRarity.common,
         description='Birb. These can fly, in case you were clueless.',
-        energy_per_minute=0.5,
+        energy_per_minute=0.05,
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.4:g}% global coin multiplier'
@@ -98,7 +98,7 @@ class Pets:
         emoji='\U0001f430',
         rarity=PetRarity.common,
         description='A mammal with long ears that hops around.',
-        energy_per_minute=0.2,
+        energy_per_minute=0.05,
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.5:g}% global XP multiplier'
@@ -111,7 +111,7 @@ class Pets:
         emoji='\U0001f439',
         rarity=PetRarity.common,
         description='A small rodent that is often kept as a pet.',
-        energy_per_minute=0.5,
+        energy_per_minute=0.12,
         max_energy=100,
         benefit=lambda level: (
             f'- +{1 + level * 0.4:g}% weight on finding rarer items when digging\n'
@@ -125,7 +125,7 @@ class Pets:
         emoji='\U0001f42d',
         rarity=PetRarity.common,
         description='A small rodent that likes cheese.',
-        energy_per_minute=0.2,
+        energy_per_minute=0.05,
         max_energy=100,
         benefit=lambda level: (
             f'- +{5 + level * 0.5:g}% XP multiplier increase from eating cheese\n'
@@ -139,7 +139,7 @@ class Pets:
         emoji='\U0001f986',
         rarity=PetRarity.uncommon,
         description='Waddle waddle and then they go quack',
-        energy_per_minute=0.3,
+        energy_per_minute=0.1,
         max_energy=200,
         benefit=lambda level: (
             f'- +{2 + level * 0.5:g}% profit from working\n'
@@ -154,7 +154,7 @@ class Pets:
         emoji='\U0001f41d',
         rarity=PetRarity.uncommon,
         description='A flying insect that pollinates flowers and makes honey.',
-        energy_per_minute=0.3,
+        energy_per_minute=0.1,
         max_energy=300,
         benefit=lambda level: (
             f'- +{1 + level * 0.4:g}% faster harvesting crops\n'
@@ -165,13 +165,27 @@ class Pets:
         )
     )
 
+    turtle = Pet(
+        name='Turtle',
+        key='turtle',
+        emoji='\U0001f422',
+        rarity=PetRarity.uncommon,
+        description='Slow and steady wins the race head ahh',
+        energy_per_minute=0.03,
+        max_energy=500,
+        benefit=lambda level: (
+            f'- +{1 + level * 0.5:g}% chance to find rarer items when fishing\n'
+            f'- +{2 + level * 0.5:g}% Global XP multiplier'
+        )
+    )
+
     cow = Pet(
         name='Cow',
         key='cow',
         emoji='\U0001f42e',
         rarity=PetRarity.rare,
         description='A large mammal used for producing milk (and steak of course).',
-        energy_per_minute=0.5,
+        energy_per_minute=0.12,
         max_energy=500,
         benefit=lambda level: (
             f'- +{2 + level * 0.5:g}% more coins from beg, search, and crime\n'
@@ -188,7 +202,7 @@ class Pets:
         emoji='\U0001f43c',
         rarity=PetRarity.rare,
         description='Celebrated for their unique black-and-white appearance, bamboo shoots make up most of their diet.',
-        energy_per_minute=0.3,
+        energy_per_minute=0.1,
         max_energy=400,
         benefit=lambda level: (
             f'- +{2 + level}% global coin multiplier\n'

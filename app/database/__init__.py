@@ -1538,6 +1538,13 @@ class UserRecord(BaseRecord):
             level = cow.level
             yield Multiplier(0.02 + level * 0.006, f'{Pets.cow.display} (Level {level})')
 
+        if turtle := pets.get_active_pet(Pets.turtle):
+            level = turtle.level
+            yield Multiplier(0.02 + level * 0.005, f'{Pets.turtle.display} (Level {level})')
+
+        if ctx is not None and ctx.guild is not None and sum(not m.bot for m in ctx.guild.members) > 50:
+            yield Multiplier(0.25, 'Large Server', is_global=False)
+
         if ctx is not None and ctx.guild is not None and ctx.guild.id in multiplier_guilds:
             yield Multiplier(0.5, ctx.guild.name, is_global=False)
 

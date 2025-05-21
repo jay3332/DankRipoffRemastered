@@ -1948,13 +1948,17 @@ class FishingView(UserView):
         self.weights: dict[Item | None, float] = weights.copy()
 
         # Apply pet multipliers
+        extra = 1.0
         if cat := pets.get_active_pet(Pets.cat):
-            extra = 1.01 + cat.level * 0.002
+            extra += 0.01 + cat.level * 0.002
 
-            for item in self.weights:
-                if item and item.rarity < ItemRarity.rare:
-                    continue
-                self.weights[item] *= extra
+        if turtle := pets.get_active_pet(Pets.turtle):
+            extra += 0.01 + turtle.level * 0.005
+
+        for item in self.weights:
+            if item and item.rarity < ItemRarity.rare:
+                continue
+            self.weights[item] *= extra
 
         # Apply bait multipliers
         self.weights_with_bait: dict[Item | None, float] = self.weights.copy()
