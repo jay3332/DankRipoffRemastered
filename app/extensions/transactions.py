@@ -621,7 +621,7 @@ class Transactions(Cog):
             Name: {item.get_display_name(bold=True)}
             Query Key: **`{item.key}`**
             Type: **{item.type.name.title()}**
-            Rarity: **{item.rarity.name.title()}**
+            Rarity: {item.rarity.emoji} **{item.rarity.name.title()}**
         """))
 
         then = '\n' + Emojis.Expansion.standalone

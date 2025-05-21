@@ -468,10 +468,12 @@ class EventsCog(Cog, name='Events'):
         if lock.locked():
             return
 
+        old = ctx._message
         async with lock:
             rarity = random.choices(list(EVENT_RARITY_WEIGHTS), weights=list(EVENT_RARITY_WEIGHTS.values()))[0]
             if choices := [e for e in walk_collection(Events, Event) if e.rarity is rarity]:
                 await random.choice(choices)(ctx)
+        ctx._message = old
 
 
 setup = EventsCog.simple_setup

@@ -88,6 +88,10 @@ class ItemRarity(Enum):
             return NotImplemented
         return self.value >= other.value
 
+    @property
+    def emoji(self) -> str:
+        return getattr(Emojis.Rarity, self.name)
+
 
 class CrateMetadata(NamedTuple):
     minimum: int

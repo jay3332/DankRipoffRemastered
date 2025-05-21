@@ -520,7 +520,10 @@ class EquipPetSelect(ui.Select):
                 ephemeral=True,
             )
 
-        remaining = PetsCog.PET_MAX_OPERATIONS_COUNT - self.parent.record.pet_operations
+        remaining = (
+            (PetsCog.PET_MAX_OPERATIONS_COUNT - self.parent.record.pet_operations)
+            or PetsCog.PET_MAX_OPERATIONS_COUNT
+        )
         if not await self.parent.ctx.confirm(
             'Are you want sure you want to update your equipped pets?\n'
             f'This will cost you **{operations / 2}** pet swaps (you have {remaining / 2} remaining).',
@@ -568,6 +571,24 @@ class EquipMorePets(discord.ui.Button):
         )
 
 
+class UnequipButton(StaticCommandButton):
+    def __init__(self, ctx: Context, record: PetRecord, container: 'ActivePetsContainer') -> None:
+        super().__init__(
+            command=ctx.bot.get_command('pets unequip'),
+            command_kwargs=dict(pet=record.pet),
+            label='Unequip',
+            style=discord.ButtonStyle.secondary,
+        )
+        self.parent = container
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.original: discord.Message = interaction.message
+        await super().callback(interaction)
+
+        await self.parent.update()
+        await self.original.edit(view=self.view)
+
+
 class ActivePetsContainer(ui.Container):
     def __init__(self, ctx: Context):
         super().__init__(accent_color=Colors.primary)
@@ -611,7 +632,7 @@ class ActivePetsContainer(ui.Container):
         for record in sorted(equipped, key=lambda entry: entry.pet.rarity.value, reverse=True):
             self.add_item(ui.Separator())
             self.add_item(ui.TextDisplay(
-                f'**{record.pet.display}** ({record.pet.rarity.name.title()})\n' + _format_entry(record)
+                f'### **{record.pet.display}** {record.pet.rarity.emoji}\n' + _format_entry(record)
             ))
             self.add_item(ui.ActionRow().add_item(
                 StaticCommandButton(
@@ -628,14 +649,7 @@ class ActivePetsContainer(ui.Container):
                     label='Info',
                     style=discord.ButtonStyle.secondary,
                 )
-            ).add_item(
-                StaticCommandButton(
-                    command=self.ctx.bot.get_command('pets unequip'),
-                    command_kwargs=dict(pet=record.pet),
-                    label='Unequip',
-                    style=discord.ButtonStyle.secondary,
-                )
-            ))
+            ).add_item(UnequipButton(self.ctx, record, self)))
 
         self.add_item(ui.Separator(spacing=discord.SeparatorSize.large)).add_item(
             ui.ActionRow().add_item(

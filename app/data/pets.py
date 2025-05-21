@@ -13,6 +13,10 @@ class PetRarity(Enum):
     mythic = 5
     special = 6
 
+    @property
+    def emoji(self) -> str:
+        return getattr(Emojis.Rarity, self.name)
+
 
 class Pet(NamedTuple):
     name: str
