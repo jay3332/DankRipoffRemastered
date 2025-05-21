@@ -34,7 +34,9 @@ from app.data.skills import RobberyTrainingButton
 from app.database import NotificationData, RobFailReason, UserRecord
 from app.extensions.misc import _get_retry_after
 from app.features.battles import PvEBattleView
-from app.util.common import expansion_list, humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar
+from app.util.common import adjust_weight, expansion_list, humanize_list, image_url_from_emoji, insert_random_u200b, \
+    progress_bar, \
+    weighted_choice
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
 from app.util.views import AnyUser, StaticCommandButton, UserView
@@ -1289,6 +1291,12 @@ class Profit(Cog):
         yield view, view.make_embed(message='You begin your dive at the surface.'), REPLY
         await view.wait()
 
+    HOURLY_CRATE_WEIGHTS: dict[Item, float] = {
+        Items.common_crate: 1.0,
+        Items.uncommon_crate: 0.1,
+        Items.rare_crate: 0.01,
+    }
+
     @command(aliases={'claim', 'redeem', 'hr', 'hour'}, hybrid=True)
     @database_cooldown(3_600)
     @user_max_concurrency(1)
@@ -1297,7 +1305,16 @@ class Profit(Cog):
         """Claim your hourly crate."""
         record = await ctx.db.get_user_record(ctx.author.id)
         inventory = record.inventory_manager
-        item = Items.common_crate  # This should dynamically change based on prestige or premium-ness
+
+        weights = self.HOURLY_CRATE_WEIGHTS.copy()
+        pets = await record.pet_manager.wait()
+
+        if duck := pets.get_active_pet(Pets.duck):
+            k = 1.01 + duck.level * 0.0025
+            for item in (Items.uncommon_crate, Items.rare_crate):
+                weights[item] *= k
+
+        item = weighted_choice(self.HOURLY_CRATE_WEIGHTS)
 
         async with ctx.db.acquire() as conn:
             await inventory.add_item(item, 1, connection=conn)

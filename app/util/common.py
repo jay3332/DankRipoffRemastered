@@ -13,7 +13,7 @@ from typing import (
     Callable,
     Iterable, Iterator,
     Mapping,
-    NamedTuple, Optional,
+    MutableMapping, NamedTuple, Optional,
     ParamSpec,
     TYPE_CHECKING,
     Type,
@@ -396,3 +396,36 @@ def format_line(ctx: Context, line: str) -> str:
         return cmd.mention
 
     return COMMAND_SUBSTITUTION.sub(sub, line)
+
+
+def weighted_choice(choices: Mapping[T, int | float], /) -> T:
+    """Returns a random choice from a dictionary of choices with weights."""
+    return random.choices(
+        list(choices.keys()),
+        weights=list(choices.values()),
+        k=1,
+    )[0]  # type: ignore[no-any-return, no-any-unpack]  # We know the return type is T
+
+
+def adjust_weight(weights: MutableMapping[T, int | float], /, item: T, *, k: float) -> float:
+    """Adjusts the weight of an item in a weighted choice dictionary by factor `k`.
+    Returns the true factor `r` by which the weight was multiplied.
+
+    For example, if P_old(a_n) = M, then P_new(a_n) = kM.
+    """
+    # Let a_n be the sequence of keys
+    # Let w_n be the weight of the item at key ``item``
+    # Let W be the sum of all weights
+    #
+    # Then we want an r s.t. P(a_n) = kw_n / W = rw_n / ( W + (r-1)w_n )
+    # Thus, r = k(w_n - W) / (kw_n - W)
+
+    w_n = weights[item]
+    W = sum(weights.values())
+
+    if not (0 <= k * w_n <= W):
+        raise ValueError('Invalid weight adjustment: 0 <= kP(a_n) <= 1')
+
+    r = k * (w_n - W) / (k * w_n - W)
+    weights[item] *= r
+    return r
