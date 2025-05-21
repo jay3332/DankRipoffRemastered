@@ -34,8 +34,7 @@ from app.data.skills import RobberyTrainingButton
 from app.database import NotificationData, RobFailReason, UserRecord
 from app.extensions.misc import _get_retry_after
 from app.features.battles import PvEBattleView
-from app.util.common import adjust_weight, expansion_list, humanize_list, image_url_from_emoji, insert_random_u200b, \
-    progress_bar, \
+from app.util.common import expansion_list, humanize_list, image_url_from_emoji, insert_random_u200b, progress_bar, \
     weighted_choice
 from app.util.converters import CaseInsensitiveMemberConverter, Investment
 from app.util.structures import LockWithReason
