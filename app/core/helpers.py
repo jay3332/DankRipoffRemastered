@@ -139,7 +139,7 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
         elif isinstance(part, discord.File):
             kwargs['files'].append(part)
 
-        elif isinstance(part, discord.ui.View):
+        elif isinstance(part, (discord.ui.View, discord.ui.LayoutView)):
             kwargs['view'] = part
 
         elif isinstance(part, Paginator):
@@ -186,6 +186,10 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
             tip = random.choice(TIPS)
             kwargs.setdefault('content', '')
             kwargs['content'] += f'\n\U0001f4a1 **Tip:** {format_line(ctx, tip)}'
+
+    if kwargs.get('content') and isinstance(kwargs.get('view'), discord.ui.LayoutView):
+        kwargs['view'].add_item(discord.ui.TextDisplay(kwargs['content']))
+        del kwargs['content']
 
     interaction = getattr(ctx, 'interaction', None)
 

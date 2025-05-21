@@ -289,7 +289,7 @@ class Miscellaneous(Cog):
         embed.set_footer(text='Votes reset at the beginning of each month.')
         return embed, view, REPLY
 
-    async def _vote_button_callback(self, vote_again: datetime.datetime, interaction: TypedInteraction) -> None:  # noqa
+    async def _vote_button_callback(self, vote_again: datetime.datetime, interaction: TypedInteraction) -> Any:  # noqa
         if interaction.user.id in self._vote_reminder_exists:
             return await interaction.response.send_message('Vote reminder already active.', ephemeral=True)
 

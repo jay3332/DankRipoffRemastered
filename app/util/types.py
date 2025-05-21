@@ -4,7 +4,7 @@ from typing import Any, AsyncGenerator, AsyncIterable, Awaitable, Callable, Para
 
 from discord import Embed, File, Interaction
 from discord.ext import commands
-from discord.ui import View
+from discord.ui import LayoutView, View
 
 from app.util.ansi import AnsiStringBuilder
 from app.util.common import ConstantT
@@ -31,7 +31,7 @@ __all__ = (
 AsyncCallable: TypeAlias = Callable[P, Awaitable[R] | AsyncIterable[R]]
 
 CommandResponseFragment: TypeAlias = (
-    str | Embed | File | Paginator | View | dict[str, Any] | ConstantT | AnsiStringBuilder
+    str | Embed | File | Paginator | View | LayoutView | dict[str, Any] | ConstantT | AnsiStringBuilder
 )
 SingleCommandResponse: TypeAlias = CommandResponseFragment | tuple[CommandResponseFragment, ...]
 CommandResponse: TypeAlias = SingleCommandResponse | AsyncGenerator[SingleCommandResponse, Any]

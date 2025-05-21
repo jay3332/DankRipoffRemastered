@@ -1,4 +1,5 @@
-git+https://github.com/Rapptz/discord.py
+# git+https://github.com/Rapptz/discord.py
+discord.py @ git+https://github.com/DA-344/d.py@feat/components-v2
 git+https://github.com/Gorialis/jishaku
 asyncpg
 tabulate

@@ -5,22 +5,24 @@ import datetime
 import random
 import time
 from math import ceil
-from typing import Final, Iterator, TYPE_CHECKING
+from typing import Any, Final, Iterator, TYPE_CHECKING, cast
 
 import aiohttp
 import discord
-from discord import app_commands
+from discord import app_commands, ui
 from discord.ext import commands
 from discord.ext.commands import BadArgument
 from discord.utils import format_dt
 
 from app.core import Cog, Context, command, group, simple_cooldown
 from app.core.helpers import BAD_ARGUMENT, EDIT, REPLY, cooldown_message, user_max_concurrency
+from app.database import PetManager, PetRecord
 from app.data.items import Item, ItemType, Items, NetMetadata
 from app.data.pets import Pet, Pets
 from app.extensions.profit import Profit
 from app.util import converters
 from app.util.common import (
+    get_by_key,
     image_url_from_emoji,
     ordinal,
     progress_bar,
@@ -29,8 +31,8 @@ from app.util.common import (
     walk_collection,
 )
 from app.util.converters import get_amount, try_query_item
-from app.util.pagination import FieldBasedFormatter, LineBasedFormatter, Paginator
-from app.util.views import UserView
+from app.util.pagination import LineBasedFormatter, Paginator
+from app.util.views import StaticCommandButton, UserView
 from config import Colors, Emojis
 
 if TYPE_CHECKING:
@@ -218,43 +220,9 @@ class PetsCog(Cog, name='Pets'):
             mention = ctx.bot.tree.get_app_command(self.hunt.app_command.qualified_name).mention
             return f'You have no pets! Go hunt for some with {mention}.'
 
-        embed = discord.Embed(color=Colors.primary, timestamp=ctx.now)
-        embed.set_author(name=f"{ctx.author.name}'s Equipped Pets", icon_url=ctx.author.avatar)
-        embed.set_thumbnail(url=image_url_from_emoji('\U0001f43e'))
-        embed.set_footer(text=f'Use {ctx.clean_prefix}pets all to view all pets.')
-
-        equip_mention = ctx.bot.tree.get_app_command('pets equip').mention
-        unequip_mention = ctx.bot.tree.get_app_command('pets unequip').mention
-        swap_mention = ctx.bot.tree.get_app_command('pets swap').mention
-
-        if not pets.equipped_count:
-            embed.description = (
-                f"You haven't equipped any pets yet.\nPets must be equipped to activate their abilities!\n"
-                f"Use {equip_mention} to equip pets."
-            )
-            return embed, REPLY
-
-        embed.description = f'You have equipped **{pets.equipped_count}**/{record.max_equipped_pets} pets.\n'
-        embed.description += (
-            f'Use {equip_mention} to equip more pets.'
-            if pets.equipped_count < record.max_equipped_pets
-            else (
-                f'You have filled all pet slots! Use {unequip_mention} to unequip pets.\n'
-                f'You can also use {swap_mention} to swap pets.'
-            )
-        )
-
-        fields = [
-            {
-                'name': f'**{entry.pet.display}** \u2014 {entry.pet.rarity.name.title()}',
-                'value': _format_entry(entry),
-                'inline': False,
-            }
-            for entry in sorted(pets.cached.values(), key=lambda entry: entry.pet.rarity.value, reverse=True)
-            if entry.equipped
-        ]
-        formatter = FieldBasedFormatter(embed=embed, field_kwargs=fields, per_page=5)
-        return Paginator(ctx, formatter), REPLY
+        view = ActivePetsView(ctx)
+        await view.container.prepare()
+        return view, REPLY
 
     @pets.command(name='all', aliases={'a', '*', 'discovered'}, hybrid=True)
     async def pets_all(self, ctx: Context) -> CommandResponse:
@@ -378,13 +346,14 @@ class PetsCog(Cog, name='Pets'):
         )
         return embed, REPLY
 
-    async def refresh_operations(self, ctx: Context, record: UserRecord, operations: int, *, connection) -> str:
-        if record.pet_operations_cooldown_start + self.PET_MAX_OPERATIONS_WINDOW < ctx.now:
+    @classmethod
+    async def refresh_operations(cls, ctx: Context, record: UserRecord, operations: int, *, connection) -> str:
+        if record.pet_operations_cooldown_start + cls.PET_MAX_OPERATIONS_WINDOW < ctx.now:
             await record.update(pet_operations_cooldown_start=ctx.now, pet_operations=operations, connection=connection)
         else:
             await record.add(pet_operations=operations, connection=connection)
 
-        remaining = self.PET_MAX_OPERATIONS_COUNT - record.pet_operations
+        remaining = cls.PET_MAX_OPERATIONS_COUNT - record.pet_operations
         return f'You have {remaining / 2:g} pet swaps remaining.'
 
     @pets.command(name='equip', aliases={'+', 'e', 'eq', 'activate', 'add'}, hybrid=True)
@@ -413,7 +382,14 @@ class PetsCog(Cog, name='Pets'):
             swaps = await self.refresh_operations(ctx, record, 1, connection=conn)
 
         ctx.bot.loop.create_task(ctx.thumbs())
-        return f'Equipped your **{pet.display}**.\n{swaps}', REPLY
+        view = ui.View().add_item(StaticCommandButton(
+            command=self.feed,
+            command_kwargs=dict(pet=pet),
+            label='Feed this Pet',
+            emoji=Emojis.bolt,
+            style=discord.ButtonStyle.primary,
+        ))
+        return f'Equipped your **{pet.display}**.\n{swaps}', view, REPLY
 
     @pets.command(name='unequip', aliases={'-', 'u', 'deactivate', 'remove'}, hybrid=True)
     @app_commands.describe(pet='The pet to unequip.')
@@ -509,6 +485,172 @@ def _format_level_data(record: PetRecord) -> str:
     return f'Level {level} ({current:,}/{required:,} XP)'
 
 
+class EquipPetSelect(ui.Select):
+    def __init__(self, parent: ActivePetsContainer) -> None:
+        super().__init__(placeholder='Select pets to equip', min_values=0, max_values=parent.record.max_equipped_pets)
+        self.parent: ActivePetsContainer = parent
+
+        for pet, record in self.parent.pets.cached.items():
+            self.add_option(
+                label=pet.name,
+                emoji=pet.emoji,
+                value=pet.key,
+                description=f'Level {record.level} \u2022 {record.energy} Energy',
+                default=record.equipped,
+            )
+
+        for i in range(max(0, 3 - len(self.parent.pets.cached))):  # fill empty slots
+            self.add_option(label='\u200b', value=f'null:{i}', default=False)
+
+    async def callback(self, interaction: TypedInteraction) -> Any:
+        values = set(get_by_key(Pets, key) for key in self.values if not key.startswith('null:'))
+        equipped = set(pet for pet, record in self.parent.pets.cached.items() if record.equipped)
+
+        added = values - equipped
+        removed = equipped - values
+
+        operations = len(added) + len(removed)
+        if operations == 0:
+            return await interaction.response.send_message('No modifications made.', ephemeral=True)
+
+        expiry = self.parent.record.pet_operations_cooldown_start + PetsCog.PET_MAX_OPERATIONS_WINDOW
+        if self.parent.ctx.now <= expiry and self.parent.record.pet_operations + operations > PetsCog.PET_MAX_OPERATIONS_COUNT:
+            return await interaction.response.send_message(
+                f'You have no more pet swaps remaining. They will replenish {format_dt(expiry, "R")}.',
+                ephemeral=True,
+            )
+
+        remaining = PetsCog.PET_MAX_OPERATIONS_COUNT - self.parent.record.pet_operations
+        if not await self.parent.ctx.confirm(
+            'Are you want sure you want to update your equipped pets?\n'
+            f'This will cost you **{operations / 2}** pet swaps (you have {remaining / 2} remaining).',
+            interaction=interaction,
+            ephemeral=True,
+            timeout=30,
+        ):
+            # if the user doesn't confirm, we need to reset the select menu
+            self.view.clear_items()
+            self.view.add_item(self)
+            return await interaction.edit_original_response(view=self.view)
+
+        cog: PetsCog = cast(self.parent.ctx.cog, PetsCog)
+
+        async with self.parent.ctx.db.acquire() as conn:
+            out = await cog.refresh_operations(self.parent.ctx, self.parent.record, operations, connection=conn)
+            for pet in added:
+                await self.parent.pets.cached[pet].update(equipped=True, connection=conn)
+            for pet in removed:
+                await self.parent.pets.cached[pet].update(equipped=False, connection=conn)
+
+        await self.parent.update()
+        self.disabled = True
+
+        await interaction.edit_original_response(
+            content=f'Successfully updated your equipped pets using **{operations /2}** pet swaps.\n-# {out}\n',
+            view=None,
+        )
+        await self.parent.ctx.maybe_edit(view=self.parent.view)
+
+
+class EquipMorePets(discord.ui.Button):
+    def __init__(self, container: 'ActivePetsContainer') -> None:
+        super().__init__(label='Equip More Pets', style=discord.ButtonStyle.primary)
+        self.container: ActivePetsContainer = container
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        self.original: discord.Message = interaction.message
+        view = discord.ui.View().add_item(EquipPetSelect(self.container))
+        await interaction.response.send_message(
+            'Select the pets you want to equip or keep equipped.\n'
+            '-# **Note:** You are limited to set number of pet swaps every few hours. Choose wisely.',
+            ephemeral=True,
+            view=view,
+        )
+
+
+class ActivePetsContainer(ui.Container):
+    def __init__(self, ctx: Context):
+        super().__init__(accent_color=Colors.primary)
+        self.ctx: Context = ctx
+
+    async def prepare(self) -> None:
+        self.record: UserRecord = await self.ctx.fetch_author_record()
+        self.pets: PetManager = await self.record.pet_manager.wait()
+        await self.update()
+
+    async def update(self) -> None:
+        self.clear_items()
+
+        equip_mention = self.ctx.bot.tree.get_app_command('pets equip').mention
+        swap_mention = self.ctx.bot.tree.get_app_command('pets swap').mention
+
+        if not self.pets.equipped_count:
+            self.accent_color = None
+            self.add_item(ui.TextDisplay(
+                f"You haven't equipped any pets yet.\nPets must be equipped to activate their abilities!\n"
+                f"Use {equip_mention} to equip pets."
+            ))
+            self.add_item(ui.Separator()).add_item(ui.ActionRow().add_item(EquipMorePets(self)))
+            return
+
+        self.accent_color = Colors.primary
+        self.add_item(
+            ui.Section(
+                f'## {self.ctx.author.display_name}\'s Equipped Pets',
+                f'-# You have equipped **{self.pets.equipped_count}**/{self.record.max_equipped_pets} pets.',
+                (
+                    f'-# Use {equip_mention} to equip more pets.'
+                    if self.pets.equipped_count < self.record.max_equipped_pets
+                    else f'-# You have filled all pet slots! Unequip or {swap_mention} some pets.'
+                ),
+                accessory=ui.Thumbnail(media=self.ctx.author.display_avatar.url),
+            )
+        )
+
+        equipped = (pet for pet in self.pets.cached.values() if pet.equipped)
+        for record in sorted(equipped, key=lambda entry: entry.pet.rarity.value, reverse=True):
+            self.add_item(ui.Separator())
+            self.add_item(ui.TextDisplay(
+                f'**{record.pet.display}** ({record.pet.rarity.name.title()})\n' + _format_entry(record)
+            ))
+            self.add_item(ui.ActionRow().add_item(
+                StaticCommandButton(
+                    command=self.ctx.bot.get_command('feed'),
+                    command_kwargs=dict(pet=record.pet),
+                    label='Feed',
+                    emoji=Emojis.bolt,
+                    style=discord.ButtonStyle.primary,
+                )
+            ).add_item(
+                StaticCommandButton(
+                    command=self.ctx.bot.get_command('pets info'),
+                    command_kwargs=dict(pet=record.pet),
+                    label='Info',
+                    style=discord.ButtonStyle.secondary,
+                )
+            ).add_item(
+                StaticCommandButton(
+                    command=self.ctx.bot.get_command('pets unequip'),
+                    command_kwargs=dict(pet=record.pet),
+                    label='Unequip',
+                    style=discord.ButtonStyle.secondary,
+                )
+            ))
+
+        self.add_item(ui.Separator(spacing=discord.SeparatorSize.large)).add_item(
+            ui.ActionRow().add_item(
+                StaticCommandButton(command=self.ctx.bot.get_command('pets all'), label='View All Pets')
+            ).add_item(EquipMorePets(self))
+        )
+
+
+class ActivePetsView(ui.LayoutView):
+    def __init__(self, ctx: Context) -> None:
+        super().__init__(timeout=120)
+        self.add_item(container := ActivePetsContainer(ctx))
+        self.container = container
+
+
 class HuntMissButton(discord.ui.Button['HuntView']):
     def __init__(self, ctx: Context, *, row: int) -> None:
         super().__init__(emoji=Emojis.space, row=row)
@@ -595,6 +737,21 @@ class HuntTargetButton(discord.ui.Button['HuntView']):
 
         embed.set_footer(text=f'Use {self.view.ctx.clean_prefix}pets info {self.pet.key} to see more details!')
         await itx.response.edit_message(view=self.view)
+
+        self.view.followup_view.add_item(StaticCommandButton(
+            command=self.view.ctx.bot.get_command('pets equip'),
+            command_kwargs=dict(pet=self.pet),
+            label='Equip Pet',
+            style=discord.ButtonStyle.primary,
+            row=0,
+        ))
+        self.view.followup_view.add_item(StaticCommandButton(
+            command=self.view.ctx.bot.get_command('pets info'),
+            command_kwargs=dict(pet=self.pet),
+            label='View Pet Info',
+            style=discord.ButtonStyle.secondary,
+            row=0,
+        ))
         await itx.followup.send(embed=embed, view=self.view.followup_view)
 
 
@@ -652,7 +809,7 @@ class SearchItemModal(discord.ui.Modal):
         super().__init__(title='Feed Item')
         self.parent = parent
 
-    async def on_submit(self, interaction: TypedInteraction, /) -> None:
+    async def on_submit(self, interaction: TypedInteraction, /) -> Any:
         if item := try_query_item(self.item.value):
             # use linear search instead of binary search in case item quantities change, which would change the sort key
             try:
