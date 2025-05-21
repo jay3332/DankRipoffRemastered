@@ -1583,6 +1583,7 @@ class Items:
                 Pets.duck: 0.2,
                 Pets.cow: 0.04,
                 Pets.panda: 0.04,
+                Pets.turtle: 0.04,
             },
             priority=0,
         ),
