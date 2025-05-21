@@ -589,6 +589,16 @@ class UnequipButton(StaticCommandButton):
         await self.original.edit(view=self.view)
 
 
+class RefreshPetsButton(ui.Button):
+    def __init__(self, container: 'ActivePetsContainer') -> None:
+        super().__init__(emoji=Emojis.refresh, style=discord.ButtonStyle.secondary)
+        self.container: ActivePetsContainer = container
+
+    async def callback(self, interaction: TypedInteraction) -> None:
+        await self.container.update()
+        await interaction.response.edit_message(view=self.view)
+
+
 class ActivePetsContainer(ui.Container):
     def __init__(self, ctx: Context):
         super().__init__(accent_color=Colors.primary)
@@ -651,10 +661,11 @@ class ActivePetsContainer(ui.Container):
                 )
             ).add_item(UnequipButton(self.ctx, record, self)))
 
-        self.add_item(ui.Separator(spacing=discord.SeparatorSize.large)).add_item(
+        self.add_item(ui.Separator(spacing=discord.SeparatorSize.large))
+        self.add_item(
             ui.ActionRow().add_item(
                 StaticCommandButton(command=self.ctx.bot.get_command('pets all'), label='View All Pets')
-            ).add_item(EquipMorePets(self))
+            ).add_item(EquipMorePets(self)).add_item(RefreshPetsButton(self))
         )
 
 
