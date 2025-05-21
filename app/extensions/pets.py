@@ -601,8 +601,9 @@ class RefreshPetsButton(ui.Button):
 
 class ActivePetsContainer(ui.Container):
     def __init__(self, ctx: Context):
-        super().__init__(accent_color=Colors.primary)
+        super().__init__()
         self.ctx: Context = ctx
+        self._accent_color = Colors.primary
 
     async def prepare(self) -> None:
         self.record: UserRecord = await self.ctx.fetch_author_record()
@@ -624,7 +625,7 @@ class ActivePetsContainer(ui.Container):
             self.add_item(ui.Separator()).add_item(ui.ActionRow().add_item(EquipMorePets(self)))
             return
 
-        self.accent_color = Colors.primary
+        self.accent_color = self._accent_color
         self.add_item(
             ui.Section(
                 f'## {self.ctx.author.display_name}\'s Equipped Pets',
