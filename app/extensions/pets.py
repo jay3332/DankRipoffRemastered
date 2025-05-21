@@ -534,7 +534,7 @@ class EquipPetSelect(ui.Select):
             # if the user doesn't confirm, we need to reset the select menu
             self.view.clear_items()
             self.view.add_item(self)
-            return await interaction.edit_original_response(view=self.view)
+            return
 
         cog: PetsCog = cast(self.parent.ctx.cog, PetsCog)
 
