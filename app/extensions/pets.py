@@ -245,7 +245,7 @@ class PetsCog(Cog, name='Pets'):
             embed=embed,
             field_name=f'Discovered Pets ({len(pets.cached)})',
             lines=[
-                f'**{entry.pet.display}** \u2014 {entry.pet.rarity.name.title()} (Level {entry.level:,}) '
+                f'**{entry.pet.display}** {entry.pet.rarity.emoji} \u2014 Level {entry.level:,} '
                 + ('[EQUIPPED]' if entry.equipped else '')
                 for entry in sorted(pets.cached.values(), key=lambda entry: (-entry.pet.rarity.value, entry.pet.name))
             ],
