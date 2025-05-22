@@ -1,0 +1,2 @@
+ALTER TABLE users
+ADD COLUMN hide_partnerships BOOLEAN NOT NULL DEFAULT false

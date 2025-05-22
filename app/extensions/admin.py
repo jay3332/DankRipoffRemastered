@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import json
 from asyncio import subprocess, create_subprocess_exec
 from asyncio.subprocess import PIPE
 from io import StringIO
@@ -257,6 +258,50 @@ class Admin(Cog):
         verb, preposition = self._spawn_verb_prep(quantity)
         await record.inventory_manager.add_item(item, quantity)
         return f'{verb} {item.get_sentence_chunk(abs(quantity))} {preposition} {user.mention}\'s inventory.', REPLY
+
+    @developer.command('add-partnership', aliases={'add-partner', 'partner', 'partnership', 'ps'})
+    async def dev_add_partnership(self, ctx: Context, invite: discord.Invite, adjustment: int = 0) -> CommandResponse:
+        """Adds a partnership to assets/partners.json."""
+        if not await ctx.confirm(
+            f'Confirm add partner **{invite.guild.name}**?\n- Guild ID: {invite.guild.id}\n'
+            f'- Invite: {invite.url}\n- Member Adjustment: {adjustment:+}'
+        ):
+            return 'Cancelled.', REPLY
+
+        with open('assets/partners.json', 'w+') as file:
+            try:
+                partners = json.load(file)
+            except json.JSONDecodeError:
+                partners = []
+            if any(p['id'] == invite.guild.id for p in partners):
+                return 'Partnership already exists.', REPLY
+
+            partners.append({
+                'id': invite.guild.id,
+                'invite': invite.code,
+                'adjustment': adjustment,
+            })
+            json.dump(partners, file, indent=2)
+
+        ctx.bot._update_partner_weights(raw=partners)
+        return 'Added partnership. New weights:\n' + str(partners), REPLY
+
+    @developer.command('remove-partnership', aliases={'remove-partner', 'unpartner', 'unpartnership', 'rps'})
+    async def dev_remove_partnership(self, ctx: Context, guild_id: int) -> CommandResponse:
+        """Removes a partnership from assets/partners.json."""
+        if not await ctx.confirm(f'Confirm remove partner with ID **{guild_id}**?'):
+            return 'Cancelled.', REPLY
+
+        with open('assets/partners.json', 'w+') as file:
+            try:
+                partners = json.load(file)
+            except json.JSONDecodeError:
+                partners = []
+            partners = [p for p in partners if p['id'] != guild_id]
+            json.dump(partners, file, indent=2)
+
+        ctx.bot._update_partner_weights(raw=partners)
+        return 'Removed partnership. New weights:\n' + str(partners), REPLY
 
 
 setup = Admin.simple_setup

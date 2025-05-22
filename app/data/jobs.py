@@ -1031,7 +1031,7 @@ class Jobs:
             'enjoy your drink!',
             'watch out, it\'s hot!',
             'we ran out of oat milk again...',
-            'tip jar’s looking empty today',
+            'tip jar\'s looking empty today',
             'another day, another latte',
         ],
         minigames={unscramble: 2, retype: 2, emoji_algebra: 2, logic_game: 1, sliding_game: 1, tic_tac_toe: 1},
@@ -1086,7 +1086,7 @@ class Jobs:
         phrases=[
             'this might need a new board', 'have you tried restarting it?', "i'll run a diagnostic check",
             'this capacitor is fried', 'screwdriver please', 'should be working now',
-            'i need to order a replacement part', 'this might take a while', 'everything’s connected properly',
+            'i need to order a replacement part', 'this might take a while', 'everything is connected properly',
             'let me test the voltage again'
         ],
         minigames={logic_game: 3, emoji_algebra: 3, unscramble: 2, retype: 1, sliding_game: 1, tic_tac_toe: 1},
@@ -1114,8 +1114,8 @@ class Jobs:
         phrases=[
             'order up!', "where's my sous chef?", 'this needs more seasoning',
             "don't overcook the pasta!", 'time to plate the dish', 'make it look fancy',
-            'what’s today’s special?', 'clean your station', 'fire up the grill',
-            'we’re out of basil!', "where's the lamb sauce?",
+            'what\'s today\'s special?', 'clean your station', 'fire up the grill',
+            'we\'re out of basil!', "where's the lamb sauce?",
         ],
         minigames={emoji_algebra: 3, logic_game: 2, unscramble: 2, retype: 2, sliding_game: 1, tic_tac_toe: 1},
         base_salary=3000,
@@ -1147,9 +1147,9 @@ class Jobs:
             'stethoscope', 'thermometer', 'medical history',
         ],
         phrases=[
-            'let me take your vitals', "it'll just be a small pinch", 'doctor will be in shortly',
+            'let me take your vitals', "it\'ll just be a small pinch", 'doctor will be in shortly',
             'time for your medication', 'let me check your chart', 'we need to clean this wound',
-            'your blood pressure looks good', 'temperature is slightly high', 'we’ll run more tests',
+            'your blood pressure looks good', 'temperature is slightly high', 'we\'ll run more tests',
             'how are you feeling today?'
         ],
         minigames={emoji_algebra: 3, logic_game: 2, unscramble: 2, retype: 2, sliding_game: 1, tic_tac_toe: 1},

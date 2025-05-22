@@ -37,3 +37,9 @@ class Settings:
             'Your username will not be shown in global leaderboards (it will be replaced with *Anonymous User*).'
         ),
     )
+
+    hide_partnerships = Setting(
+        key='hide_partnerships',
+        name='Hide Partnerships',
+        description='When enabled, you will no longer see server partnerships/advertisements.'
+    )

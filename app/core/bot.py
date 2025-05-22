@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from asyncio import subprocess
+import json
 import math
 import os
 import re
@@ -41,6 +42,7 @@ jishaku.Flags.NO_UNDERSCORE = True
 jishaku.Flags.NO_DM_TRACEBACK = True
 
 ANSI_REGEX: re.Pattern[str] = re.compile(r"\x1b\[\d{2};[01]m")
+EVERY_TWO_HOURS: list[time] = [time(hour=hour) for hour in range(0, 24, 2)]
 
 
 class TrackingKeepAliveHandler(gateway.KeepAliveHandler):
@@ -222,6 +224,7 @@ class Bot(commands.Bot):
     cdn: CDNClient
     db: Database
     ipc: Server
+    partnership_weights: dict[str, int]
     session: ClientSession
     startup_timestamp: datetime
     timers: TimerManager
@@ -338,6 +341,7 @@ class Bot(commands.Bot):
 
     async def on_first_ready(self) -> None:
         self.startup_timestamp = discord.utils.utcnow()
+        self._update_partner_weights()
 
         text = f'Ready as {self.user} ({self.user.id})'
         center = f' {name} v{version} '
@@ -377,8 +381,34 @@ class Bot(commands.Bot):
 
         await self.process_commands(message)
 
+    def _update_partner_weights(self, *, raw: list[dict[str, Any]] | None = None) -> None:
+        self.partnership_weights = {}
+        if raw is None:
+            try:
+                with open('assets/partners.json') as f:
+                    raw = json.load(f)
+            except FileNotFoundError:
+                print('assets/partners.json not found, skipping partner weight update')
+                return
+            except json.JSONDecodeError:
+                print('assets/partners.json is malformed, skipping partner weight update')
+                return
+
+        for partner in raw:
+            guild = self.get_guild(partner['id'])
+            if guild is None:
+                continue
+
+            humans = sum(not member.bot for member in guild.members)
+            self.partnership_weights[partner['invite']] = humans + partner.get('adjustment', 0)
+
+    @tasks.loop(time=EVERY_TWO_HOURS)
+    async def update_partner_weights(self) -> None:
+        await self.wait_until_ready()
+        self._update_partner_weights()
+
     # Run backup every 2 hours
-    @tasks.loop(time=[time(hour=hour) for hour in range(0, 24, 2)])
+    @tasks.loop(time=EVERY_TWO_HOURS)
     async def backup(self) -> None:
         await self.wait_until_ready()
         channel = self.get_partial_messageable(backups_channel)

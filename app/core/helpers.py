@@ -11,7 +11,7 @@ from discord.app_commands import Command as AppCommand
 from discord.ext import commands
 
 from app.core.models import Command, GroupCommand, HybridCommand, HybridGroupCommand
-from app.util.common import format_line, sentinel
+from app.util.common import format_line, sentinel, weighted_choice
 from app.util.pagination import Paginator
 from app.util.structures import LockWithReason
 from config import Emojis
@@ -186,6 +186,14 @@ async def process_message(ctx: Context, payload: Any) -> discord.Message | None:
             tip = random.choice(TIPS)
             kwargs.setdefault('content', '')
             kwargs['content'] += f'\n\U0001f4a1 **Tip:** {format_line(ctx, tip)}'
+
+        if not record.hide_partnerships and random.random() < 0.1 and ctx.bot.partnership_weights:
+            partner = weighted_choice(ctx.bot.partnership_weights)
+            kwargs.setdefault('content', '')
+            kwargs['content'] += (
+                f'\n\U0001f91d The growth of Coined is made possible by partnerships! '
+                f'Here is one of our partners: https://discord.gg/{partner}'
+            )
 
     if kwargs.get('content') and isinstance(kwargs.get('view'), discord.ui.LayoutView):
         kwargs['view'].add_item(discord.ui.TextDisplay(kwargs['content']))
