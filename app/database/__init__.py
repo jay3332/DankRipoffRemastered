@@ -455,7 +455,7 @@ class NotificationData:
         title = 'You died!'
         color = Colors.error
         emoji = '\N{SKULL}'
-        
+
         def describe(self, _: Bot) -> str:
             extra = (
                 f' and {get_by_key(Items, self.item_lost).get_sentence_chunk(self.quantity_lost)}'
@@ -471,7 +471,7 @@ class NotificationData:
         title = 'You almost died!'
         color = Colors.warning
         emoji = '\u26a0\ufe0f'
-        
+
         def describe(self, _: Bot) -> str:
             s = '' if self.remaining == 1 else 's'
             remaining = (
@@ -1542,11 +1542,12 @@ class UserRecord(BaseRecord):
             level = turtle.level
             yield Multiplier(0.02 + level * 0.005, f'{Pets.turtle.display} (Level {level})')
 
-        if ctx is not None and ctx.guild is not None and sum(not m.bot for m in ctx.guild.members) > 50:
-            yield Multiplier(0.25, 'Large Server', is_global=False)
+        if ctx is not None and ctx.guild is not None:
+            if sum(not m.bot for m in ctx.guild.members) > 50:
+                yield Multiplier(0.25, 'Large Server', is_global=False)
 
-        if ctx is not None and ctx.guild is not None and ctx.guild.id in multiplier_guilds:
-            yield Multiplier(0.5, ctx.guild.name, is_global=False)
+            if ctx.guild.id in multiplier_guilds:
+                yield Multiplier(0.5, ctx.guild.name, is_global=False)
 
     @property
     def global_exp_multiplier(self) -> float:
@@ -1624,6 +1625,10 @@ class UserRecord(BaseRecord):
     @property
     def anonymous_mode(self) -> bool:
         return self.data['anonymous_mode']
+
+    @property
+    def hide_partnerships(self) -> bool:
+        return self.data['hide_partnerships']
 
     @property
     def max_equipped_pets(self) -> int:
