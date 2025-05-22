@@ -313,6 +313,7 @@ class Bot(commands.Bot):
         self.db = Database(self, loop=self.loop)
         self.timers = TimerManager(self)
         self.transaction_locks = {}
+        self.partnership_weights = {}
         self.session = ClientSession()
         self.cdn = CDNClient(self)
         self.bypass_checks = False
@@ -382,7 +383,7 @@ class Bot(commands.Bot):
         await self.process_commands(message)
 
     def _update_partner_weights(self, *, raw: list[dict[str, Any]] | None = None) -> None:
-        self.partnership_weights = {}
+        self.partnership_weights.clear()
         if raw is None:
             try:
                 with open('assets/partners.json') as f:
