@@ -166,7 +166,7 @@ def active_pet(pet: Pet, energy: int, verb: str):
                 )
             hunt_mention = ctx.bot.tree.get_app_command('hunt').mention
             raise BadArgument(
-                f"You don't have a {Pets.bee.display} to produce honey! Hunt for one using {hunt_mention}"
+                f"You don't have a **{pet.display}** to {verb}! Hunt for one using {hunt_mention}"
             )
         return True
 
@@ -1395,6 +1395,17 @@ class Profit(Cog):
         view = await self._get_command_shortcuts(ctx, record)
         return embed, view, REPLY
 
+    @staticmethod
+    async def _pet_claim(ctx: Context, *, pet: Pet, item: Item, energy: int) -> None:
+        record = await ctx.fetch_author_record()
+        inventory = await record.inventory_manager.wait()
+
+        pet_record = record.pet_manager.cached[pet]
+        async with ctx.db.acquire() as conn:
+            await pet_record.add_energy(-energy, connection=conn)
+            await inventory.add_item(item, connection=conn)
+            await ctx.add_random_exp(10, 15, connection=conn)
+
     @command(aliases={'hon', 'bee'}, hybrid=True)
     @database_cooldown(3600)
     @user_max_concurrency(1)
@@ -1402,38 +1413,38 @@ class Profit(Cog):
     @active_pet(Pets.bee, energy=60, verb='produce honey')
     async def honey(self, ctx: Context) -> CommandResponse:
         """Claim honey from your bee."""
-        record = await ctx.fetch_author_record()
-        inventory = await record.inventory_manager.wait()
-
-        bee = record.pet_manager.cached[Pets.bee]
-        async with ctx.db.acquire() as conn:
-            await bee.add_energy(-60, connection=conn)
-            await inventory.add_item(item := Items.jar_of_honey, connection=conn)
-            await ctx.add_random_exp(10, 15, connection=conn)
-
+        item = Items.honey
+        await self._pet_claim(ctx, pet=Pets.bee, item=item, energy=60)
         return (
             f'{Pets.bee.emoji} Your **bee** produces {item.get_sentence_chunk()} and stores it in your inventory.',
             REPLY,
         )
 
-    @command(aliases={'cow', 'mk'}, hybrid=True)
+    @command(aliases={'cow'}, hybrid=True)
     @database_cooldown(3600)
     @user_max_concurrency(1)
     @cooldown_message('Your cow needs time to make more milk!')
     @active_pet(Pets.cow, energy=100, verb='produce milk')
     async def milk(self, ctx: Context) -> CommandResponse:
         """Claim milk from your cow."""
-        record = await ctx.db.get_user_record(ctx.author.id)
-        inventory = await record.inventory_manager.wait()
-
-        cow = record.pet_manager.cached[Pets.cow]
-        async with ctx.db.acquire() as conn:
-            await cow.add_energy(-100, connection=conn)
-            await inventory.add_item(item := Items.milk, connection=conn)
-            await record.add_random_exp(10, 15, ctx=ctx, connection=conn)
-
+        item = Items.milk
+        await self._pet_claim(ctx, pet=Pets.cow, item=item, energy=100)
         return (
             f'{Pets.cow.emoji} Your **cow** produces {item.get_sentence_chunk()} and stores it in your inventory.',
+            REPLY,
+        )
+
+    @command(aliases={'berry', 'bry'}, hybrid=True)
+    @database_cooldown(3600)
+    @user_max_concurrency(1)
+    @cooldown_message('Your fox needs time to find berries!')
+    @active_pet(Pets.fox, energy=200, verb='produce berries')
+    async def berries(self, ctx: Context) -> CommandResponse:
+        """Claim berries from your fox."""
+        item = Items.berries
+        await self._pet_claim(ctx, pet=Pets.fox, item=item, energy=200)
+        return (
+            f'{Pets.fox.emoji} Your **fox** produces {item.get_sentence_chunk()} and stores it in your inventory.',
             REPLY,
         )
 

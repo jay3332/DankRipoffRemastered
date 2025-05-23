@@ -209,4 +209,25 @@ class Pets:
             f'- +{2 + level}% global coin multiplier\n'
             f'- +{2 + level * 0.5:g}% chance to find rarer wood when chopping trees'
         ),
+        abilities=lambda level: (
+            f'- Produce bamboo (1 per hour) with `.bamboo` ({Emojis.bolt} 100)'
+        )
+    )
+
+    fox = Pet(
+        name='Fox',
+        key='fox',
+        emoji='\U0001f98a',
+        rarity=PetRarity.epic,
+        description='A small to medium-sized omnivorous mammal.',
+        energy_per_minute=0.1,
+        max_energy=400,
+        benefit=lambda level: (
+            f'- +{5 + level:g}% global coin multiplier\n'
+            f'- +{2 + level:g}% global bank space multiplier\n'
+            f'- +{2 + level * 0.5:g}% chance to find rarer items when searching'
+        ),
+        abilities=lambda level: (
+            f'- Produce berries (1 per hour) with `.berries` ({Emojis.bolt} 200)'
+        )
     )

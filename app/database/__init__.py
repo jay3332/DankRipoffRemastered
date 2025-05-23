@@ -1572,12 +1572,20 @@ class UserRecord(BaseRecord):
             level = panda.level
             yield Multiplier(0.02 + level * 0.01, f'{Pets.panda.display} (Level {level})')
 
+        if fox := pets.get_active_pet(Pets.fox):
+            level = fox.level
+            yield Multiplier(0.05 + level * 0.01, f'{Pets.fox.display} (Level {level})')
+
     @property
     def coin_multiplier(self) -> float:
         return 1 + sum(m.multiplier for m in self.walk_coin_multipliers())
 
     def walk_bank_space_growth_multipliers(self) -> Generator[Multiplier, Any, Any]:
         yield Multiplier(self.prestige * 0.5, f'{Emojis.get_prestige_emoji(self.prestige)} Prestige {self.prestige}')
+
+        if fox := self.pet_manager.get_active_pet(Pets.fox):
+            level = fox.level
+            yield Multiplier(0.02 + level * 0.01, f'{Pets.fox.display} (Level {level})')
 
     @property
     def bank_space_growth_multiplier(self) -> float:

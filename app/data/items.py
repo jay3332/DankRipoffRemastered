@@ -1579,11 +1579,12 @@ class Items:
                 Pets.bunny: 0.9,
                 Pets.hamster: 0.9,
                 Pets.mouse: 0.9,
-                Pets.bee: 0.2,
-                Pets.duck: 0.2,
-                Pets.cow: 0.04,
-                Pets.panda: 0.04,
-                Pets.turtle: 0.04,
+                Pets.bee: 0.3,
+                Pets.turtle: 0.3,
+                Pets.duck: 0.3,
+                Pets.cow: 0.1,
+                Pets.panda: 0.1,
+                Pets.fox: 0.03,
             },
             priority=0,
         ),
@@ -1836,6 +1837,18 @@ class Items:
         sell=800,
         rarity=ItemRarity.uncommon,
         energy=22,
+    )
+
+    berries = Item(
+        type=ItemType.miscellaneous,
+        key='bunch_of_berries',
+        name='Bunch of Berries',
+        plural='Bunches of Berries',
+        emoji='<:berries:1375294760276856932>',
+        description='A handful of berries. Obtainable from foxes. Good for feeding pets.',
+        sell=1200,
+        rarity=ItemRarity.uncommon,
+        energy=36,
     )
 
     sheet_of_paper = Item(
