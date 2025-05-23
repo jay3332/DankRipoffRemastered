@@ -122,7 +122,7 @@ class BaseCurve:
 
     def total_exp_for(self, level: int, /) -> int:
         if level < 0:
-            raise ValueError('Level must be greater than or equal to 0')
+            return 0
         if level < self.memoize_to:
             return self._sums[level]
 
