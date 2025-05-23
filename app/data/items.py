@@ -1580,7 +1580,7 @@ class Items:
                 Pets.hamster: 0.9,
                 Pets.mouse: 0.9,
                 Pets.bee: 0.3,
-                Pets.turtle: 0.3,
+                Pets.tortoise: 0.3,
                 Pets.duck: 0.3,
                 Pets.cow: 0.1,
                 Pets.panda: 0.1,

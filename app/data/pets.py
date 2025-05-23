@@ -166,9 +166,9 @@ class Pets:
         )
     )
 
-    turtle = Pet(
-        name='Turtle',
-        key='turtle',
+    tortoise = Pet(
+        name='Tortoise',
+        key='tortoise',
         emoji='\U0001f422',
         rarity=PetRarity.uncommon,
         description='Slow and steady wins the race head ahh',

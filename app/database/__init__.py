@@ -1537,9 +1537,9 @@ class UserRecord(BaseRecord):
             level = cow.level
             yield Multiplier(0.02 + level * 0.006, f'{Pets.cow.display} (Level {level})')
 
-        if turtle := pets.get_active_pet(Pets.turtle):
-            level = turtle.level
-            yield Multiplier(0.02 + level * 0.005, f'{Pets.turtle.display} (Level {level})')
+        if tortoise := pets.get_active_pet(Pets.tortoise):
+            level = tortoise.level
+            yield Multiplier(0.02 + level * 0.005, f'{Pets.tortoise.display} (Level {level})')
 
         if ctx is not None and ctx.guild is not None:
             if sum(not m.bot for m in ctx.guild.members) > 50:

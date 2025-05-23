@@ -129,7 +129,7 @@ class PetsCog(Cog, name='Pets'):
         Pets.mouse: 0.8,
         Pets.bee: 0.05,
         Pets.duck: 0.05,
-        Pets.turtle: 0.05,
+        Pets.tortoise: 0.05,
         Pets.cow: 0.004,
         Pets.panda: 0.004,
         Pets.fox: 0.002,

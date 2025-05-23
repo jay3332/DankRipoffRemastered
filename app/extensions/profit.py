@@ -1985,8 +1985,8 @@ class FishingView(UserView):
         if cat := pets.get_active_pet(Pets.cat):
             extra += 0.01 + cat.level * 0.002
 
-        if turtle := pets.get_active_pet(Pets.turtle):
-            extra += 0.01 + turtle.level * 0.005
+        if tortoise := pets.get_active_pet(Pets.tortoise):
+            extra += 0.01 + tortoise.level * 0.005
 
         for item in self.weights:
             if item and item.rarity < ItemRarity.rare:
