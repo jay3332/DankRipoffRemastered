@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Collection, Generic, TYPE_CHECKING, TypeVar
+from typing import Any, Collection, Generic, TYPE_CHECKING, TypeVar
 
 import discord
 from discord import ButtonStyle, Embed, File, Interaction
@@ -69,7 +69,7 @@ class _PageInputModal(Modal, title='Select Page'):
         self.paginator: Paginator = view.paginator
         self.page.placeholder %= f'{self.paginator.max_pages:,}'
 
-    async def on_submit(self, interaction: TypedInteraction) -> None:
+    async def on_submit(self, interaction: TypedInteraction) -> Any:
         try:
             page = int(self.page.value)
         except ValueError:

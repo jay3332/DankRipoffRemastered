@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Callable, NamedTuple
 
+from app.util.common import BaseCurve, ExponentialCurve
 from config import Emojis
 
 
@@ -29,7 +30,7 @@ class Pet(NamedTuple):
     benefit: Callable[[int], str]  # Passive
     abilities: Callable[[int], str] | None = None  # Active
     # Leveling
-    leveling_curve: tuple[int, int] = (50, 1.15)
+    leveling_curve: BaseCurve = ExponentialCurve(50, 1.15, precision=10)
     max_level: int = 200
 
     @property

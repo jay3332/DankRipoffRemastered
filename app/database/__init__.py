@@ -21,7 +21,7 @@ from app.data.jobs import Job, Jobs
 from app.data.pets import Pet, Pets
 from app.data.skills import Skill, Skills
 from app.database.migrations import Migrator
-from app.util.common import calculate_level, calculate_level_v2, get_by_key, image_url_from_emoji, pick
+from app.util.common import CubicCurve, ExponentialCurve, get_by_key, image_url_from_emoji, pick
 from config import Colors, DatabaseConfig, Emojis, multiplier_guilds
 
 if TYPE_CHECKING:
@@ -767,7 +767,7 @@ class CropInfo(NamedTuple):
 
     @property
     def level_data(self) -> tuple[int, int, int]:
-        return calculate_level(self.exp, **CropManager.LEVELING_CURVE)
+        return CropManager.LEVELING_CURVE.compute_level(self.exp)
 
     @property
     def level(self) -> int:
@@ -794,7 +794,7 @@ class CropInfo(NamedTuple):
 
 
 class CropManager:
-    LEVELING_CURVE = dict(base=50, factor=1.15)
+    LEVELING_CURVE = ExponentialCurve(50, 1.15, precision=100)
 
     def __init__(self, record: UserRecord) -> None:
         self.cached: dict[tuple[int, int], CropInfo] = {}
@@ -966,8 +966,7 @@ class PetRecord:
 
     @property
     def level_data(self) -> tuple[int, int, int]:
-        base, factor = self.pet.leveling_curve
-        return calculate_level(self.total_exp, base=base, factor=factor, precision=10)
+        return self.pet.leveling_curve.compute_level(self.total_exp)
 
     @property
     def level(self) -> int:
@@ -1095,8 +1094,7 @@ class AbilityRecord:
 
     @property
     def level_data(self) -> tuple[int, int, int]:
-        base, factor = self.ability.curve
-        return calculate_level(self.total_exp, base=base, factor=factor, precision=10)
+        return self.ability.curve.compute_level(self.total_exp)
 
     @property
     def level(self) -> int:
@@ -1285,6 +1283,7 @@ class UserRecord(BaseRecord):
     """Stores data about a user."""
 
     ALCOHOL_ACTIVE_DURATION = datetime.timedelta(hours=2)
+    LEVELING_CURVE = CubicCurve.default()
 
     def __init__(self, user_id: int, *, db: Database) -> None:
         self.db: Database = db
@@ -1481,7 +1480,7 @@ class UserRecord(BaseRecord):
 
     @property
     def level_data(self) -> tuple[int, int, int]:
-        return calculate_level_v2(self.total_exp)
+        return self.LEVELING_CURVE.compute_level(self.total_exp)
 
     @property
     def level(self) -> int:

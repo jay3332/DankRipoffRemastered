@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any, NamedTuple, TypeAlias, TYPE_CHECKING
 
 from app.core.helpers import MISSING
-from app.util.common import get_by_key
+from app.util.common import BaseCurve, ExponentialCurve, get_by_key
 
 if TYPE_CHECKING:
     from app.data.enemies import Enemy
@@ -44,7 +44,7 @@ class Ability:
     emoji: str
     skins: dict[str, str] = field(default_factory=dict)
     stamina: int = 0
-    curve: tuple[int, int] = (100, 1.22)
+    curve: BaseCurve = ExponentialCurve(100, 1.22, precision=10)
     exclusive_to: list[Ref] | None = None
     _callback: AbilityCallback = MISSING
 

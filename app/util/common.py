@@ -13,8 +13,10 @@ from typing import (
     Callable,
     Iterable, Iterator,
     Mapping,
-    MutableMapping, NamedTuple, Optional,
+    MutableMapping,
+    Optional,
     ParamSpec,
+    Self,
     TYPE_CHECKING,
     Type,
     TypeVar,
@@ -38,8 +40,8 @@ if TYPE_CHECKING:
 
 __all__ = (
     'sentinel',
-    'level_requirement_for',
-    'calculate_level',
+    'CubicCurve',
+    'ExponentialCurve',
     'converter',
 )
 
@@ -87,52 +89,116 @@ def ordinal(number: int) -> str:
     return f"{number}th"
 
 
-def level_requirement_for(level: int, /, *, base: int = 1000, factor: float = 1.45, precision: int = 100) -> int:
-    precise = base * factor ** level
-    return math.ceil(precise / precision) * precision
+class BaseCurve:
+    def __init__(
+        self,
+        *,
+        precision: int = 50,
+        memoize_to: int = 500,
+    ) -> None:
+        self.precision = precision
+        self.memoize_to = memoize_to
+
+        # _sums[N] = total EXP needed to reach level N
+        self._sums: list[int] = [self(0)] * (self.memoize_to + 1)
+
+        for n in range(1, self.memoize_to + 1):
+            self._sums[n] = self._sums[n - 1] + self(n)
+
+        # Binary search worst-case: ceil(log_2 N)
+        # Linear search average-case: (K + 1) / 2
+        # Set up (K + 1) // 2 = ceil(log_2 N) => K = 2 * ceil(log_2 N) - 1
+        k = 2 * math.ceil(math.log2(self.memoize_to)) - 1
+        self._total_exp_linear_threshold: int = self._sums[k]
+
+    def unrounded(self, x: float) -> float:
+        raise NotImplementedError
+
+    def requirement_for(self, level: int, /) -> int:
+        return math.ceil(self.unrounded(level) / self.precision) * self.precision
+
+    def __call__(self, level: int) -> int:
+        return self.requirement_for(level)
+
+    def total_exp_for(self, level: int, /) -> int:
+        if level < 0:
+            raise ValueError('Level must be greater than or equal to 0')
+        if level < self.memoize_to:
+            return self._sums[level]
+
+        # If we are above the memoize threshold, we need to calculate it
+        for n in range(self.memoize_to, level + 1):
+            self._sums.append(self._sums[n - 1] + self(n))
+        return self._sums[level]
+
+    def _compute_level_linear(self, exp: int) -> tuple[int, int, int]:
+        level = 0
+        while self.total_exp_for(level) <= exp:
+            level += 1
+
+        exp -= self.total_exp_for(level - 1)
+        requirement = self.requirement_for(level)
+        return level, exp, requirement
+
+    def compute_level(self, exp: int) -> tuple[int, int, int]:
+        # Note: computing with a binary search assumes curve is ALWAYS increasing
+        if exp < self._total_exp_linear_threshold:
+            return self._compute_level_linear(exp)
+
+        low, high = 0, len(self._sums) - 1
+
+        while low <= high:
+            mid = (low + high) // 2
+            if self.total_exp_for(mid) <= exp:
+                low = mid + 1
+            else:
+                high = mid - 1
+
+        exp -= self.total_exp_for(low - 1)
+        requirement = self.requirement_for(low)
+        return low, exp, requirement
 
 
-def calculate_level(exp: int, *, base: int = 1000, factor: float = 1.45, precision: int = 100) -> tuple[int, int, int]:
-    kwargs = {'base': base, 'factor': factor, 'precision': precision}
-    level = 0
+class CubicCurve(BaseCurve):
+    """Models a cubic curve, f(x) = ax^3 + bx^2 + cx."""
 
-    while exp > (requirement := level_requirement_for(level, **kwargs)):
-        exp -= requirement
-        level += 1
-
-    return level, exp, requirement
-
-
-class CubicCurve(NamedTuple):
-    a: float = 0
-    b: float = 0
-    c: float = 0
-    d: float = 0
-    threshold: float | None = None
+    def __init__(
+        self,
+        a: float = 0,
+        b: float = 0,
+        c: float = 0,
+        *,
+        threshold: float | None = None,
+        **kwargs,
+    ) -> None:
+        self.a: float = a
+        self.b: float = b
+        self.c: float = c
+        self.threshold: float = threshold
+        super().__init__(**kwargs)
 
     @property
     def solve_threshold(self) -> float:
-        return (self.a + self.b + self.c + self.d) / 2 if self.threshold is None else self.threshold
+        return (self.a + self.b + self.c) / 2 if self.threshold is None else self.threshold
 
-    def __call__(self, x: float) -> float:
-        return max(self.solve_threshold, self.a * x ** 3 + self.b * x ** 2 + self.c * x + self.d)
+    def unrounded(self, x: float) -> float:
+        return max(self.solve_threshold, self.a * x ** 3 + self.b * x ** 2 + self.c * x)
 
-
-DEFAULT_CURVE = CubicCurve(0.25, 11.75, 88)
-
-
-def level_requirement_v2_for(level: int, *, curve: CubicCurve = DEFAULT_CURVE, precision: int = 50) -> int:
-    return math.ceil(curve(level) / precision) * precision
+    @classmethod
+    def default(cls) -> Self:
+        return cls(0.25, 11.75, 88)
 
 
-def calculate_level_v2(exp: int, *, curve: CubicCurve = DEFAULT_CURVE, precision: int = 50) -> tuple[int, int, int]:
-    level = 0
+class ExponentialCurve(BaseCurve):
+    """Models an exponential curve, f(x) = (initial)(ratio)^x."""
 
-    while exp > (requirement := level_requirement_v2_for(level, curve=curve, precision=precision)):
-        exp -= requirement
-        level += 1
+    def __init__(self, initial: float, ratio: float, **kwargs) -> None:
+        self.initial: float = initial
+        self.ratio: float = ratio
+        super().__init__(**kwargs)
 
-    return level, exp, requirement
+    def unrounded(self, x: float) -> float:
+        return self.initial * self.ratio ** x
 
 
 def image_url_from_emoji(emoji: str | discord.PartialEmoji) -> str:

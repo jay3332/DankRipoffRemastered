@@ -598,15 +598,6 @@ class EmojiAlgebraView(UserView):
         for i in range(start, start + 4):
             self.add_item(EmojiAlgebraButton(label=str(i), choice=i))
 
-    async def interaction_check(self, interaction: TypedInteraction) -> bool:
-        if interaction.user != self.ctx.author:
-            await interaction.response.send_message(
-                'You are not the one who started this game, you cannot play it.',
-                ephemeral=True,
-            )
-            return False
-        return True
-
 
 @minigame('Emoji Algebra', multiplier=1.3)
 async def emoji_algebra(ctx: Context, embed: discord.Embed, _job: Job) -> discord.Message:
